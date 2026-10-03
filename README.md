@@ -34,6 +34,14 @@ The host app runs separately against a device or emulator:
 cd app && flutter run
 ```
 
+## Secrets
+
+Local secrets live in `.env` at the repo root (gitignored). `.env.example` is the committed template and lists every variable the code reads; add new variables there in the same change that starts reading them.
+
+- `bin/dev` creates `.env` on first run with generated values and loads it before starting anything.
+- Running `mix` in `api/` directly needs the same variables: with [direnv](https://direnv.net) hooked into your shell, run `direnv allow` once and `.envrc` loads `.env` automatically; otherwise `set -a; . ./.env; set +a` first.
+- Production secrets are set with `fly secrets set` and never stored in files. The Flutter app and the Next.js pay page ship to clients, so they must not hold secrets.
+
 ## Tests
 
 ```sh

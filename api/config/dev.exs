@@ -24,7 +24,6 @@ config :petepete, PetepeteWeb.Endpoint,
   check_origin: false,
   code_reloader: true,
   debug_errors: true,
-  secret_key_base: "kmbSNi5nLY3kMe6re8nm6TzlpcgQGjfywcDjaUqtWeBrix8YFNdL35IlII0fHv2S",
   watchers: []
 
 # ## SSL Support

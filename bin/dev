@@ -6,6 +6,15 @@ set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
 
+if [[ ! -f .env ]]; then
+  secret="$(openssl rand -base64 48 | tr -d '\n')"
+  (umask 077 && sed "s|^SECRET_KEY_BASE=.*|SECRET_KEY_BASE=$secret|" .env.example > .env)
+  echo "Created .env with a generated SECRET_KEY_BASE"
+fi
+set -a
+. ./.env
+set +a
+
 docker compose up -d --wait db
 
 (cd api && mix setup)
