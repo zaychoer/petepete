@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Starts Postgres (Docker), the Phoenix API on :4000 and the Next.js pay page on :3000.
+# The Flutter app runs separately: cd app && flutter run
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$root"
+
+docker compose up -d --wait db
+
+(cd api && mix setup)
+(cd web && pnpm install --frozen-lockfile)
+
+pids=()
+cleanup() {
+  for pid in "${pids[@]}"; do kill "$pid" 2>/dev/null || true; done
+  wait 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+
+(cd api && exec mix phx.server) &
+pids+=($!)
+(cd web && exec pnpm dev) &
+pids+=($!)
+
+wait
