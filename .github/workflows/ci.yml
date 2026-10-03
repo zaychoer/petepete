@@ -74,4 +74,33 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: flutter analyze
-      - run: flutter test
+
+  api-image:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+      - run: docker build --pull -t petepete-api api
+
+  deploy-staging:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [api, web, app, api-image]
+    runs-on: ubuntu-26.04
+    environment: staging
+    concurrency: deploy-staging
+    defaults:
+      run:
+        working-directory: api
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+    steps:
+      - name: Require FLY_API_TOKEN
+        run: |
+          if [ -z "$FLY_API_TOKEN" ]; then
+            echo "::error::FLY_API_TOKEN is not set in the staging environment; see README > Deploy"
+            exit 1
+          fi
+        working-directory: .
+      - uses: actions/checkout@v7
+      - uses: superfly/flyctl-actions/setup-flyctl@1.5
+      # release_command in fly.staging.toml runs /app/bin/migrate before the new machines start.
+      - run: flyctl deploy --config fly.staging.toml --remote-only

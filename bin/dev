@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Starts Postgres (Docker), the Phoenix API on :4000 and the Next.js pay page on :3000.
-# The Flutter app runs separately: cd app && flutter run
+# Starts Postgres (Docker), the Phoenix API on :4000, the Next.js pay page on :3000, and
+# the Flutter host app on the first connected Android device or running emulator.
+# Set FLUTTER=/path/to/flutter when flutter is not on PATH (e.g. an fvm install).
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -31,5 +32,24 @@ trap cleanup EXIT INT TERM
 pids+=($!)
 (cd web && exec pnpm dev) &
 pids+=($!)
+
+flutter_bin="${FLUTTER:-flutter}"
+android_device=""
+if command -v "$flutter_bin" >/dev/null; then
+  android_device="$("$flutter_bin" devices --machine 2>/dev/null | node -e '
+    let s = "";
+    process.stdin.on("data", (d) => (s += d)).on("end", () => {
+      const devices = JSON.parse(s.slice(s.indexOf("[")) || "[]");
+      const android = devices.find((d) => d.isSupported && d.targetPlatform.startsWith("android"));
+      if (android) console.log(android.id);
+    });
+  ' || true)"
+fi
+if [[ -n "$android_device" ]]; then
+  (cd app && exec "$flutter_bin" run -d "$android_device" </dev/null) &
+  pids+=($!)
+else
+  echo "Flutter app not started: no flutter on PATH (set FLUTTER) or no Android device/emulator connected."
+fi
 
 wait

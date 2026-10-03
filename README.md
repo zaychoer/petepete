@@ -26,13 +26,7 @@ Spec and tickets: [`docs/spec.md`](docs/spec.md).
 bin/dev
 ```
 
-Starts Postgres in Docker, sets up the database, and runs the API on http://localhost:4000 and the pay page on http://localhost:3000. Stop with Ctrl-C; `docker compose down` stops Postgres.
-
-The host app runs separately against a device or emulator:
-
-```sh
-cd app && flutter run
-```
+Creates `.env` if missing, starts Postgres in Docker, sets up the database, and runs the API on http://localhost:4000 and the pay page on http://localhost:3000. If `flutter` is on `PATH` (or `FLUTTER=/path/to/flutter` is set) and an Android device or emulator is connected, it also runs the host app on it; otherwise it prints why it skipped. Stop with Ctrl-C; `docker compose down` stops Postgres.
 
 ## Secrets
 
@@ -47,7 +41,31 @@ Local secrets live in `.env` at the repo root (gitignored). `.env.example` is th
 ```sh
 (cd api && mix test)
 (cd web && pnpm lint && pnpm build)
-(cd app && flutter analyze && flutter test)
+(cd app && flutter analyze)
 ```
 
-CI runs the same commands on every push to `main` and on pull requests (`.github/workflows/ci.yml`).
+The Flutter app has no tests yet; add `flutter test` here and in CI with the first one.
+
+CI runs the same commands on every push to `main` and on pull requests (`.github/workflows/ci.yml`), and also builds the API Docker image (`api/Dockerfile`).
+
+## Deploy
+
+The API runs on Fly.io in Singapore (`sin`): `petepete-staging` (`api/fly.staging.toml`) and `petepete-production` (`api/fly.production.toml`). Both run `/app/bin/migrate` as the release command, so migrations apply before new machines start.
+
+- **Staging:** every push to `main` deploys after all CI jobs pass (`deploy-staging` job).
+- **Production:** run the "Deploy production" workflow manually from the Actions tab on `main`.
+
+One-time provisioning (needs a Fly account; run from `api/`):
+
+```sh
+fly auth login
+for env in staging production; do
+  fly apps create "petepete-$env"
+  fly mpg create --name "petepete-$env-db" --region sin --pg-major-version 17
+  fly mpg attach <cluster-id-printed-above> -a "petepete-$env"   # sets DATABASE_URL
+  fly secrets set -a "petepete-$env" --stage SECRET_KEY_BASE="$(openssl rand -base64 48 | tr -d '\n')"
+  fly tokens create deploy -a "petepete-$env"                    # copy the token
+done
+```
+
+Then in GitHub (Settings → Environments) create `staging` and `production`, each with a `FLY_API_TOKEN` secret holding that app's deploy token. Until `staging` has the secret, the `deploy-staging` job fails on `main` with a message pointing here. Fly app names are global; if one is taken, change `app` and `PHX_HOST` in the matching `fly.*.toml`.
