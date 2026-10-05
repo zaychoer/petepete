@@ -192,7 +192,7 @@ Aplikasi host dan halaman bayar memanggil JSON API Phoenix. Logika ada di contex
 | Webhook | POST /webhooks/:provider | payload gateway | 200 / 401 / 5xx | Gateway |
 | Tandai cash | POST /bills/:id/cash → `Billing.mark_paid_cash/2` | — | txn\_id | APP |
 | Batal cash | POST /bills/:id/cash/cancel → `Billing.cancel_cash/2` | reason | txn\_id pembalik | APP |
-| Koreksi | POST /txns/:id/reverse → `Ledger.reverse/2` | reason | txn\_id baru | APP |
+| Koreksi | POST /txns/:id/reverse → `Ledger.reverse/2` | reason; hanya txn pelunasan antar anggota atau belanja kas | txn\_id baru | APP |
 | Pelunasan antar anggota | POST /groups/:id/settlements → `Ledger.record_settlement/2` | from\_member\_id, to\_member\_id, amount, note | txn\_id | APP |
 | Belanja kas | POST /groups/:id/kas-spends → `Ledger.record_kas_spend/2` | member\_id, amount, note | txn\_id | APP |
 | Saldo | GET /groups/:id/balances → `Ledger.balances/1` | — | saldo kas + saldo per anggota | APP |
@@ -304,7 +304,7 @@ Epic dengan story point terbesar adalah Pembayaran (27 SP) dan Kalkulasi (18 SP)
 | --- | --- | --- | --- | --- | --- |
 | PP-LDG-01 | Fungsi `Ledger.balances/1` | Dihitung dari jumlah entri, bukan kolom cache; cocok dengan hitungan manual di test | 3 | FND-02 | Belum mulai |
 | PP-LDG-02 | Layar Kas & riwayat | Ledger kronologis berbahasa santai ("Andi bayar Rp45.000"); filter per anggota; terlihat semua anggota | 3 | LDG-01 | Belum mulai |
-| PP-LDG-04 | Koreksi & audit log | Host membalik txn dengan alasan wajib; riwayat menampilkan entri asli + pembalik; semua aksi host yang mengubah uang tercatat di `audit_log` | 2 | LDG-01 | Belum mulai |
+| PP-LDG-04 | Koreksi & audit log | Host membalik txn pelunasan antar anggota atau belanja kas dengan alasan wajib; txn lain ditolak (tagihan dibatalkan lewat CALC-05, cash lewat PAY-05, pembayaran gateway tidak bisa dibalik); riwayat menampilkan entri asli + pembalik; semua aksi host yang mengubah uang tercatat di `audit_log` | 2 | LDG-01 | Belum mulai |
 | PP-LDG-05 | Pelunasan antar anggota & belanja kas | Host mencatat "Saya ganti talangan Andi RpX" dan "Beli bola RpX dari kas"; belanja kas ditolak bila melebihi saldo kas; keduanya tampil di riwayat | 3 | LDG-01 | Belum mulai |
 
 ### REL — Rilis (3 tiket, 6 SP)
