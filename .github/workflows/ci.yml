@@ -96,7 +96,7 @@ jobs:
       - name: Require FLY_API_TOKEN
         run: |
           if [ -z "$FLY_API_TOKEN" ]; then
-            echo "::error::FLY_API_TOKEN is not set in the staging environment; see README > Deploy"
+            echo "::error::FLY_API_TOKEN is not set in the staging environment; see docs/deploy.md"
             exit 1
           fi
         working-directory: .

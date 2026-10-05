@@ -55,17 +55,4 @@ The API runs on Fly.io in Singapore (`sin`): `petepete-staging` (`api/fly.stagin
 - **Staging:** every push to `main` deploys after all CI jobs pass (`deploy-staging` job).
 - **Production:** run the "Deploy production" workflow manually from the Actions tab on `main`.
 
-One-time provisioning (needs a Fly account; run from `api/`):
-
-```sh
-fly auth login
-for env in staging production; do
-  fly apps create "petepete-$env"
-  fly mpg create --name "petepete-$env-db" --region sin --pg-major-version 17
-  fly mpg attach <cluster-id-printed-above> -a "petepete-$env"   # sets DATABASE_URL
-  fly secrets set -a "petepete-$env" --stage SECRET_KEY_BASE="$(openssl rand -base64 48 | tr -d '\n')"
-  fly tokens create deploy -a "petepete-$env"                    # copy the token
-done
-```
-
-Then in GitHub (Settings → Environments) create `staging` and `production`, each with a `FLY_API_TOKEN` secret holding that app's deploy token. Until `staging` has the secret, the `deploy-staging` job fails on `main` with a message pointing here. Fly app names are global; if one is taken, change `app` and `PHX_HOST` in the matching `fly.*.toml`.
+First-time setup (Fly apps, databases, secrets, GitHub deploy tokens), token rotation, and troubleshooting: [`docs/deploy.md`](docs/deploy.md).
