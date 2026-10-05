@@ -13,7 +13,8 @@ jobs:
         working-directory: api
     services:
       db:
-        image: postgres:18-alpine
+        # Same major as production (Fly Managed Postgres); see docker-compose.yml.
+        image: postgres:17-alpine
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres

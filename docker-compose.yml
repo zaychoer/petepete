@@ -1,13 +1,14 @@
+# Postgres 17 matches production (Fly Managed Postgres offers 16 and 17 only).
 services:
   db:
-    image: postgres:18-alpine
+    image: postgres:17-alpine
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
       - "55432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql
+      - pgdata17:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 2s
@@ -15,4 +16,4 @@ services:
       retries: 15
 
 volumes:
-  pgdata:
+  pgdata17:

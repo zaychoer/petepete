@@ -9,12 +9,34 @@ jobs:
     runs-on: ubuntu-26.04
     environment: production
     concurrency: deploy-production
+    permissions:
+      actions: read
+      contents: read
     defaults:
       run:
         working-directory: api
     env:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
     steps:
+      - name: Require FLY_API_TOKEN
+        run: |
+          if [ -z "$FLY_API_TOKEN" ]; then
+            echo "::error::FLY_API_TOKEN is not set in the production environment; see docs/deploy.md"
+            exit 1
+          fi
+        working-directory: .
+      # A successful CI run means tests passed and staging deployed this exact commit.
+      - name: Require green CI on this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          passed="$(gh run list -R "$GITHUB_REPOSITORY" --workflow ci.yml --commit "$GITHUB_SHA" \
+            --status success --json databaseId --jq length)"
+          if [ "$passed" = "0" ]; then
+            echo "::error::CI has not passed on $GITHUB_SHA (still running or failed); deploy once it is green"
+            exit 1
+          fi
+        working-directory: .
       - uses: actions/checkout@v7
       - uses: superfly/flyctl-actions/setup-flyctl@1.5
       # release_command in fly.production.toml runs /app/bin/migrate before the new machines start.

@@ -34,7 +34,7 @@ fly mpg create --name petepete-staging-db --region sin --pg-major-version 17
 fly mpg attach <cluster-id-printed-above> -a petepete-staging
 ```
 
-`attach` stores the connection string as the app's `DATABASE_URL` secret. Fly Managed Postgres offers 16 and 17 only; local and CI run 18 (see `docker-compose.yml`), so avoid Postgres 18-only features.
+`attach` stores the connection string as the app's `DATABASE_URL` secret. Fly Managed Postgres offers 16 and 17 only, so local (`docker-compose.yml`) and CI also run 17.
 
 ### 4. Set the app's secret key
 
@@ -85,6 +85,9 @@ The GitHub environment `<name>` does not exist, often because of a typo when cre
 
 **`deploy-staging` fails with "FLY_API_TOKEN is not set in the staging environment"**
 Step 5 has not been done for `staging`, or the secret was added as a repository secret instead of an environment secret.
+
+**"Deploy production" fails with "CI has not passed on <sha>"**
+The latest commit on `main` has no successful CI run yet: it is still running, a test failed, or `deploy-staging` failed. Wait for (or fix) that run, then run "Deploy production" again.
 
 **Deploy fails after the token check**
 The app is missing its database (step 3) or `SECRET_KEY_BASE` (step 4). `fly secrets list -a petepete-staging` should show both `DATABASE_URL` and `SECRET_KEY_BASE`.

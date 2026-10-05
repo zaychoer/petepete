@@ -1,12 +1,19 @@
 # Petepete MVP — Spec Teknis & Tiket Pengembangan
 
-Oct 1, 2026 · @Zayyana Choir · Revisi 2: Oct 3, 2026
+Oct 1, 2026 · @Zayyana Choir · Revisi 3: Oct 5, 2026
 
 ## Ringkasan & konvensi
 
 MVP Petepete dipecah menjadi 11 epic dan 39 tiket P0, total 116 story point (≈ 58 hari kerja solo), untuk 12 minggu pengembangan setelah 2 minggu validasi desain (total 14 minggu). Enam tiket (17 SP) digeser ke P1 agar muat: REL-04, NTF-02, NTF-03, LDG-03, ATT-01, GRP-04. Semua tiket diturunkan dari fitur P0 di PRD Petepete; fitur P1/P2 hanya dicatat sebagai backlog.
 
-**Perubahan dari revisi 1**
+**Perubahan revisi 3**
+
+- `ledger_txns.kind` memakai delapan money event ADR-0001; `reversal` dipecah menjadi `session_bills_cancelled`, `cash_payment_cancelled`, dan `correction`.
+- Tagihan Perlu dicek diselesaikan dengan Terima pembayaran (`gateway_payment` sebesar uang yang benar-benar masuk, ke pemilik rekening pencairan), bukan Tandai lunas cash.
+- Aturan konkurensi: setiap posting ledger mengunci baris grup lebih dulu.
+- Host menandai cash tagihannya sendiri: diizinkan, kedua entri di akun host.
+
+**Perubahan revisi 2 (dari revisi 1)**
 
 - Biaya gateway masuk aturan hitung: peserta menanggung biaya di atas `amount_due` (satu-satunya opsi di MVP).
 - Alur webhook dijalankan dalam satu transaksi DB; dedup per (transaksi, status); lebih bayar menjadi kredit.
@@ -39,7 +46,7 @@ MVP Petepete dipecah menjadi 11 epic dan 39 tiket P0, total 116 story point (≈
 
 - [ ] Acceptance criteria terpenuhi dan diuji manual di HP Android kelas menengah bawah.
 - [ ] Fungsi uang (hitung, ledger, webhook) punya unit test; semua angka dalam rupiah integer, tanpa float.
-- [ ] Endpoint yang memposting ledger diuji dengan request ganda: hasil tetap satu txn.
+- [ ] Endpoint yang memposting ledger diuji dengan request ganda (hasil tetap satu txn) dan dengan dua request paralel berbeda di grup yang sama (kredit dan saldo kas tidak terpakai dua kali).
 - [ ] Otorisasi per grup diuji: anggota grup lain tidak bisa membaca data.
 - [ ] Teks UI berbahasa Indonesia santai, status selalu disertai teks (bukan warna saja).
 - [ ] Error dikirim ke Sentry; tidak ada nomor HP di log.
@@ -87,7 +94,7 @@ stateDiagram-v2
         [*] --> paid: amount_due = 0 (kredit)
         unpaid --> paid: webhook nominal cocok / tandai cash
         unpaid --> needs_review: webhook nominal beda
-        needs_review --> paid: host tandai lunas
+        needs_review --> paid: host terima pembayaran
         paid --> unpaid: batal cash ≤ 24 jam
         unpaid --> void: Batalkan tagihan
         needs_review --> void: Batalkan tagihan
@@ -97,7 +104,7 @@ stateDiagram-v2
 
 Label UI: draft = Draft, issued = Ditagih, settled = Selesai, cancelled = Batal; unpaid = Belum bayar, paid = Lunas, needs_review = Perlu dicek, void = Dibatalkan.
 
-Transisi di luar diagram ditolak oleh context Sessions dan Billing. Webhook dengan nominal berbeda tidak memposting, hanya mengubah tagihan ke `needs_review`; host menyelesaikannya lewat Tandai lunas (PAY-05) atau Catat pelunasan (LDG-05). Pembatalan cash dalam 24 jam mengembalikan tagihan ke `unpaid` lewat reverse txn.
+Transisi di luar diagram ditolak oleh context Sessions dan Billing. Webhook dengan nominal berbeda tidak memposting, hanya mengubah tagihan ke `needs_review`; host menyelesaikannya lewat Terima pembayaran (PAY-05), yang memposting `gateway_payment` sebesar uang bersih yang benar-benar masuk ke sub-account, ke pemilik rekening pencairan. Selisih terhadap `amount_due` tetap di saldo peserta: lebih bayar menjadi kredit, kurang bayar menjadi utang yang terlihat di Saldo. Tandai lunas cash tidak dipakai di sini karena uangnya ada di gateway, bukan di tangan host yang menandai. Pembatalan cash dalam 24 jam mengembalikan tagihan ke `unpaid` lewat reverse txn.
 
 ## Model data & aturan hitung
 
@@ -130,18 +137,24 @@ Semua uang disimpan sebagai rupiah integer (`bigint`) dan setiap perubahan saldo
 - Jumlah entri per txn = 0 dijaga constraint trigger `DEFERRABLE INITIALLY DEFERRED` (entri diinsert per baris). `ledger_entries` dan `ledger_txns` menolak UPDATE/DELETE lewat trigger.
 - `account_type = member` wajib `member_id`; `account_type = kas` wajib `member_id` null.
 - `reverses_txn_id` unique: satu txn hanya bisa dibalik sekali.
+- `kind` adalah salah satu money event ADR-0001 (check constraint): `session_billed`, `gateway_payment`, `cash_received`, `settlement`, `kas_spend`, `session_bills_cancelled`, `cash_payment_cancelled`, `correction`. Tiga kind terakhir wajib mengisi `reverses_txn_id`, kind lain wajib null.
+
+**Aturan konkurensi.** Setiap `Ecto.Multi` yang memposting ke ledger mengunci baris grup (`SELECT … FROM groups WHERE id = $1 FOR UPDATE`) sebelum membaca saldo atau tagihan. Posting per grup jadi berurutan, sehingga kredit di `Billing.issue/2` dan batas saldo kas di belanja kas tidak bisa dipakai dua kali oleh request paralel. Urutan kunci selalu grup → tagihan → attempt, agar tidak deadlock.
 
 **Akun ledger per grup.** Satu akun per anggota/tamu (`member`) dan satu `kas` grup. Saldo anggota = jumlah entri; negatif berarti masih utang ke grup, positif berarti punya kredit. Saldo negatif pemilik rekening pencairan berarti ia sedang memegang uang grup.
 
 | Kejadian (`kind`) | Entri (debit = −, kredit = +) |
 | --- | --- |
-| Tagihan sesi diterbitkan (`issue`) | −`share` ke tiap peserta; +nominal pos ke penalang pos itu; +selisih pembulatan ke `kas` |
-| Peserta bayar via gateway (`payment`) | +`amount_due` attempt ke peserta; −`amount_due` ke pemilik rekening pencairan. Biaya gateway dibayar peserta di atas `amount_due`, tidak masuk ledger, dicatat di `payment_attempts.fee` |
-| Lebih bayar / bayar tagihan void (`payment`) | Entri sama seperti di atas; tagihan tidak berubah, hasilnya kredit peserta |
-| Tandai lunas cash (`cash`) | +`amount_due` ke peserta; −`amount_due` ke host yang menandai (penerima cash) |
+| Tagihan sesi diterbitkan (`session_billed`) | −`share` ke tiap peserta; +nominal pos ke penalang pos itu; +selisih pembulatan ke `kas` |
+| Peserta bayar via gateway (`gateway_payment`) | +`amount_due` attempt ke peserta; −`amount_due` ke pemilik rekening pencairan. Biaya gateway dibayar peserta di atas `amount_due`, tidak masuk ledger, dicatat di `payment_attempts.fee` |
+| Lebih bayar / bayar tagihan void (`gateway_payment`) | Entri sama seperti di atas; tagihan tidak berubah, hasilnya kredit peserta |
+| Host terima pembayaran tagihan Perlu dicek (`gateway_payment`) | +uang bersih yang masuk ke peserta; −nominal yang sama ke pemilik rekening pencairan; tagihan `paid` (`paid_via` = gateway) |
+| Tandai lunas cash (`cash_received`) | +`amount_due` ke peserta; −`amount_due` ke host yang menandai (penerima cash). Bila host menandai tagihannya sendiri, kedua entri jatuh ke akun host (bersih 0): tagihan lunas dan saldo host tetap menunjukkan uang grup yang ia pegang |
 | Pelunasan antar anggota (`settlement`) | +X ke pembayar; −X ke penerima (mis. host mengganti talangan Andi: +X host, −X Andi) |
 | Belanja dari kas (`kas_spend`) | −X ke `kas`; +X ke anggota yang membayar belanjaan |
-| Batalkan tagihan / koreksi (`reversal`) | Txn baru dengan entri kebalikan, `reverses_txn_id` terisi, alasan wajib |
+| Batalkan tagihan (`session_bills_cancelled`) | Kebalikan txn `session_billed` sesi itu, `reverses_txn_id` terisi, alasan wajib |
+| Batal cash (`cash_payment_cancelled`) | Kebalikan txn `cash_received`, ≤ 24 jam sejak `paid_at`, alasan wajib |
+| Koreksi (`correction`) | Kebalikan txn `settlement` atau `kas_spend` saja, alasan wajib |
 
 Penarikan dana dari sub-account ke rekening bank host (PAY-07) tidak menyentuh ledger: uang itu sudah tercatat dipegang host.
 
@@ -164,7 +177,7 @@ Penarikan dana dari sub-account ke rekening bank host (PAY-07) tidak menyentuh l
 | Pos subset | 10 hadir; lapangan Rp350.000 + wasit Rp100.000 + minum Rp60.000 untuk 6 orang; pembulatan Rp1.000 | Non-minum Rp45.000, peminum Rp55.000; total Rp510.000; selisih Rp0 |
 | Pembulatan | 3 hadir; lapangan Rp100.000; pembulatan Rp1.000 | Tiap orang Rp34.000; total Rp102.000; masuk kas Rp2.000 |
 | Bobot | 4 hadir, satu tamu bobot 1200; lapangan Rp210.000 | Anggota Rp50.000, tamu Rp60.000; selisih Rp0 |
-| Kredit penalang | Kasus pertama; host menalangi lapangan | Tagihan host Rp0 berstatus paid (`paid_via` = credit); saldo host +Rp305.000 setelah penerbitan |
+| Kredit penalang | Kasus pertama; host (bukan peminum) menalangi lapangan | Tagihan host Rp0 berstatus paid (`paid_via` = credit); saldo host +Rp305.000 setelah penerbitan |
 
 ## Spesifikasi API & webhook
 
@@ -191,6 +204,7 @@ Aplikasi host dan halaman bayar memanggil JSON API Phoenix. Logika ada di contex
 | Buat pembayaran | POST /pay/:token/payment | metode (qris/va/ewallet) | qr\_string / va\_number / redirect\_url, amount\_due, fee, gross\_amount, expires\_at | WEB |
 | Webhook | POST /webhooks/:provider | payload gateway | 200 / 401 / 5xx | Gateway |
 | Tandai cash | POST /bills/:id/cash → `Billing.mark_paid_cash/2` | — | txn\_id | APP |
+| Terima pembayaran | POST /bills/:id/accept-payment → `Billing.accept_gateway_payment/2` | — (nominal dari attempt yang dibayar) | txn\_id | APP |
 | Batal cash | POST /bills/:id/cash/cancel → `Billing.cancel_cash/2` | reason | txn\_id pembalik | APP |
 | Koreksi | POST /txns/:id/reverse → `Ledger.reverse/2` | reason; hanya txn pelunasan antar anggota atau belanja kas | txn\_id baru | APP |
 | Pelunasan antar anggota | POST /groups/:id/settlements → `Ledger.record_settlement/2` | from\_member\_id, to\_member\_id, amount, note | txn\_id | APP |
@@ -203,12 +217,12 @@ Aplikasi host dan halaman bayar memanggil JSON API Phoenix. Logika ada di contex
 1. Verifikasi keaslian di plug khusus webhook: token callback (Xendit) atau signature key SHA512 (Midtrans). Gagal → 401, catat ke Sentry.
 2. Normalisasi payload → `provider_txn_id`, status (pending/paid/expired/failed), `external_id`, nominal dibayar.
 3. Semua langkah berikut dalam **satu transaksi DB**. Insert `payment_events` dengan `ON CONFLICT DO NOTHING` pada (provider, provider\_txn\_id, provider\_status), lalu `SELECT … FOR UPDATE` baris itu. Jika `processed_at` sudah terisi → selesai, 200. Status berbeda untuk transaksi yang sama (pending lalu settlement) adalah event berbeda.
-4. Cari `payment_attempts` lewat `external_id`, kunci tagihannya (`FOR UPDATE`). Tidak ketemu → outcome `unknown`, Sentry, 200.
+4. Cari `payment_attempts` lewat `external_id`, lalu kunci grup dan tagihannya (`FOR UPDATE`, urutan sesuai Aturan konkurensi). Tidak ketemu → outcome `unknown`, Sentry, 200.
 5. Status non-final, kedaluwarsa, atau gagal → perbarui status attempt saja.
 6. Status paid:
    - nominal ≠ `gross_amount` attempt → tagihan unpaid menjadi `needs_review`, isi `paid_amount`, tidak memposting;
-   - tagihan unpaid → posting txn `payment`, tagihan `paid` (`paid_via` = gateway, `paid_txn_id`, `paid_at`), attempt `paid`;
-   - tagihan sudah paid atau void → posting txn `payment` sebagai kredit peserta, outcome `overpaid`, tampil di Status sesi host.
+   - tagihan unpaid → posting txn `gateway_payment`, tagihan `paid` (`paid_via` = gateway, `paid_txn_id`, `paid_at`), attempt `paid`;
+   - tagihan sudah paid atau void → posting txn `gateway_payment` sebagai kredit peserta, outcome `overpaid`, tampil di Status sesi host.
 7. Isi `processed_at` dan `outcome`, commit. Error apa pun → rollback dan 5xx, sehingga gateway mengirim ulang dan event diproses dari awal.
 
 **Aturan `Billing.issue/2`.** Hanya untuk sesi berstatus draft dan lolos validasi; satu `Idempotency-Key` (disimpan di `ledger_txns.idempotency_key`) hanya menghasilkan satu txn. Tagihan dengan `amount_due` = 0 langsung `paid` dengan `paid_via` = credit, tanpa txn tambahan. `token_expires_at` = waktu terbit + 30 hari (asumsi).
@@ -288,7 +302,7 @@ Epic dengan story point terbesar adalah Pembayaran (27 SP) dan Kalkulasi (18 SP)
 | PP-PAY-02 | Endpoint `POST /pay/:token/payment` + biaya gateway | QRIS/VA/e-wallet; satu `payment_attempts` per permintaan dengan `external_id` `<bill_id>-<seq>`; `fee` dan `gross_amount` dari `Payments.fee_for/2`; permintaan ulang dengan metode sama mengembalikan attempt yang masih aktif; tagihan paid/void ditolak | 5 | PAY-01, CALC-04 | Belum mulai |
 | PP-PAY-03 | Endpoint `POST /webhooks/:provider` | Mengikuti alur webhook; tes: webhook ganda tidak posting dua kali, pending lalu paid diproses dua-duanya, crash di tengah lalu retry tetap memposting, signature salah ditolak, nominal beda masuk needs\_review, bayar tagihan void jadi kredit | 5 | PAY-02 | Belum mulai |
 | PP-PAY-04 | Halaman bayar web (Next.js) | Dimuat < 2 detik di 4G; nama grup, tanggal, rincian, total, biaya gateway per metode; QRIS default; berubah ke Lunas otomatis (polling 5 detik); tanpa nomor HP siapa pun | 5 | PAY-02 | Belum mulai |
-| PP-PAY-05 | Tandai lunas cash & batalkan | Host tandai lunas dari Status sesi untuk tagihan unpaid atau needs\_review; bisa dibatalkan dalam 24 jam sejak `paid_at` lewat reverse txn | 2 | CALC-04 | Belum mulai |
+| PP-PAY-05 | Tandai lunas cash, batalkan, & terima pembayaran | Host tandai lunas cash dari Status sesi untuk tagihan unpaid; bisa dibatalkan dalam 24 jam sejak `paid_at` lewat txn `cash_payment_cancelled`; tagihan needs\_review diselesaikan dengan Terima pembayaran (nominal gateway sebenarnya, ke pemilik rekening pencairan) | 2 | CALC-04 | Belum mulai |
 | PP-PAY-06 | Kedaluwarsa link bayar | pay\_token aktif sampai lunas atau `token_expires_at`; QRIS kedaluwarsa dibuat ulang otomatis (attempt baru) saat halaman dibuka | 2 | PAY-02 | Belum mulai |
 | PP-PAY-07 | Tarik dana ke rekening host | Host melihat saldo sub-account dan menarik ke rekening terdaftar (API payout gateway, atau tautan dashboard bila sub-account managed); riwayat penarikan; tidak mengubah ledger | 3 | PAY-01 | Belum mulai |
 

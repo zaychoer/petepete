@@ -16,8 +16,8 @@ Spec and tickets: [`docs/spec.md`](docs/spec.md).
 ## Requirements
 
 - Erlang/Elixir and Node versions from `.tool-versions` (asdf)
-- pnpm
-- Docker (local Postgres on port 55432, to avoid clashing with other local Postgres instances)
+- pnpm 12 (`corepack enable` installs the version pinned in `web/package.json`)
+- Docker (local Postgres 17, the same major as production, on port 55432 to avoid clashing with other local Postgres instances)
 - Flutter 3.35.3 (same version CI pins)
 
 ## Run locally
@@ -26,7 +26,7 @@ Spec and tickets: [`docs/spec.md`](docs/spec.md).
 bin/dev
 ```
 
-Creates `.env` if missing, starts Postgres in Docker, sets up the database, and runs the API on http://localhost:4000 and the pay page on http://localhost:3000. If `flutter` is on `PATH` (or `FLUTTER=/path/to/flutter` is set) and an Android device or emulator is connected, it also runs the host app on it; otherwise it prints why it skipped. Stop with Ctrl-C; `docker compose down` stops Postgres.
+Creates `.env` if missing, starts Postgres in Docker, sets up the database, and runs the API on http://localhost:4000 and the pay page on http://localhost:3000. If `flutter` is on `PATH` (or `FLUTTER=/path/to/flutter` is set) and an Android device or emulator is connected, it also runs the host app on it; otherwise it prints why it skipped. Stop with Ctrl-C; `docker compose down` stops Postgres. If you ran an earlier checkout on Postgres 18, its data stays in the old `pgdata` volume and the database is recreated empty in `pgdata17`; `docker volume rm petepete_pgdata` removes the old one.
 
 ## Secrets
 
@@ -48,11 +48,28 @@ The Flutter app has no tests yet; add `flutter test` here and in CI with the fir
 
 CI runs the same commands on every push to `main` and on pull requests (`.github/workflows/ci.yml`), and also builds the API Docker image (`api/Dockerfile`).
 
+## Android release signing
+
+Play Store builds are signed with the upload key from `app/android/key.properties`, which is gitignored together with `*.jks`. Without that file, release builds use the debug key, which Play Console rejects. Create the key once and keep the `.jks` and its passwords backed up outside the repo; losing them means asking Google for an upload key reset.
+
+```sh
+keytool -genkey -v -keystore ~/petepete-upload.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+```
+
+`app/android/key.properties` (`storeFile` is relative to `app/android/app/`, or absolute):
+
+```properties
+storePassword=...
+keyPassword=...
+keyAlias=upload
+storeFile=/home/you/petepete-upload.jks
+```
+
 ## Deploy
 
-The API runs on Fly.io in Singapore (`sin`): `petepete-staging` (`api/fly.staging.toml`) and `petepete-production` (`api/fly.production.toml`). Both run `/app/bin/migrate` as the release command, so migrations apply before new machines start.
+The API runs on Fly.io in Singapore (`sin`): `petepete-staging` (`api/fly.staging.toml`) and `petepete-production` (`api/fly.production.toml`). Both run `/app/bin/migrate` as the release command, so migrations apply before new machines start, and Fly health-checks `GET /health`.
 
 - **Staging:** every push to `main` deploys after all CI jobs pass (`deploy-staging` job).
-- **Production:** run the "Deploy production" workflow manually from the Actions tab on `main`.
+- **Production:** run the "Deploy production" workflow manually from the Actions tab on `main`. It refuses a commit whose CI run (tests plus the staging deploy) has not succeeded.
 
 First-time setup (Fly apps, databases, secrets, GitHub deploy tokens), token rotation, and troubleshooting: [`docs/deploy.md`](docs/deploy.md).

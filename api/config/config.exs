@@ -19,8 +19,7 @@ config :petepete, PetepeteWeb.Endpoint,
     formats: [json: PetepeteWeb.ErrorJSON],
     layout: false
   ],
-  pubsub_server: Petepete.PubSub,
-  live_view: [signing_salt: "ZQyN0U8m"]
+  pubsub_server: Petepete.PubSub
 
 # Configure Elixir's Logger
 config :logger, :default_formatter,

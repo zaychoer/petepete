@@ -1,12 +1,11 @@
 defmodule PetepeteWeb do
   @moduledoc """
   The entrypoint for defining your web interface, such
-  as controllers, components, channels, and so on.
+  as controllers, channels, and so on.
 
   This can be used in your application as:
 
       use PetepeteWeb, :controller
-      use PetepeteWeb, :html
 
   The definitions below will be executed for every controller,
   component, etc, so keep them short and clean, focused
@@ -37,7 +36,7 @@ defmodule PetepeteWeb do
 
   def controller do
     quote do
-      use Phoenix.Controller, formats: [:html, :json]
+      use Phoenix.Controller, formats: [:json]
 
       import Plug.Conn
 
@@ -55,7 +54,7 @@ defmodule PetepeteWeb do
   end
 
   @doc """
-  When used, dispatch to the appropriate controller/live_view/etc.
+  When used, dispatch to the appropriate controller/router/etc.
   """
   defmacro __using__(which) when is_atom(which) do
     apply(__MODULE__, which, [])
