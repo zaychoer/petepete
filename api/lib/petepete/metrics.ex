@@ -9,7 +9,8 @@ defmodule Petepete.Metrics do
     * `:bills_sent`: one event per bill created by `Billing.issue/2`; the count is the
       number of rows.
     * `:time_to_paid`: issue to paid, `value_ms`, one per bill. Recorded when a bill
-      becomes paid by gateway or cash (not by credit, which pays it at issue).
+      becomes paid by gateway or cash, and at issue (`value_ms` 0) for a bill that credit
+      pays in full (`amount_due` 0), so "jam sampai lunas" counts every paid bill.
     * `:paid_without_install`: a bill paid through the gateway whose member has no linked
       user account; one per bill.
 
@@ -63,14 +64,15 @@ defmodule Petepete.Metrics do
   end
 
   @doc """
-  Records what a bill becoming paid (by `:cash` or `:gateway`, not credit) means for the
-  metrics: `:time_to_paid` from the bill's creation at issue to `paid_at`, and for a
-  gateway payment by a member without a linked user account `:paid_without_install`.
+  Records what a bill becoming paid (by `:cash`, `:gateway` or `:credit`) means for the
+  metrics: `:time_to_paid` from the bill's creation at issue to `paid_at` (0 for credit,
+  which pays at issue), and for a gateway payment by a member without a linked user
+  account `:paid_without_install` (never for cash or credit).
   Call it once, in the transaction that marks the bill paid.
   """
-  @spec record_paid(%Bill{}, pos_integer(), DateTime.t(), :cash | :gateway) :: :ok
+  @spec record_paid(%Bill{}, pos_integer(), DateTime.t(), :cash | :gateway | :credit) :: :ok
   def record_paid(%Bill{} = bill, group_id, %DateTime{} = paid_at, via)
-      when via in [:cash, :gateway] do
+      when via in [:cash, :gateway, :credit] do
     ref = [group_id: group_id, session_id: bill.session_id, bill_id: bill.id]
     record(:time_to_paid, [value_ms: duration_ms(bill.inserted_at, paid_at)] ++ ref)
 

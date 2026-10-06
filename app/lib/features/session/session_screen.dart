@@ -7,16 +7,19 @@ import '../../ui/rupiah.dart';
 import '../../ui/status_chip.dart';
 import 'cost_sheet.dart';
 import 'link_launcher.dart';
+import 'member_session_view.dart';
 import 'session_api.dart';
 import 'session_models.dart';
 import 'session_routes.dart';
+import 'session_totals.dart';
 import 'status_view.dart';
 import 'weight.dart';
 
-/// One session. A draft shows the cost entry (category chips, nominal, Simpan),
-/// attendance with weights and "Tambah tamu", and the way to the bill preview.
-/// Once issued it shows [StatusView]: bills with their status, cash actions,
-/// WhatsApp sharing and Batalkan tagihan.
+/// One session. The host of a draft gets the cost entry (category chips, nominal,
+/// Simpan), attendance with weights and "Tambah tamu", and the way to the bill preview;
+/// once issued, [StatusView]: bills with their status, cash actions, WhatsApp sharing
+/// and Batalkan tagihan. A member sees [MemberSessionView] instead, read-only: bills,
+/// cash actions and sharing are host-only on the server.
 class SessionScreen extends StatefulWidget {
   const SessionScreen({
     super.key,
@@ -216,6 +219,8 @@ class _SessionScreenState extends State<SessionScreen> {
             ? _loadError != null
                   ? _LoadFailed(message: _loadError!, onRetry: _load)
                   : const Center(child: CircularProgressIndicator())
+            : !roster.isHost
+            ? MemberSessionView(api: _api!, detail: detail, roster: roster)
             : detail.isDraft
             ? _draftBody(detail, roster)
             : StatusView(
@@ -231,11 +236,6 @@ class _SessionScreenState extends State<SessionScreen> {
 
   Widget _draftBody(SessionDetail detail, GroupRoster roster) {
     final theme = Theme.of(context);
-    final attending = detail.attendingCount;
-    final total = detail.totalCost;
-    final perPerson = attending > 0 && total > 0
-        ? '≈ ${formatRupiah((total + attending - 1) ~/ attending)}'
-        : '—';
     final categories = [
       ...roster.categories,
       if (!roster.categories.contains('Lainnya')) 'Lainnya',
@@ -243,47 +243,10 @@ class _SessionScreenState extends State<SessionScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Total biaya'),
-                      Text(
-                        formatRupiah(total),
-                        key: const Key('header-total'),
-                        style: theme.textTheme.headlineSmall,
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Per orang ($attending hadir)'),
-                      Text(
-                        perPerson,
-                        key: const Key('header-per-person'),
-                        style: theme.textTheme.headlineSmall,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.only(top: 4, bottom: 8),
-          child: Text(
-            'Perkiraan rata-rata, dibagi rata. Angka pasti (bobot dan pembulatan) ada di pratinjau tagihan.',
-            style: theme.textTheme.bodySmall,
-          ),
+        SessionTotals(
+          detail: detail,
+          note:
+              'Perkiraan rata-rata, dibagi rata. Angka pasti (bobot dan pembulatan) ada di pratinjau tagihan.',
         ),
         if (_actionError != null) ...[
           InlineError(_actionError!),

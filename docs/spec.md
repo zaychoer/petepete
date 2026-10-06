@@ -255,95 +255,95 @@ Epic dengan story point terbesar adalah Pembayaran (27 SP) dan Kalkulasi (18 SP)
 
 | ID | Tiket | Acceptance criteria | SP | Dep | Status |
 | --- | --- | --- | --- | --- | --- |
-| PP-FND-01 | Setup proyek: monorepo (app/, web/, api/), Phoenix + Postgres staging & prod di Fly.io region Singapura, skeleton Flutter & Next.js, CI | Jalan lokal dengan satu perintah; push ke main menjalankan test + migrasi ke staging; tidak ada secret di repo | 3 | — | Sedang berjalan (repo selesai: `bin/dev`, CI test + build image, job deploy staging dengan migrasi, workflow deploy prod manual, `fly.*.toml` region sin; tinggal provisioning Fly + token GitHub, lihat `docs/deploy.md`) |
-| PP-FND-02 | Skema DB inti sesuai bagian Model data + trigger ledger | Migrasi bersih dari nol; txn tidak seimbang ditolak saat commit; `ledger_entries`/`ledger_txns` tidak bisa di-UPDATE/DELETE; `kind` hanya delapan nilai kejadian uang; partial unique `bills` dan unique `sessions` aktif | 5 | FND-01 | Belum mulai |
-| PP-FND-03 | Otorisasi per grup (scope query + policy module) | Anggota hanya bisa membaca data grupnya; hanya host yang menulis sesi, biaya, tagihan, dan ledger; test otomatis dengan 2 grup | 3 | FND-02 | Belum mulai |
-| PP-FND-04 | Sentry di APP/WEB/API + backup harian | Error uji muncul dengan tag lapisan; nomor HP dimasking; restore backup diuji sekali | 2 | FND-01 | Belum mulai |
+| PP-FND-01 | Setup proyek: monorepo (app/, web/, api/), Phoenix + Postgres staging & prod di Fly.io region Singapura, skeleton Flutter & Next.js, CI | Jalan lokal dengan satu perintah; push ke main menjalankan test + migrasi ke staging; tidak ada secret di repo | 3 | — | Sebagian: repo selesai: `bin/dev`, CI test + build image, job deploy staging dengan migrasi, workflow deploy prod manual, `fly.*.toml` region sin; tinggal provisioning Fly + token GitHub, lihat `docs/deploy.md` (human-only) |
+| PP-FND-02 | Skema DB inti sesuai bagian Model data + trigger ledger | Migrasi bersih dari nol; txn tidak seimbang ditolak saat commit; `ledger_entries`/`ledger_txns` tidak bisa di-UPDATE/DELETE; `kind` hanya delapan nilai kejadian uang; partial unique `bills` dan unique `sessions` aktif | 5 | FND-01 | Selesai |
+| PP-FND-03 | Otorisasi per grup (scope query + policy module) | Anggota hanya bisa membaca data grupnya; hanya host yang menulis sesi, biaya, tagihan, dan ledger; test otomatis dengan 2 grup | 3 | FND-02 | Selesai |
+| PP-FND-04 | Sentry di APP/WEB/API + backup harian | Error uji muncul dengan tag lapisan; nomor HP dimasking; restore backup diuji sekali | 2 | FND-01 | Sebagian: Sentry di tiga lapisan dengan masking nomor HP dan backup harian selesai; restore backup belum diuji (human-only, checklist di `docs/deploy.md`) |
 
 ### AUTH — Login (3 tiket, 9 SP)
 
 | ID | Tiket | Acceptance criteria | SP | Dep | Status |
 | --- | --- | --- | --- | --- | --- |
-| PP-AUTH-01 | OTP WhatsApp ke penyedia WA lokal + token sesi (access & refresh token) | OTP tiba < 10 detik; 6 digit berlaku 5 menit; maks 5 permintaan per nomor per jam dan 20 per IP per jam; maks 5 percobaan salah per kode lalu kode hangus | 5 | FND-01 | Belum mulai |
-| PP-AUTH-02 | Layar login & isi nama | Nomor dinormalisasi ke 62…; login pertama minta nama tampilan; sesi bertahan setelah app ditutup; anggota/tamu dengan nomor sama otomatis tertaut ke akun | 2 | AUTH-01 | Belum mulai |
-| PP-AUTH-03 | Hapus akun (UU PDP) | Nama & nomor dianonimkan, entri ledger tetap dengan label "Mantan anggota"; ditolak jika masih host grup aktif | 2 | AUTH-01, FND-02 | Belum mulai |
+| PP-AUTH-01 | OTP WhatsApp ke penyedia WA lokal + token sesi (access & refresh token) | OTP tiba < 10 detik; 6 digit berlaku 5 menit; maks 5 permintaan per nomor per jam dan 20 per IP per jam; maks 5 percobaan salah per kode lalu kode hangus | 5 | FND-01 | Sebagian: kode OTP, batas permintaan, masa berlaku, dan hangus diuji terhadap pengirim fake; pengiriman WhatsApp nyata belum ada (penyedia belum dipilih, human-only) sehingga "tiba < 10 detik" belum bisa diukur |
+| PP-AUTH-02 | Layar login & isi nama | Nomor dinormalisasi ke 62…; login pertama minta nama tampilan; sesi bertahan setelah app ditutup; anggota/tamu dengan nomor sama otomatis tertaut ke akun | 2 | AUTH-01 | Selesai (diverifikasi lewat widget test, belum di perangkat) |
+| PP-AUTH-03 | Hapus akun (UU PDP) | Nama & nomor dianonimkan, entri ledger tetap dengan label "Mantan anggota"; ditolak jika masih host grup aktif | 2 | AUTH-01, FND-02 | Selesai (API diuji; layar app diverifikasi lewat widget test, belum di perangkat) |
 
 ### GRP — Grup & anggota (3 tiket, 9 SP)
 
 | ID | Tiket | Acceptance criteria | SP | Dep | Status |
 | --- | --- | --- | --- | --- | --- |
-| PP-GRP-01 | Onboarding: nomor HP → nama grup → pilih template (Futsal, Badminton, Padel, Mini Soccer, Acara Umum) | Host baru sampai beranda grup dalam ≤ 3 layar; template mengisi pos biaya default; pembulatan default Rp1.000 | 3 | AUTH-02 | Belum mulai |
-| PP-GRP-02 | Undang via link WA, gabung, & klaim nama | Tombol Undang membuka WA dengan teks + link; link membuka web gabung tanpa install, atau app jika terpasang; host bisa reset token; pengguna app bisa klaim anggota tanpa akun, host menyetujui, tanpa memindah entri ledger | 5 | GRP-01 | Belum mulai |
-| PP-GRP-03 | Tambah tamu | Cukup nama, nomor WA opsional; tamu bisa dipilih lagi di sesi berikutnya | 1 | GRP-01 | Belum mulai |
+| PP-GRP-01 | Onboarding: nomor HP → nama grup → pilih template (Futsal, Badminton, Padel, Mini Soccer, Acara Umum) | Host baru sampai beranda grup dalam ≤ 3 layar; template mengisi pos biaya default; pembulatan default Rp1.000 | 3 | AUTH-02 | Selesai (diverifikasi lewat widget test, belum di perangkat) |
+| PP-GRP-02 | Undang via link WA, gabung, & klaim nama | Tombol Undang membuka WA dengan teks + link; link membuka web gabung tanpa install, atau app jika terpasang; host bisa reset token; pengguna app bisa klaim anggota tanpa akun, host menyetujui, tanpa memindah entri ledger | 5 | GRP-01 | Sebagian: gabung web, klaim anggota, dan persetujuan host selesai (diverifikasi lewat widget test, belum di perangkat); membuka app lewat link https butuh `assetlinks.json` (human-only, `docs/deploy.md`), skema `petepete://join/<token>?claim=<id>` sudah terdaftar |
+| PP-GRP-03 | Tambah tamu | Cukup nama, nomor WA opsional; tamu bisa dipilih lagi di sesi berikutnya | 1 | GRP-01 | Selesai (diverifikasi lewat widget test, belum di perangkat) |
 
 ### EVT — Event & sesi (4 tiket, 11 SP)
 
 | ID | Tiket | Acceptance criteria | SP | Dep | Status |
 | --- | --- | --- | --- | --- | --- |
-| PP-EVT-01 | Buat event rutin & sekali jalan | Rutin: hari + jam (rrule) + template biaya; sekali jalan: satu tanggal dan sesinya langsung dibuat (draft); form muat di 1 layar | 3 | GRP-01 | Belum mulai |
-| PP-EVT-02 | Generate sesi rutin (Oban Cron) | Sesi draft dibuat H-3; salin pos biaya dari template dan peserta dari sesi sebelumnya; job jalan dua kali tidak membuat duplikat (unique DB `(event_id, starts_at)` + insert `ON CONFLICT DO NOTHING`) | 3 | EVT-01 | Belum mulai |
-| PP-EVT-03 | Beranda grup | Kartu sesi berikutnya, saldo kas, daftar belum bayar dan Perlu dicek; dimuat < 2 detik di 4G | 3 | EVT-02, LDG-01 | Belum mulai |
-| PP-EVT-04 | State machine sesi & tagihan (Billing) | Billing satu-satunya pemilik status sesi (draft/issued/cancelled) dan tagihan; transisi hanya sesuai diagram; Selesai diturunkan dari tagihan; biaya dan kehadiran sesi issued hanya bisa diubah setelah Batalkan tagihan (CALC-05); perintah Billing mengikuti urutan kunci sesi, tagihan, ledger | 2 | FND-02 | Belum mulai |
+| PP-EVT-01 | Buat event rutin & sekali jalan | Rutin: hari + jam (rrule) + template biaya; sekali jalan: satu tanggal dan sesinya langsung dibuat (draft); form muat di 1 layar | 3 | GRP-01 | Selesai (diverifikasi lewat widget test, belum di perangkat) |
+| PP-EVT-02 | Generate sesi rutin (Oban Cron) | Sesi draft dibuat H-3; salin pos biaya dari template dan peserta dari sesi sebelumnya; job jalan dua kali tidak membuat duplikat (unique DB `(event_id, starts_at)` + insert `ON CONFLICT DO NOTHING`) | 3 | EVT-01 | Selesai |
+| PP-EVT-03 | Beranda grup | Kartu sesi berikutnya, saldo kas, daftar belum bayar dan Perlu dicek; dimuat < 2 detik di 4G | 3 | EVT-02, LDG-01 | Sebagian: kartu sesi, saldo kas, dan daftar belum bayar selesai (diverifikasi lewat widget test, belum di perangkat); "dimuat < 2 detik di 4G" belum diukur |
+| PP-EVT-04 | State machine sesi & tagihan (Billing) | Billing satu-satunya pemilik status sesi (draft/issued/cancelled) dan tagihan; transisi hanya sesuai diagram; Selesai diturunkan dari tagihan; biaya dan kehadiran sesi issued hanya bisa diubah setelah Batalkan tagihan (CALC-05); perintah Billing mengikuti urutan kunci sesi, tagihan, ledger | 2 | FND-02 | Selesai |
 
 ### COST — Pos biaya (3 tiket, 7 SP)
 
 | ID | Tiket | Acceptance criteria | SP | Dep | Status |
 | --- | --- | --- | --- | --- | --- |
-| PP-COST-01 | Input pos biaya | ≤ 3 tap: chip kategori → nominal → simpan; total dan bagian per orang di header ter-update langsung | 3 | EVT-04 | Belum mulai |
-| PP-COST-02 | Penalang per pos | Default host; bisa diganti ke anggota mana pun; tampil di rincian tagihan | 2 | COST-01 | Belum mulai |
-| PP-COST-03 | Pos untuk sebagian peserta | Toggle "Hanya untuk…" lalu centang peserta; hanya yang hadir ikut dihitung; pos tanpa penanggung hadir memblokir kirim tagihan | 2 | COST-01, ATT-02 | Belum mulai |
+| PP-COST-01 | Input pos biaya | ≤ 3 tap: chip kategori → nominal → simpan; total dan bagian per orang di header ter-update langsung | 3 | EVT-04 | Selesai (diverifikasi lewat widget test, belum di perangkat) |
+| PP-COST-02 | Penalang per pos | Default host; bisa diganti ke anggota mana pun; tampil di rincian tagihan | 2 | COST-01 | Selesai (diverifikasi lewat widget test, belum di perangkat) |
+| PP-COST-03 | Pos untuk sebagian peserta | Toggle "Hanya untuk…" lalu centang peserta; hanya yang hadir ikut dihitung; pos tanpa penanggung hadir memblokir kirim tagihan | 2 | COST-01, ATT-02 | Selesai (diverifikasi lewat widget test, belum di perangkat) |
 
 ### ATT — Absensi (2 tiket, 3 SP)
 
 | ID | Tiket | Acceptance criteria | SP | Dep | Status |
 | --- | --- | --- | --- | --- | --- |
-| PP-ATT-02 | Check-in hadir oleh host | Toggle hadir, terisi otomatis dari kehadiran sesi sebelumnya; tombol tambah tamu di layar yang sama | 2 | EVT-04 | Belum mulai |
-| PP-ATT-03 | Bobot per peserta | Default dari data anggota (mis. tamu 1,2×, anak 0,5×), disimpan per mil; bisa diubah per sesi; bobot 0 ditolak | 1 | ATT-02 | Belum mulai |
+| PP-ATT-02 | Check-in hadir oleh host | Toggle hadir, terisi otomatis dari kehadiran sesi sebelumnya; tombol tambah tamu di layar yang sama | 2 | EVT-04 | Selesai (diverifikasi lewat widget test, belum di perangkat) |
+| PP-ATT-03 | Bobot per peserta | Default dari data anggota (mis. tamu 1,2×, anak 0,5×), disimpan per mil; bisa diubah per sesi; bobot 0 ditolak | 1 | ATT-02 | Selesai (diverifikasi lewat widget test, belum di perangkat) |
 
 ### CALC — Kalkulasi & tagih (5 tiket, 18 SP)
 
 | ID | Tiket | Acceptance criteria | SP | Dep | Status |
 | --- | --- | --- | --- | --- | --- |
-| PP-CALC-01 | Fungsi `Billing.preview/1` | Mengikuti aturan hitung; ≥ 15 unit test termasuk semua contoh uji wajib, pos subset dengan peserta tidak hadir, bobot, kredit; hasil deterministik; tanpa float | 5 | FND-02, LDG-01 | Belum mulai |
-| PP-CALC-02 | Pembulatan & selisih ke kas | Bulat ke atas per orang dari pecahan eksak; selisih masuk akun kas dan tampil "Masuk kas: RpX" | 2 | CALC-01 | Belum mulai |
-| PP-CALC-03 | Layar pratinjau tagihan | Rincian per orang per pos, total ditagih vs total biaya, kredit terpakai; tombol Kirim tagihan | 3 | CALC-02, COST-01, ATT-02 | Belum mulai |
-| PP-CALC-04 | Fungsi `Billing.issue/2` | Atomik: ledger + tagihan + pay\_token; idempoten; tagihan Rp0 langsung lunas via kredit; sesi pindah ke issued | 5 | CALC-01, EVT-04 | Belum mulai |
-| PP-CALC-05 | Batalkan tagihan (`Billing.void_issue/2`) | Mengikuti aturannya; alasan wajib; link bayar lama menampilkan "Tagihan dibatalkan" dan menolak pembayaran baru; uang yang sudah masuk menjadi kredit; terbit ulang menghasilkan tagihan baru | 3 | CALC-04 | Belum mulai |
+| PP-CALC-01 | Fungsi `Billing.preview/1` | Mengikuti aturan hitung; ≥ 15 unit test termasuk semua contoh uji wajib, pos subset dengan peserta tidak hadir, bobot, kredit; hasil deterministik; tanpa float | 5 | FND-02, LDG-01 | Selesai |
+| PP-CALC-02 | Pembulatan & selisih ke kas | Bulat ke atas per orang dari pecahan eksak; selisih masuk akun kas dan tampil "Masuk kas: RpX" | 2 | CALC-01 | Selesai |
+| PP-CALC-03 | Layar pratinjau tagihan | Rincian per orang per pos, total ditagih vs total biaya, kredit terpakai; tombol Kirim tagihan | 3 | CALC-02, COST-01, ATT-02 | Selesai (diverifikasi lewat widget test, belum di perangkat) |
+| PP-CALC-04 | Fungsi `Billing.issue/2` | Atomik: ledger + tagihan + pay\_token; idempoten; tagihan Rp0 langsung lunas via kredit; sesi pindah ke issued | 5 | CALC-01, EVT-04 | Selesai |
+| PP-CALC-05 | Batalkan tagihan (`Billing.void_issue/2`) | Mengikuti aturannya; alasan wajib; link bayar lama menampilkan "Tagihan dibatalkan" dan menolak pembayaran baru; uang yang sudah masuk menjadi kredit; terbit ulang menghasilkan tagihan baru | 3 | CALC-04 | Selesai |
 
 ### PAY — Pembayaran (7 tiket, 27 SP)
 
 | ID | Tiket | Acceptance criteria | SP | Dep | Status |
 | --- | --- | --- | --- | --- | --- |
-| PP-PAY-01 | Pilih gateway, integrasi sandbox & sub-account host | Keputusan Xendit vs Midtrans tercatat beserta tipe sub-account; host mendaftarkan rekening pencairan; sub-account terbentuk di sandbox; `payout_accounts` terisi | 5 | FND-01 | Belum mulai |
-| PP-PAY-02 | Endpoint `POST /pay/:token/payment` + biaya gateway | QRIS/VA/e-wallet; satu `payment_attempts` per permintaan dengan `external_id` `<bill_id>-<seq>`; `fee` dan `gross_amount` dari `Payments.fee_for/2`; permintaan ulang dengan metode sama mengembalikan attempt yang masih aktif; tagihan paid/void ditolak | 5 | PAY-01, CALC-04 | Belum mulai |
-| PP-PAY-03 | Endpoint `POST /webhooks/:provider` | Mengikuti alur webhook; tes: webhook ganda tidak posting dua kali, pending lalu paid diproses dua-duanya, crash di tengah lalu retry tetap memposting, signature salah ditolak, nominal beda masuk needs\_review, bayar tagihan void jadi kredit | 5 | PAY-02 | Belum mulai |
-| PP-PAY-04 | Halaman bayar web (Next.js) | Dimuat < 2 detik di 4G; nama grup, tanggal, rincian, total, biaya gateway per metode; QRIS default; berubah ke Lunas otomatis (polling 5 detik); tanpa nomor HP siapa pun | 5 | PAY-02 | Belum mulai |
-| PP-PAY-05 | Tandai lunas cash & batalkan | Host tandai lunas dari Status sesi untuk tagihan unpaid atau needs\_review (`cash_received`); bisa dibatalkan dalam 24 jam sejak `paid_at` lewat `cash_payment_cancelled` | 2 | CALC-04 | Belum mulai |
-| PP-PAY-06 | Kedaluwarsa link bayar | pay\_token aktif sampai lunas atau `token_expires_at`; QRIS kedaluwarsa dibuat ulang otomatis (attempt baru) saat halaman dibuka | 2 | PAY-02 | Belum mulai |
-| PP-PAY-07 | Tarik dana ke rekening host | Host melihat saldo sub-account dan menarik ke rekening terdaftar (API payout gateway, atau tautan dashboard bila sub-account managed); riwayat penarikan; tidak mengubah ledger | 3 | PAY-01 | Belum mulai |
+| PP-PAY-01 | Pilih gateway, integrasi sandbox & sub-account host | Keputusan Xendit vs Midtrans tercatat beserta tipe sub-account; host mendaftarkan rekening pencairan; sub-account terbentuk di sandbox; `payout_accounts` terisi | 5 | FND-01 | Sebagian: seam gateway, adapter fake, pendaftaran rekening pencairan, dan `payout_accounts` selesai; keputusan Xendit/Midtrans, sandbox, dan KYC sub-account belum (human-only) |
+| PP-PAY-02 | Endpoint `POST /pay/:token/payment` + biaya gateway | QRIS/VA/e-wallet; satu `payment_attempts` per permintaan dengan `external_id` `<bill_id>-<seq>`; `fee` dan `gross_amount` dari `Payments.fee_for/2`; permintaan ulang dengan metode sama mengembalikan attempt yang masih aktif; tagihan paid/void ditolak | 5 | PAY-01, CALC-04 | Selesai terhadap adapter fake; belum diuji ke gateway nyata |
+| PP-PAY-03 | Endpoint `POST /webhooks/:provider` | Mengikuti alur webhook; tes: webhook ganda tidak posting dua kali, pending lalu paid diproses dua-duanya, crash di tengah lalu retry tetap memposting, signature salah ditolak, nominal beda masuk needs\_review, bayar tagihan void jadi kredit | 5 | PAY-02 | Selesai terhadap adapter fake; format callback gateway nyata belum dikonfirmasi |
+| PP-PAY-04 | Halaman bayar web (Next.js) | Dimuat < 2 detik di 4G; nama grup, tanggal, rincian, total, biaya gateway per metode; QRIS default; berubah ke Lunas otomatis (polling 5 detik); tanpa nomor HP siapa pun | 5 | PAY-02 | Sebagian: halaman, rincian, biaya per metode, polling 5 detik, dan tanpa nomor HP selesai (tes web); "dimuat < 2 detik di 4G" belum diukur |
+| PP-PAY-05 | Tandai lunas cash & batalkan | Host tandai lunas dari Status sesi untuk tagihan unpaid atau needs\_review (`cash_received`); bisa dibatalkan dalam 24 jam sejak `paid_at` lewat `cash_payment_cancelled` | 2 | CALC-04 | Selesai (API diuji; layar app diverifikasi lewat widget test, belum di perangkat) |
+| PP-PAY-06 | Kedaluwarsa link bayar | pay\_token aktif sampai lunas atau `token_expires_at`; QRIS kedaluwarsa dibuat ulang otomatis (attempt baru) saat halaman dibuka | 2 | PAY-02 | Selesai |
+| PP-PAY-07 | Tarik dana ke rekening host | Host melihat saldo sub-account dan menarik ke rekening terdaftar (API payout gateway, atau tautan dashboard bila sub-account managed); riwayat penarikan; tidak mengubah ledger | 3 | PAY-01 | Selesai terhadap adapter fake; belum dengan gateway nyata (layar app diverifikasi lewat widget test, belum di perangkat) |
 
 ### NTF — Notifikasi (1 tiket, 2 SP)
 
 | ID | Tiket | Acceptance criteria | SP | Dep | Status |
 | --- | --- | --- | --- | --- | --- |
-| PP-NTF-01 | Bagikan ke WA | Tagihan, pengingat, ringkasan teks membuka wa.me dengan teks + link siap kirim; peserta bernomor bisa dikirimi personal | 2 | CALC-04 | Belum mulai |
+| PP-NTF-01 | Bagikan ke WA | Tagihan, pengingat, ringkasan teks membuka wa.me dengan teks + link siap kirim; peserta bernomor bisa dikirimi personal | 2 | CALC-04 | Selesai (teks dan tautan wa.me diuji; pembukaan WhatsApp diverifikasi lewat widget test, belum di perangkat) |
 
 ### LDG — Kas & laporan (4 tiket, 11 SP)
 
 | ID | Tiket | Acceptance criteria | SP | Dep | Status |
 | --- | --- | --- | --- | --- | --- |
-| PP-LDG-01 | Fungsi `Ledger.balances/1` | Dihitung dari jumlah entri, bukan kolom cache; cocok dengan hitungan manual di test | 3 | FND-02 | Belum mulai |
-| PP-LDG-02 | Layar Kas & riwayat | Ledger kronologis berbahasa santai ("Andi bayar Rp45.000"); filter per anggota; terlihat semua anggota | 3 | LDG-01 | Belum mulai |
-| PP-LDG-04 | Koreksi & audit log | Host mengoreksi (`correction`) txn pelunasan antar anggota atau belanja kas dengan alasan wajib; Ledger menolak undo lain (tagihan dibatalkan lewat CALC-05, cash lewat PAY-05, pembayaran gateway tidak bisa dibalik); riwayat menampilkan entri asli + pembalik; semua aksi host yang mengubah uang tercatat di `audit_log` | 2 | LDG-01 | Belum mulai |
-| PP-LDG-05 | Pelunasan antar anggota & belanja kas | Host mencatat "Saya ganti talangan Andi RpX" dan "Beli bola RpX dari kas"; belanja kas ditolak bila melebihi saldo kas; keduanya tampil di riwayat | 3 | LDG-01 | Belum mulai |
+| PP-LDG-01 | Fungsi `Ledger.balances/1` | Dihitung dari jumlah entri, bukan kolom cache; cocok dengan hitungan manual di test | 3 | FND-02 | Selesai |
+| PP-LDG-02 | Layar Kas & riwayat | Ledger kronologis berbahasa santai ("Andi bayar Rp45.000"); filter per anggota; terlihat semua anggota | 3 | LDG-01 | Selesai (diverifikasi lewat widget test, belum di perangkat) |
+| PP-LDG-04 | Koreksi & audit log | Host mengoreksi (`correction`) txn pelunasan antar anggota atau belanja kas dengan alasan wajib; Ledger menolak undo lain (tagihan dibatalkan lewat CALC-05, cash lewat PAY-05, pembayaran gateway tidak bisa dibalik); riwayat menampilkan entri asli + pembalik; semua aksi host yang mengubah uang tercatat di `audit_log` | 2 | LDG-01 | Selesai (diverifikasi lewat widget test, belum di perangkat) |
+| PP-LDG-05 | Pelunasan antar anggota & belanja kas | Host mencatat "Saya ganti talangan Andi RpX" dan "Beli bola RpX dari kas"; belanja kas ditolak bila melebihi saldo kas; keduanya tampil di riwayat | 3 | LDG-01 | Selesai (diverifikasi lewat widget test, belum di perangkat) |
 
 ### REL — Rilis (3 tiket, 6 SP)
 
 | ID | Tiket | Acceptance criteria | SP | Dep | Status |
 | --- | --- | --- | --- | --- | --- |
-| PP-REL-01 | Kebijakan privasi & S&K | Halaman publik; menyebut data yang disimpan, hak hapus akun, saldo bukan dana tersimpan | 1 | — | Belum mulai |
-| PP-REL-02 | Pelacakan metrik MVP | Event: durasi buat sesi, tagihan dikirim, jam sampai lunas, bayar tanpa install; dashboard sederhana | 2 | CALC-04, PAY-03 | Belum mulai |
-| PP-REL-03 | Beta tertutup & rilis Play Store | 5–10 grup di internal testing selama sprint 6; listing Play Store siap; crash-free ≥ 99% selama beta; rilis setelah semua P0 selesai | 3 | Gerbang beta (semua tiket sprint 1–5) | Belum mulai |
+| PP-REL-01 | Kebijakan privasi & S&K | Halaman publik; menyebut data yang disimpan, hak hapus akun, saldo bukan dana tersimpan | 1 | — | Selesai |
+| PP-REL-02 | Pelacakan metrik MVP | Event: durasi buat sesi, tagihan dikirim, jam sampai lunas, bayar tanpa install; dashboard sederhana | 2 | CALC-04, PAY-03 | Selesai (event server-side dan dashboard sederhana `GET /api/admin/metrics`) |
+| PP-REL-03 | Beta tertutup & rilis Play Store | 5–10 grup di internal testing selama sprint 6; listing Play Store siap; crash-free ≥ 99% selama beta; rilis setelah semua P0 selesai | 3 | Gerbang beta (semua tiket sprint 1–5) | Belum mulai: beta tertutup, listing Play Store, dan crash-free ≥ 99% adalah kerja manusia (checklist di `docs/release.md`) |
 
 **Digeser ke P1 (17 SP, ID dipertahankan)**
 

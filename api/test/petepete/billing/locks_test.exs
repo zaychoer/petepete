@@ -17,10 +17,10 @@ defmodule Petepete.Billing.LocksTest do
   setup do
     :ok = Sandbox.checkout(Repo, sandbox: false)
 
-    group = group!()
-    event = event!(group)
-    session = session!(event, status: "issued")
-    bills = for _ <- 1..3, do: bill!(session, member!(group))
+    group = group_fixture()
+    event = event_fixture(group)
+    session = session_fixture(event, status: "issued")
+    bills = for _ <- 1..3, do: bill_fixture(session, member_fixture(group))
 
     on_exit(fn ->
       Sandbox.checkout(Repo, sandbox: false)

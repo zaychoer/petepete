@@ -20,10 +20,10 @@ defmodule Petepete.LedgerConcurrencyTest do
       Ecto.Adapters.SQL.Sandbox.mode(Repo, :manual)
     end)
 
-    user = user!()
-    group = group!()
-    host = member!(group, user_id: user.id, role: "host")
-    other = member!(group)
+    user = user_fixture()
+    group = group_fixture()
+    host = member_fixture(group, user_id: user.id, role: "host")
+    other = member_fixture(group)
     {:ok, g: group.id, actor: {:host, user.id}, host: host.id, other: other.id}
   end
 

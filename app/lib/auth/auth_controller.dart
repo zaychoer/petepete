@@ -27,11 +27,11 @@ class AuthUser {
   const AuthUser({required this.id, required this.displayName});
 
   factory AuthUser.fromJson(Map<String, dynamic> json) => AuthUser(
-    id: json['id'] as String,
+    id: json['id'] as int,
     displayName: (json['display_name'] as String?) ?? '',
   );
 
-  final String id;
+  final int id;
   final String displayName;
 }
 

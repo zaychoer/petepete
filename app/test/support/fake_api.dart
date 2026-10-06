@@ -32,8 +32,8 @@ class FakeApi {
   /// Makes only `/api/auth/refresh` fail like an offline phone.
   bool refreshOffline = false;
 
-  /// Accounts by normalised phone: `{id, display_name}`.
-  final accounts = <String, Map<String, String>>{};
+  /// Accounts by normalised phone: `{id (int), display_name}`.
+  final accounts = <String, Map<String, Object>>{};
 
   /// Phones a code was requested for, in order.
   final otpRequests = <String>[];
@@ -41,7 +41,7 @@ class FakeApi {
   /// Every request as `METHOD path`, in order.
   final log = <String>[];
 
-  /// `Idempotency-Key` header of each `/api/groups/g1/kas-spends` request, in order.
+  /// `Idempotency-Key` header of each `/api/groups/1/kas-spends` request, in order.
   final moneyKeys = <String?>[];
 
   int refreshCalls = 0;
@@ -53,7 +53,7 @@ class FakeApi {
   AuthTokens signIn(String phone, {String displayName = 'Budi'}) {
     accounts.putIfAbsent(
       phone,
-      () => {'id': 'u${++_seq}', 'display_name': displayName},
+      () => {'id': ++_seq, 'display_name': displayName},
     );
     return _issue(phone);
   }
@@ -94,10 +94,7 @@ class FakeApi {
         final phone = body['phone'] as String;
         if (body['code'] != validCode) return _error(401, 'invalid_code');
         final newUser = !accounts.containsKey(phone);
-        accounts.putIfAbsent(
-          phone,
-          () => {'id': 'u${++_seq}', 'display_name': ''},
-        );
+        accounts.putIfAbsent(phone, () => {'id': ++_seq, 'display_name': ''});
         final tokens = _issue(phone);
         return _json({
           'access_token': tokens.accessToken,
@@ -137,7 +134,7 @@ class FakeApi {
         return _json({..._user(phone), 'phone': phone});
       case 'GET /api/groups':
         return _json({'groups': <Object>[]});
-      case 'POST /api/groups/g1/kas-spends':
+      case 'POST /api/groups/1/kas-spends':
         moneyKeys.add(request.headers['idempotency-key']);
         return _json({'ok': true});
     }

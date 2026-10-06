@@ -19,19 +19,9 @@ defmodule PetepeteWeb.PayoutAccountControllerTest do
   end
 
   defp login_user(conn, group, role) do
-    phone =
-      "628" <> (uniq() |> rem(1_000_000_000) |> Integer.to_string() |> String.pad_leading(9, "0"))
-
-    user = user_fixture(%{phone: phone})
-    member_fixture(group, role, user)
-
-    post(conn, ~p"/api/auth/otp", %{phone: phone})
-    assert_received {:otp_sent, _, code}
-
-    %{"access_token" => token} =
-      post(conn, ~p"/api/auth/verify", %{phone: phone, code: code}) |> json_response(200)
-
-    put_req_header(conn, "authorization", "Bearer " <> token)
+    user = user_fixture(phone: valid_phone())
+    member_fixture(group, role: role, user: user)
+    bearer_conn(conn, user)
   end
 
   test "host registers the payout account and the audit row is written", ctx do

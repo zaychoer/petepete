@@ -11,15 +11,15 @@ defmodule Petepete.ShareTest do
   defp issued_session do
     group = group_fixture(%{name: "Futsal Kamis"})
     event = event_fixture(group, %{name: "Futsal Kamis Malam"})
-    session = session_fixture(group, event: event, starts_at: @starts_at, status: "issued")
-    cost_item_fixture(session, amount: 100_000, paid_by: member_fixture(group, "host"))
+    session = session_fixture(event, starts_at: @starts_at, status: "issued")
+    cost_item_fixture(session, amount: 100_000, paid_by: member_fixture(group, role: "host"))
     %{group: group, session: session}
   end
 
   defp bill_for(ctx, attrs) do
     {phone, attrs} = Map.pop(attrs, :phone)
     {name, attrs} = Map.pop(attrs, :name, "Andi")
-    member = member_fixture(ctx.group, "member")
+    member = member_fixture(ctx.group, role: "member")
 
     member =
       member |> Ecto.Changeset.change(phone: phone, display_name: name) |> Repo.update!()
@@ -108,7 +108,7 @@ defmodule Petepete.ShareTest do
       group = group_fixture()
 
       for status <- ~w(draft cancelled) do
-        session = session_fixture(group, status: status)
+        session = session_fixture(event_fixture(group), status: status)
 
         assert Share.bills(session.id) == {:error, {:conflict, :session_not_issued}}
         assert Share.reminder(session.id) == {:error, {:conflict, :session_not_issued}}

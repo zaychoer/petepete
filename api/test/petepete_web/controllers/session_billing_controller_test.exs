@@ -4,40 +4,25 @@ defmodule PetepeteWeb.SessionBillingControllerTest do
   import Petepete.Fixtures
 
   alias Petepete.{Clock, Ledger, Repo}
-  alias Petepete.Accounts.User
 
   setup do
     Clock.freeze(~U[2026-10-06 03:00:00Z])
     :ok
   end
 
-  # Logs in through the OTP flow and returns `{conn with bearer token, user}`.
-  defp login(conn) do
-    phone =
-      "628" <> (uniq() |> rem(1_000_000_000) |> Integer.to_string() |> String.pad_leading(9, "0"))
-
-    post(conn, ~p"/api/auth/otp", %{phone: phone})
-    assert_received {:otp_sent, _, code}
-
-    %{"access_token" => token, "user" => %{"id" => id}} =
-      post(conn, ~p"/api/auth/verify", %{phone: phone, code: code}) |> json_response(200)
-
-    {put_req_header(conn, "authorization", "Bearer " <> token), Repo.get!(User, id)}
-  end
-
   # A group whose host is `user`, with a draft session of 3 attendees and a Rp100.000 cost.
   defp group_with_session(user, role \\ "host") do
     group = group_fixture()
-    host = member_fixture(group, role, user)
-    others = for _ <- 1..2, do: member_fixture(group, "member")
-    session = session_fixture(group)
+    host = member_fixture(group, role: role, user: user)
+    others = for _ <- 1..2, do: member_fixture(group, role: "member")
+    session = session_fixture(event_fixture(group))
     for m <- [host | others], do: attendance_fixture(session, m)
     cost_item_fixture(session, amount: 100_000, paid_by: host)
     %{group: group, host: host, others: others, session: session}
   end
 
   setup %{conn: conn} do
-    {conn, user} = login(conn)
+    {conn, user} = bearer_login(conn)
     %{conn: conn, user: user}
   end
 
@@ -73,9 +58,9 @@ defmodule PetepeteWeb.SessionBillingControllerTest do
     test "a host of another group gets 404 and a plain member 403", %{conn: conn, user: user} do
       ctx = group_with_session(user)
       other = group_with_session(user_fixture())
-      {member_conn, member_user} = login(build_conn())
-      member_fixture(ctx.group, "member", member_user)
-      {stranger_conn, _} = login(build_conn())
+      {member_conn, member_user} = bearer_login(build_conn())
+      member_fixture(ctx.group, role: "member", user: member_user)
+      {stranger_conn, _} = bearer_login(build_conn())
 
       assert get(member_conn, ~p"/api/sessions/#{ctx.session.id}/preview")
              |> json_response(403) == %{"error" => "forbidden"}
@@ -138,24 +123,24 @@ defmodule PetepeteWeb.SessionBillingControllerTest do
       assert length(Ledger.txns(ctx.group.id)) == 1
     end
 
-    test "a different key after issuing is 409, no header is 400", %{conn: conn, user: user} do
+    test "a different key after issuing is 409, no header is 422", %{conn: conn, user: user} do
       ctx = group_with_session(user)
       issue(conn, ctx.session.id, "one") |> json_response(200)
 
-      assert issue(conn, ctx.session.id, "two") |> json_response(409) ==
-               %{"error" => "session_not_draft"}
+      assert %{"error" => "invalid_transition", "entity" => "session", "status" => "issued"} =
+               issue(conn, ctx.session.id, "two") |> json_response(409)
 
-      assert post(conn, ~p"/api/sessions/#{ctx.session.id}/issue") |> json_response(400) ==
-               %{"error" => "idempotency_key_required"}
+      assert %{"error" => "idempotency_key_required"} =
+               post(conn, ~p"/api/sessions/#{ctx.session.id}/issue") |> json_response(422)
 
       assert length(Ledger.txns(ctx.group.id)) == 1
     end
 
     test "only the host of the session's group may issue", %{user: user} do
       ctx = group_with_session(user)
-      {member_conn, member_user} = login(build_conn())
-      member_fixture(ctx.group, "member", member_user)
-      {stranger_conn, _} = login(build_conn())
+      {member_conn, member_user} = bearer_login(build_conn())
+      member_fixture(ctx.group, role: "member", user: member_user)
+      {stranger_conn, _} = bearer_login(build_conn())
 
       assert issue(member_conn, ctx.session.id, "m") |> json_response(403)
       assert issue(stranger_conn, ctx.session.id, "s") |> json_response(404)

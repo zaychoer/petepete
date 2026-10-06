@@ -295,7 +295,11 @@ class _WithdrawalTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    final managed = withdrawal.status == 'managed';
+    final tone = switch (withdrawal.status) {
+      'failed' => StatusTone.danger,
+      'managed' || 'pending' => StatusTone.warning,
+      _ => StatusTone.info,
+    };
     return Card(
       key: Key('withdrawal-${withdrawal.id}'),
       child: Padding(
@@ -315,7 +319,7 @@ class _WithdrawalTile extends StatelessWidget {
               children: [
                 StatusChip(
                   label: withdrawal.statusLabel,
-                  tone: managed ? StatusTone.warning : StatusTone.info,
+                  tone: tone,
                 ),
                 if (onOpenDashboard != null)
                   TextButton(

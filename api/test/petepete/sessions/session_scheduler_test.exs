@@ -4,17 +4,17 @@ defmodule Petepete.Sessions.SessionSchedulerTest do
 
   @moduletag :capture_log
 
-  import Petepete.Fixtures, only: [group!: 0]
+  import Petepete.Fixtures, only: [group_fixture: 0, member_fixture: 2]
 
   alias Petepete.{Clock, Sessions}
   alias Petepete.Billing.Session
   alias Petepete.Sessions.{Event, SessionScheduler}
 
   setup do
-    group = group!()
+    group = group_fixture()
 
     {:ok, %{event: event}} =
-      Sessions.create_event(group.id, %{
+      Sessions.create_event(member_fixture(group, role: "host"), %{
         "type" => "recurring",
         "rrule" => "FREQ=WEEKLY;BYDAY=TH",
         "time" => "19:00"

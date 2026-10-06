@@ -1,25 +1,11 @@
 defmodule Petepete.SchemaConstraintsTest do
   use Petepete.DataCase, async: true
 
-  alias Petepete.Accounts.User
-  alias Petepete.Billing.{Bill, CostItem, Participant, Session}
-  alias Petepete.Groups.{Group, Member}
+  import Petepete.Fixtures
+
+  alias Petepete.Billing.{CostItem, Participant}
+  alias Petepete.Groups.Group
   alias Petepete.Ledger.{Entry, Txn}
-  alias Petepete.Sessions.Event
-
-  @now ~U[2026-10-06 10:00:00Z]
-
-  defp uniq, do: System.unique_integer([:positive])
-
-  defp user!, do: Repo.insert!(%User{phone: "62#{uniq()}", display_name: "Host"})
-
-  defp group!, do: Repo.insert!(%Group{name: "Futsal", invite_token: "inv#{uniq()}"})
-
-  defp member!(group, attrs \\ []) do
-    Repo.insert!(
-      struct(%Member{group_id: group.id, display_name: "M#{uniq()}", role: "member"}, attrs)
-    )
-  end
 
   defp txn!(group, attrs \\ []) do
     base = %Txn{
@@ -40,8 +26,8 @@ defmodule Petepete.SchemaConstraintsTest do
 
   describe "ledger zero-sum" do
     setup do
-      group = group!()
-      {:ok, group: group, a: member!(group), b: member!(group)}
+      group = group_fixture()
+      {:ok, group: group, a: member_fixture(group), b: member_fixture(group)}
     end
 
     test "unbalanced txn is rejected when constraints are checked at commit", ctx do
@@ -64,8 +50,8 @@ defmodule Petepete.SchemaConstraintsTest do
 
   describe "ledger immutability" do
     setup do
-      group = group!()
-      a = member!(group)
+      group = group_fixture()
+      a = member_fixture(group)
       txn = txn!(group)
       entry = entry!(txn, account_type: "member", member_id: a.id, amount: 0)
       {:ok, txn: txn, entry: entry}
@@ -90,8 +76,8 @@ defmodule Petepete.SchemaConstraintsTest do
 
   describe "ledger_txns checks" do
     setup do
-      group = group!()
-      {:ok, group: group, user: user!()}
+      group = group_fixture()
+      {:ok, group: group, user: user_fixture()}
     end
 
     test "kind must be one of the eight money events", %{group: group} do
@@ -153,9 +139,9 @@ defmodule Petepete.SchemaConstraintsTest do
 
   describe "ledger_entries checks" do
     test "member accounts need member_id, kas accounts must not have one" do
-      group = group!()
+      group = group_fixture()
       txn = txn!(group)
-      m = member!(group)
+      m = member_fixture(group)
 
       assert_raise Ecto.ConstraintError, ~r/account_matches_member/, fn ->
         entry!(txn, account_type: "member", amount: 1)
@@ -169,14 +155,14 @@ defmodule Petepete.SchemaConstraintsTest do
 
   describe "other checks" do
     test "weights must be positive" do
-      group = group!()
+      group = group_fixture()
 
       assert_raise Ecto.ConstraintError, ~r/default_weight_positive/, fn ->
-        member!(group, default_weight: 0)
+        member_fixture(group, default_weight: 0)
       end
 
-      m = member!(group)
-      session = session!(group)
+      m = member_fixture(group)
+      session = session_fixture(event_fixture(group))
 
       assert_raise Ecto.ConstraintError, ~r/weight_positive/, fn ->
         Repo.insert!(%Participant{session_id: session.id, member_id: m.id, weight: 0})
@@ -184,17 +170,17 @@ defmodule Petepete.SchemaConstraintsTest do
     end
 
     test "member role, rounding unit and cost amount are restricted" do
-      group = group!()
+      group = group_fixture()
 
       assert_raise Ecto.ConstraintError, ~r/role_allowed/, fn ->
-        member!(group, role: "admin")
+        member_fixture(group, role: "admin")
       end
 
       assert_raise Ecto.ConstraintError, ~r/rounding_unit_allowed/, fn ->
         Repo.insert!(%Group{name: "x", invite_token: "t#{uniq()}", rounding_unit: 250})
       end
 
-      session = session!(group)
+      session = session_fixture(event_fixture(group))
 
       assert_raise Ecto.ConstraintError, ~r/amount_positive/, fn ->
         Repo.insert!(%CostItem{session_id: session.id, category: "lapangan", amount: 0})
@@ -204,67 +190,45 @@ defmodule Petepete.SchemaConstraintsTest do
 
   describe "uniques" do
     test "group member is unique per (group, user) only when user is set" do
-      group = group!()
-      user = user!()
-      member!(group, user_id: user.id)
-      member!(group)
-      member!(group)
+      group = group_fixture()
+      user = user_fixture()
+      member_fixture(group, user: user)
+      member_fixture(group)
+      member_fixture(group)
 
       assert_raise Ecto.ConstraintError, ~r/group_members_group_id_user_id_index/, fn ->
-        member!(group, user_id: user.id)
+        member_fixture(group, user: user)
       end
     end
 
     test "only one active session per (event, starts_at); cancelled frees the slot" do
-      group = group!()
-      event = event!(group)
-      first = session!(group, event)
+      group = group_fixture()
+      event = event_fixture(group)
+      first = session_fixture(event)
 
       assert_raise Ecto.ConstraintError, ~r/sessions_event_id_starts_at_index/, fn ->
-        session!(group, event)
+        session_fixture(event)
       end
 
       first |> Ecto.Changeset.change(status: "cancelled") |> Repo.update!()
-      session!(group, event)
+      session_fixture(event)
     end
 
     test "bills: one non-void bill per (session, member); re-bill allowed after void" do
-      group = group!()
-      session = session!(group)
-      m = member!(group)
+      group = group_fixture()
+      session = session_fixture(event_fixture(group))
+      m = member_fixture(group)
 
-      first = bill!(session, m)
+      first = bill_fixture(session, m)
 
       assert_raise Ecto.ConstraintError, ~r/bills_session_id_member_id_index/, fn ->
-        bill!(session, m)
+        bill_fixture(session, m)
       end
 
       first |> Ecto.Changeset.change(status: "void") |> Repo.update!()
-      bill!(session, m)
+      bill_fixture(session, m)
       # voided bills do not count towards uniqueness either
-      bill!(session, m, status: "void")
+      bill_fixture(session, m, status: "void")
     end
-  end
-
-  defp event!(group) do
-    Repo.insert!(%Event{group_id: group.id, name: "Futsal Kamis", type: "recurring"})
-  end
-
-  defp session!(group, event \\ nil) do
-    event = event || event!(group)
-    Repo.insert!(%Session{event_id: event.id, group_id: group.id, starts_at: @now})
-  end
-
-  defp bill!(session, member, attrs \\ []) do
-    base = %Bill{
-      session_id: session.id,
-      member_id: member.id,
-      share: 1000,
-      amount_due: 1000,
-      pay_token: "p#{uniq()}",
-      token_expires_at: @now
-    }
-
-    Repo.insert!(struct(base, attrs))
   end
 end

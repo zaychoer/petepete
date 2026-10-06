@@ -12,6 +12,11 @@ FakeGroupsApi _fake() {
     'role': 'host',
   });
   fake.homes[5] = emptyHome(5, 'Futsal Kamis');
+  // The host's member id is not 1, so a payer that is merely "the first member" shows.
+  fake.members[5] = [
+    {'id': 4, 'display_name': 'Andi', 'role': 'member', 'has_account': true},
+    {'id': 7, 'display_name': 'Budi', 'role': 'host', 'has_account': true},
+  ];
   return fake;
 }
 
@@ -96,7 +101,12 @@ void main() {
       'time': '19:00',
       'cost_template': {
         'items': [
-          {'category': 'Sewa lapangan', 'amount': 350000, 'scope': 'all'},
+          {
+            'category': 'Sewa lapangan',
+            'amount': 350000,
+            'scope': 'all',
+            'paid_by_member_id': 7,
+          },
         ],
       },
     });
@@ -104,6 +114,38 @@ void main() {
       find.text('Event rutin dibuat. Sesi draft muncul 3 hari sebelum main.'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('every template item names the host as payer', (tester) async {
+    final fake = _fake();
+    final app = AppHarness(fake);
+    await app.pump(tester, app.screenRouter('/groups/5/events/new'));
+
+    await tester.tap(find.text('Kam'));
+    await tester.tap(find.text('+ Sewa lapangan'));
+    await tester.tap(find.text('+ Air minum'));
+    await tester.tap(find.text('+ Pos lain'));
+    await tester.pump();
+    final amounts = find.widgetWithText(TextField, 'Jumlah');
+    await tester.enterText(amounts.at(0), '350000');
+    await tester.enterText(amounts.at(1), '40000');
+    await tester.enterText(amounts.at(2), '15000');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Pos biaya').at(2),
+      'Parkir',
+    );
+    await _tapSave(tester);
+
+    final items =
+        (fake.calls('POST /api/groups/5/events').single.body['cost_template']
+                as Map)['items']
+            as List;
+    expect(items.map((i) => (i as Map)['category']), [
+      'Sewa lapangan',
+      'Air minum',
+      'Parkir',
+    ]);
+    expect(items.map((i) => (i as Map)['paid_by_member_id']), [7, 7, 7]);
   });
 
   testWidgets('a one-off event needs a date, then is sent with a WIB timestamp', (

@@ -20,7 +20,7 @@ defmodule PetepeteWeb.WithdrawalControllerTest do
     {other_host, _} = login(conn, g, "host")
     {plain, _} = login(conn, g, "member")
     {outsider, _} = login(conn, group_fixture(), "host")
-    account = payout_account!(g, owner_member, status: "active")
+    account = payout_account_fixture(g, owner_member, status: "active")
 
     %{
       g: g,
@@ -34,7 +34,7 @@ defmodule PetepeteWeb.WithdrawalControllerTest do
 
   defp login(conn, group, role) do
     user = user_fixture(%{phone: valid_phone()})
-    member = member_fixture(group, role, user)
+    member = member_fixture(group, role: role, user: user)
     {bearer_conn(conn, user), member}
   end
 

@@ -29,6 +29,13 @@ class FakeSessionServer {
 
   static const hostId = 1;
 
+  /// The caller's role in the group (`you.role`). As a `member` the fake answers
+  /// every host-only route with 403 `forbidden`, like the real API.
+  String youRole = 'host';
+
+  /// The caller's member id (`you.member_id`).
+  int youMemberId = hostId;
+
   /// Roster as the group endpoint returns it.
   final members = <Map<String, dynamic>>[
     {'id': 1, 'display_name': 'Budi', 'role': 'host'},
@@ -91,6 +98,15 @@ class FakeSessionServer {
     ...participants[id]!,
   };
 
+  /// Routes only the host may call; they answer a member 403.
+  static final _hostOnly = RegExp(
+    r'^(PUT|DELETE) /api/sessions/\d+/(costs|attendance)'
+    r'|^POST /api/groups/\d+/guests$'
+    r'|^GET /api/sessions/\d+/(preview|share/bills|share/reminder)$'
+    r'|^POST /api/sessions/\d+/(issue|void)$'
+    r'|^POST /api/bills/',
+  );
+
   Future<http.Response> _handle(http.Request r) async {
     final route = '${r.method} ${r.url.path}';
     log.add(route);
@@ -102,6 +118,9 @@ class FakeSessionServer {
 
     final failure = failures.remove(route);
     if (failure != null) return _json(failure.$2, failure.$1);
+    if (youRole != 'host' && _hostOnly.hasMatch(route)) {
+      return _json({'error': 'forbidden'}, 403);
+    }
 
     switch (route) {
       case 'GET /api/groups/1':
@@ -109,7 +128,7 @@ class FakeSessionServer {
           'id': 1,
           'members': members,
           'cost_categories': categories,
-          'you': {'member_id': hostId, 'role': 'host'},
+          'you': {'member_id': youMemberId, 'role': youRole},
         });
       case 'POST /api/groups/1/guests':
         final id = ++_memberSeq;
@@ -203,7 +222,11 @@ class FakeSessionServer {
       final bill = shareBills.firstWhere(
         (b) => b['bill_id'] == int.parse(cash.group(1)!),
       );
-      bill['status'] = cash.group(2) == null ? 'paid' : 'unpaid';
+      final paying = cash.group(2) == null;
+      bill['status'] = paying ? 'paid' : 'unpaid';
+      bill['paid_via'] = paying ? 'cash' : null;
+      bill['paid_at'] = paying ? '2026-10-06T12:00:00Z' : null;
+      bill['cash_cancellable'] = paying;
       return _json({
         'txn_id': 9,
         'replayed': false,

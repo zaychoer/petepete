@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   applyAttempt,
+  createOpenRegeneration,
   initialMethod,
+  openRegenerationMethod,
   phaseOf,
-  regenerationMethod,
   shouldPoll,
 } from "./pay-machine";
 import type { BillPayPage, PayAttempt, PayPage, VoidPayPage } from "./pay-types";
@@ -42,6 +43,7 @@ function bill(overrides: Partial<BillPayPage> = {}): BillPayPage {
     methods: [...methods],
     attempt: null,
     attempt_expired: false,
+    expired_method: null,
     ...overrides,
   };
 }
@@ -89,40 +91,60 @@ describe("shouldPoll", () => {
   });
 });
 
-describe("regenerationMethod", () => {
-  const idle = { lastMethod: null, inFlight: false, failed: false };
-
-  it("asks for a new QRIS when the page opens on an expired attempt", () => {
-    expect(regenerationMethod(bill({ attempt_expired: true }), idle)).toBe("qris");
+describe("openRegenerationMethod", () => {
+  it("asks for a new QRIS when the page opens on an expired QRIS", () => {
+    const page = bill({ attempt_expired: true, expired_method: "qris" });
+    expect(openRegenerationMethod(page)).toBe("qris");
   });
 
-  it("keeps the method the payer used", () => {
+  it("leaves an expired VA or e-wallet to the pay button", () => {
     expect(
-      regenerationMethod(bill({ attempt_expired: true }), {
-        ...idle,
-        lastMethod: "va",
-      }),
-    ).toBe("va");
+      openRegenerationMethod(bill({ attempt_expired: true, expired_method: "va" })),
+    ).toBe(null);
+    expect(
+      openRegenerationMethod(bill({ attempt_expired: true, expired_method: "ewallet" })),
+    ).toBe(null);
   });
 
-  it("falls back to the first available method when the wanted one is gone", () => {
-    const page = bill({ attempt_expired: true, methods: [methods[1]] });
-    expect(regenerationMethod(page, idle)).toBe("va");
-    expect(regenerationMethod(bill({ attempt_expired: true, methods: [] }), idle)).toBe(
-      null,
-    );
-  });
-
-  it("never fires twice at once nor loops after a failure", () => {
-    const page = bill({ attempt_expired: true });
-    expect(regenerationMethod(page, { ...idle, inFlight: true })).toBe(null);
-    expect(regenerationMethod(page, { ...idle, failed: true })).toBe(null);
+  it("does nothing when the expired method is unknown or QRIS is not offered", () => {
+    expect(openRegenerationMethod(bill({ attempt_expired: true }))).toBe(null);
+    const noQris = bill({
+      attempt_expired: true,
+      expired_method: "qris",
+      methods: [methods[1]],
+    });
+    expect(openRegenerationMethod(noQris)).toBe(null);
   });
 
   it("does nothing in any other phase", () => {
-    expect(regenerationMethod(bill(), idle)).toBe(null);
-    expect(regenerationMethod(bill({ attempt: qrisAttempt }), idle)).toBe(null);
-    expect(regenerationMethod(voidPage, idle)).toBe(null);
+    expect(openRegenerationMethod(bill())).toBe(null);
+    expect(openRegenerationMethod(bill({ attempt: qrisAttempt }))).toBe(null);
+    expect(openRegenerationMethod(voidPage)).toBe(null);
+  });
+});
+
+describe("createOpenRegeneration", () => {
+  it("hands out the QRIS regeneration exactly once", () => {
+    const regen = createOpenRegeneration(
+      bill({ attempt_expired: true, expired_method: "qris" }),
+    );
+    expect(regen.claim()).toBe("qris");
+    expect(regen.claim()).toBe(null);
+    expect(regen.claim()).toBe(null);
+  });
+
+  it("never regenerates when the page opened with a live QRIS that expires later", () => {
+    // Decided from the page as opened: an active attempt, so nothing is pending even after
+    // the polled page later shows the same QRIS as expired.
+    const regen = createOpenRegeneration(bill({ attempt: qrisAttempt }));
+    expect(regen.claim()).toBe(null);
+  });
+
+  it("never regenerates for an expired VA on open", () => {
+    const regen = createOpenRegeneration(
+      bill({ attempt_expired: true, expired_method: "va" }),
+    );
+    expect(regen.claim()).toBe(null);
   });
 });
 

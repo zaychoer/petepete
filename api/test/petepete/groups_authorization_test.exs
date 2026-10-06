@@ -14,7 +14,7 @@ defmodule Petepete.GroupsAuthorizationTest do
     {plain_a, plain_a_member} = plain_member_fixture(a)
     {guest_a, _} = guest_fixture(a)
     {host_b, host_b_member} = host_fixture(b)
-    session_b = session_fixture(b)
+    session_b = session_fixture(event_fixture(b))
     bill_b = bill_fixture(session_b, host_b_member)
 
     txn_b =
@@ -77,7 +77,7 @@ defmodule Petepete.GroupsAuthorizationTest do
   end
 
   test "scope helpers restrict queries to one group", ctx do
-    session_a = session_fixture(ctx.a)
+    session_a = session_fixture(event_fixture(ctx.a))
     bill_a = bill_fixture(session_a, ctx.host_a_member)
 
     ids =

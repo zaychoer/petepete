@@ -118,7 +118,7 @@ defmodule PetepeteWeb.InviteControllerTest do
       assert json_response(get(conn, ~p"/api/invites/nope"), 404) == %{"error" => "not_found"}
 
       {host_conn, host_user} = bearer_login(build_conn())
-      member_fixture(group, "host", host_user)
+      member_fixture(group, role: "host", user: host_user)
       post(host_conn, ~p"/api/groups/#{group.id}/invite/reset") |> json_response(200)
 
       assert json_response(get(conn, ~p"/api/invites/#{group.invite_token}"), 404) ==
@@ -147,7 +147,7 @@ defmodule PetepeteWeb.InviteControllerTest do
                post(conn, join_path(old), %{display_name: "Sebelum"}) |> json_response(201)
 
       {host_conn, host_user} = bearer_login(build_conn())
-      member_fixture(group, "host", host_user)
+      member_fixture(group, role: "host", user: host_user)
 
       %{"invite_url" => url} =
         post(host_conn, ~p"/api/groups/#{group.id}/invite/reset") |> json_response(200)

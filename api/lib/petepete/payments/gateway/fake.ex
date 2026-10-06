@@ -11,7 +11,11 @@ defmodule Petepete.Payments.Gateway.Fake do
       (default) or `:active`.
     * `:kyc_status` - status `payout_account_status/1` returns afterwards, default `:active`.
     * `:balance` - what `balance/1` returns, default `0`.
-    * `:withdraw` - `:api` (default) or `{:managed, dashboard_url}`.
+    * `:withdraw` - `:api` (default), `{:managed, dashboard_url}` or `{:error, reason}`.
+    * `:create_payment` - `:api` (default) or `{:error, reason}`.
+    * `:notify` - a pid that gets `{:fake_gateway, :create_payment | :withdraw, key}` for every
+      call that reaches the provider (`key` is the `external_id` or the withdrawal
+      `reference`), so tests can count them. Default none.
 
   Tests build signed webhooks with `webhook/2`.
   """
@@ -33,9 +37,14 @@ defmodule Petepete.Payments.Gateway.Fake do
 
   @impl true
   def create_payment(%{external_id: external_id, method: method, gross_amount: gross} = request) do
-    with {:ok, action} <- action(method, external_id, gross) do
+    notify(:create_payment, external_id)
+
+    with :api <- config(:create_payment, :api),
+         {:ok, action} <- action(method, external_id, gross) do
       {:ok,
        %{provider_ref: "fake-#{external_id}", action: action, expires_at: request.expires_at}}
+    else
+      {:error, _} = error -> error
     end
   end
 
@@ -119,11 +128,18 @@ defmodule Petepete.Payments.Gateway.Fake do
   def balance(_provider_account_id), do: {:ok, config(:balance, 0)}
 
   @impl true
-  def withdraw(provider_account_id, amount) do
+  def withdraw(provider_account_id, _amount, reference) do
+    notify(:withdraw, reference)
+
     case config(:withdraw, :api) do
-      :api -> {:ok, %{provider_ref: "fake-withdrawal-#{provider_account_id}-#{amount}"}}
+      :api -> {:ok, %{provider_ref: "fake-withdrawal-#{provider_account_id}-#{reference}"}}
       {:managed, url} -> {:managed, url}
+      {:error, _} = error -> error
     end
+  end
+
+  defp notify(call, key) do
+    if pid = config(:notify, nil), do: send(pid, {:fake_gateway, call, key})
   end
 
   @doc """

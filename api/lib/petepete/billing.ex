@@ -41,17 +41,17 @@ defmodule Petepete.Billing do
   ## Session lifecycle owned by the state machine
 
   @doc """
-  Creates a draft session of an event. `attrs` takes `:event_id`, `:group_id` and
-  `:starts_at`; the event must belong to the group and the event may have only one
-  non-cancelled session per `starts_at`.
+  Creates a draft session of `event` (its group is the event's). `attrs` takes
+  `:starts_at`; the event may have only one non-cancelled session per `starts_at`.
   """
-  @spec create_session(map()) :: {:ok, %Session{}} | {:error, Ecto.Changeset.t()}
-  def create_session(attrs) do
-    %Session{} |> Session.create_changeset(attrs) |> Repo.insert()
+  @spec create_session(%Petepete.Sessions.Event{}, map()) ::
+          {:ok, %Session{}} | {:error, Ecto.Changeset.t()}
+  def create_session(%Petepete.Sessions.Event{} = event, attrs) do
+    event |> Session.create_changeset(attrs) |> Repo.insert()
   end
 
   @doc """
-  `create_session/1` for the scheduler: `{:ok, session}` when it inserted a draft,
+  `create_session/2` for the scheduler: `{:ok, session}` when it inserted a draft,
   `:exists` when the event already has a session at `starts_at`, `{:error, changeset}` for
   invalid attributes.
 
@@ -59,10 +59,10 @@ defmodule Petepete.Billing do
   not get it back on the next run. The insert is `ON CONFLICT DO NOTHING`, so a concurrent
   run that wins the race also yields `:exists` and never aborts the caller's transaction.
   """
-  @spec create_session_if_absent(map()) ::
+  @spec create_session_if_absent(%Petepete.Sessions.Event{}, map()) ::
           {:ok, %Session{}} | :exists | {:error, Ecto.Changeset.t()}
-  def create_session_if_absent(attrs) do
-    changeset = Session.create_changeset(%Session{}, attrs)
+  def create_session_if_absent(%Petepete.Sessions.Event{} = event, attrs) do
+    changeset = Session.create_changeset(event, attrs)
 
     cond do
       not changeset.valid? ->
@@ -354,7 +354,8 @@ defmodule Petepete.Billing do
 
   Returns `{:ok, %{session: session, txn: txn, voided_bill_ids: [id], cancelled_attempt_ids:
   [id], replayed: boolean}}`. The ids of the cancelled attempts are for the payment side to
-  drop at the gateway (`Petepete.Payments.CancelAttemptsJob` does not exist yet).
+  drop at the gateway (`Petepete.Payments.void_issue/2` wraps this call and enqueues
+  `Petepete.Payments.CancelAttemptsJob` in the same transaction).
   Errors: `:idempotency_key_required`, `:not_found`, `%TransitionError{}` (session is not
   issued), `:reason_required`, `:idempotency_key_conflict`; any error rolls everything back.
   """

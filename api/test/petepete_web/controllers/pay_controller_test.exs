@@ -16,14 +16,14 @@ defmodule PetepeteWeb.PayControllerTest do
 
     group = group_fixture(name: "Futsal Kamis")
     host_user = user_fixture()
-    host = member_fixture(group, "host", host_user)
-    others = for _ <- 1..2, do: member_fixture(group, "member")
+    host = member_fixture(group, role: "host", user: host_user)
+    others = for _ <- 1..2, do: member_fixture(group, role: "member")
 
     for {m, phone} <- Enum.zip([host | others], @phones) do
       m |> Ecto.Changeset.change(phone: phone) |> Repo.update!()
     end
 
-    session = session_fixture(group)
+    session = session_fixture(event_fixture(group), starts_at: ~U[2026-10-06 03:00:00Z])
     for m <- [host | others], do: attendance_fixture(session, m)
     cost_item_fixture(session, amount: 100_000, paid_by: host, label: "Sewa lapangan")
 

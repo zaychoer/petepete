@@ -17,12 +17,12 @@ defmodule PetepeteWeb.SessionVoidControllerTest do
     host_user = user_fixture(%{phone: valid_phone()})
     plain_user = user_fixture(%{phone: valid_phone()})
     stranger_user = user_fixture(%{phone: valid_phone()})
-    host = member_fixture(group, "host", host_user)
-    member_fixture(group, "member", plain_user)
-    member_fixture(group_fixture(), "host", stranger_user)
+    host = member_fixture(group, role: "host", user: host_user)
+    member_fixture(group, role: "member", user: plain_user)
+    member_fixture(group_fixture(), role: "host", user: stranger_user)
 
-    a = member_fixture(group, "member")
-    session = session_fixture(group)
+    a = member_fixture(group, role: "member")
+    session = session_fixture(event_fixture(group))
     for m <- [host, a], do: attendance_fixture(session, m)
     cost_item_fixture(session, amount: 100_000, paid_by: host)
 

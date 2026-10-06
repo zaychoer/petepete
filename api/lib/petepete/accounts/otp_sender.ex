@@ -4,9 +4,11 @@ defmodule Petepete.Accounts.OtpSender do
 
   The adapter is chosen by `config :petepete, Petepete.Accounts, otp_sender: Module`.
   `Petepete.Accounts.OtpSender.Fake` is configured in dev and test. Production has
-  no default: `config/runtime.exs` reads `OTP_SENDER` (a module name), refuses
-  the fake, and `fetch!/0` raises at boot when nothing is configured, so the app
-  never starts in production without a real sender.
+  no default: `config/runtime.exs` reads `OTP_SENDER` (a module name) through
+  `Petepete.AdapterPolicy`, which refuses a module that is not loadable, does not
+  implement this behaviour, or is the fake (unless `ALLOW_FAKE_ADAPTERS=true`, staging
+  only), so the app never starts in production with a sender that cannot deliver.
+  `fetch!/0` raises at boot when nothing is configured at all.
 
   Adapters MUST NOT log the phone number.
   """

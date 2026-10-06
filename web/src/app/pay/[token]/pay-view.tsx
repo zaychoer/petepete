@@ -7,9 +7,9 @@ import {
   POLL_INTERVAL_MS,
   STALE_BILL_ERRORS,
   applyAttempt,
+  createOpenRegeneration,
   initialMethod,
   phaseOf,
-  regenerationMethod,
   shouldPoll,
 } from "@/lib/pay-machine";
 import type { Method, PayAttempt, PayPage } from "@/lib/pay-types";
@@ -31,8 +31,6 @@ export function PayView({
   );
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [regenFailed, setRegenFailed] = useState(false);
-  const [lastMethod, setLastMethod] = useState<Method | null>(null);
   const [offline, setOffline] = useState(false);
 
   // Bumped whenever a POST starts, so a poll that began earlier cannot overwrite its result.
@@ -62,7 +60,6 @@ export function PayView({
       if (inFlight.current) return;
       inFlight.current = true;
       epoch.current += 1;
-      setLastMethod(method);
       setBusy(true);
       setActionError(null);
       try {
@@ -71,9 +68,7 @@ export function PayView({
           body: { method },
         });
         setPage((current) => applyAttempt(current, attempt));
-        setRegenFailed(false);
       } catch (error) {
-        setRegenFailed(true);
         if (error instanceof ApiError && STALE_BILL_ERRORS.has(error.code)) {
           // The bill moved on (paid, voided, needs review, link expired): show the truth.
           await refresh();
@@ -121,18 +116,17 @@ export function PayView({
     };
   }, [polling, refresh]);
 
-  // An expired attempt is replaced automatically (QRIS when the page was just opened).
-  const regenMethod = regenerationMethod(page, {
-    lastMethod,
-    inFlight: busy,
-    failed: regenFailed,
-  });
+  // PAY-06: an expired QRIS is replaced once, when the page is opened. Every later expiry
+  // (and any expired VA / e-wallet) waits for the payer's own tap.
+  const [openRegen] = useState(() => createOpenRegeneration(initialPage));
   useEffect(() => {
-    if (!regenMethod) return;
     // Deferred so the request starts outside the render commit; cleanup cancels it.
-    const timer = setTimeout(() => void startPayment(regenMethod), 0);
+    const timer = setTimeout(() => {
+      const method = openRegen.claim();
+      if (method) void startPayment(method);
+    }, 0);
     return () => clearTimeout(timer);
-  }, [regenMethod, startPayment]);
+  }, [openRegen, startPayment]);
 
   const header = (
     <header className="flex flex-col gap-1">
@@ -255,8 +249,12 @@ export function PayView({
             </button>
           )}
 
-          {busy && active === null && phase === "expired" && (
-            <p className="text-sm">Pembayaran sebelumnya kedaluwarsa, bikin yang baru…</p>
+          {active === null && phase === "expired" && (
+            <p className="text-sm">
+              {busy
+                ? "Pembayaran sebelumnya kedaluwarsa, bikin yang baru…"
+                : "Pembayaran sebelumnya kedaluwarsa. Tekan tombol di atas buat bikin yang baru."}
+            </p>
           )}
           {actionError && (
             <p role="alert" className="text-sm font-medium">

@@ -19,7 +19,7 @@ defmodule Petepete.Sessions do
   import Ecto.Query, only: [from: 2]
 
   alias Petepete.{Billing, Repo, Wib}
-  alias Petepete.Groups.Group
+  alias Petepete.Groups.{Group, Member}
   alias Petepete.Sessions.{CostTemplate, Event, RRule}
 
   require Logger
@@ -27,19 +27,21 @@ defmodule Petepete.Sessions do
   @days_ahead 3
 
   @doc """
-  Creates an event in `group_id` from request params (see `Event.create_changeset/3`).
+  Creates an event in the group of `host` (a host `Petepete.Groups.Member`) from request
+  params (see `Event.create_changeset/4`). A template cost item without
+  `paid_by_member_id` is paid by `host` (PP-COST-02: "Default host").
 
   A one-off event also gets its draft session at once, with the template's cost items;
   a recurring event gets none here, the scheduler creates them. Returns the event and
   its session (`nil` for recurring), or `{:error, changeset}` with field errors.
   """
-  @spec create_event(pos_integer(), map()) ::
+  @spec create_event(%Member{}, map()) ::
           {:ok, %{event: %Event{}, session: struct() | nil}} | {:error, Ecto.Changeset.t()}
-  def create_event(group_id, params) when is_map(params) do
-    group = Repo.get!(Group, group_id)
+  def create_event(%Member{} = host, params) when is_map(params) do
+    group = Repo.get!(Group, host.group_id)
 
     Repo.transaction(fn ->
-      with {:ok, event} <- Repo.insert(Event.create_changeset(%Event{}, group, params)),
+      with {:ok, event} <- Repo.insert(Event.create_changeset(%Event{}, group, host.id, params)),
            {:ok, session} <- create_one_off_session(event) do
         %{event: event, session: session}
       else
@@ -52,11 +54,7 @@ defmodule Petepete.Sessions do
 
   defp create_one_off_session(%Event{type: "one_off"} = event) do
     with {:ok, session} <-
-           Billing.create_session(%{
-             event_id: event.id,
-             group_id: event.group_id,
-             starts_at: event.starts_at
-           }),
+           Billing.create_session(event, %{starts_at: event.starts_at}),
          {:ok, _copied} <-
            Billing.copy_session_inputs(session, CostTemplate.items(event.cost_template)) do
       {:ok, session}
@@ -108,11 +106,7 @@ defmodule Petepete.Sessions do
   defp generate_occurrence(%Event{} = event, starts_at) do
     result =
       Repo.transaction(fn ->
-        case Billing.create_session_if_absent(%{
-               event_id: event.id,
-               group_id: event.group_id,
-               starts_at: starts_at
-             }) do
+        case Billing.create_session_if_absent(event, %{starts_at: starts_at}) do
           {:ok, session} ->
             {:ok, _} =
               Billing.copy_session_inputs(session, CostTemplate.items(event.cost_template))

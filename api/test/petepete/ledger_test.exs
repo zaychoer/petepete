@@ -19,11 +19,11 @@ defmodule Petepete.LedgerTest do
   @t0 ~U[2026-10-06 10:00:00Z]
 
   setup do
-    host_user = user!()
-    group = group!()
-    host = member!(group, user_id: host_user.id, role: "host")
-    [a, b, c] = for _ <- 1..3, do: member!(group)
-    payout_account!(group, host)
+    host_user = user_fixture()
+    group = group_fixture()
+    host = member_fixture(group, user_id: host_user.id, role: "host")
+    [a, b, c] = for _ <- 1..3, do: member_fixture(group)
+    payout_account_fixture(group, host)
 
     {:ok, g: group.id, actor: {:host, host_user.id}, host: host.id, a: a.id, b: b.id, c: c.id}
   end
@@ -276,7 +276,7 @@ defmodule Petepete.LedgerTest do
     end
 
     test "members must belong to the event's group", ctx do
-      other = member!(group!())
+      other = member_fixture(group_fixture())
 
       assert {:error, :member_not_in_group} =
                try_record(ctx.actor, settlement(ctx, payee_member_id: other.id))
@@ -292,7 +292,7 @@ defmodule Petepete.LedgerTest do
     end
 
     test "guests and former members count as members", ctx do
-      guest = member!(%{id: ctx.g}, role: "guest")
+      guest = member_fixture(%{id: ctx.g}, role: "guest")
       assert {:ok, _} = try_record(ctx.actor, settlement(ctx, payee_member_id: guest.id))
     end
 
@@ -330,12 +330,12 @@ defmodule Petepete.LedgerTest do
     end
 
     test "cash_received needs the host to be a member of the group", ctx do
-      assert {:error, :actor_not_member} = try_record({:host, user!().id}, cash(ctx))
+      assert {:error, :actor_not_member} = try_record({:host, user_fixture().id}, cash(ctx))
     end
 
     test "gateway payment needs a payout account", ctx do
-      bare = group!()
-      m = member!(bare)
+      bare = group_fixture()
+      m = member_fixture(bare)
 
       assert {:error, :no_payout_account} =
                try_record(:gateway, gateway(ctx, group_id: bare.id, member_id: m.id))
@@ -401,7 +401,7 @@ defmodule Petepete.LedgerTest do
     test "gateway replay survives a change of payout account owner and keeps history", ctx do
       ev = gateway(ctx)
       %{txn: first} = record!(:gateway, ev)
-      payout_account!(%{id: ctx.g}, %{id: ctx.c})
+      payout_account_fixture(%{id: ctx.g}, %{id: ctx.c})
 
       assert %{txn: %{id: id}, replayed: true} = record!(:gateway, ev)
       assert id == first.id
@@ -423,7 +423,7 @@ defmodule Petepete.LedgerTest do
                try_record(ctx.actor, kas_spend(ctx, idempotency_key: k))
 
       assert {:error, :idempotency_key_conflict} =
-               try_record({:host, user!().id}, settlement(ctx, idempotency_key: k))
+               try_record({:host, user_fixture().id}, settlement(ctx, idempotency_key: k))
 
       assert length(Ledger.txns(ctx.g)) == 1
     end
@@ -431,9 +431,9 @@ defmodule Petepete.LedgerTest do
     test "keys are unique across groups", ctx do
       k = key()
       record!(ctx.actor, settlement(ctx, idempotency_key: k))
-      other = group!()
-      a = member!(other)
-      b = member!(other)
+      other = group_fixture()
+      a = member_fixture(other)
+      b = member_fixture(other)
 
       assert {:error, :idempotency_key_conflict} =
                try_record(ctx.actor, %Settlement{
@@ -527,7 +527,7 @@ defmodule Petepete.LedgerTest do
       assert {:error, :txn_not_found} = try_record(ctx.actor, undo(ctx, Correction, 0))
 
       %{txn: s} = record!(ctx.actor, settlement(ctx))
-      other = group!()
+      other = group_fixture()
 
       assert {:error, :txn_not_found} =
                try_record(ctx.actor, undo(ctx, Correction, s.id, group_id: other.id))
@@ -581,7 +581,7 @@ defmodule Petepete.LedgerTest do
                members: %{ctx.host => 8_000, ctx.a => -10_000, ctx.b => 1_500, ctx.c => 0}
              }
 
-      assert Ledger.balances(group!().id) == %{kas: 0, members: %{}}
+      assert Ledger.balances(group_fixture().id) == %{kas: 0, members: %{}}
     end
 
     test "txns are chronological with entries and filter by member", ctx do

@@ -39,11 +39,12 @@ GoRouter createRouter(AuthController auth) {
     initialLocation: _homePath,
     refreshListenable: auth,
     redirect: (context, state) {
-      final location = state.matchedLocation;
+      final deepLink = customSchemeJoinLocation(state.uri);
+      final location = deepLink?.path ?? state.matchedLocation;
       final target = _redirect(auth, location);
       if (auth.status != AuthStatus.signedIn &&
           location.startsWith(GroupRoutes.joinPrefix)) {
-        returnTo = state.uri.toString();
+        returnTo = (deepLink ?? state.uri).toString();
       } else if (target == _homePath &&
           auth.status == AuthStatus.signedIn &&
           returnTo != null) {
@@ -51,7 +52,7 @@ GoRouter createRouter(AuthController auth) {
         returnTo = null;
         return back;
       }
-      return target;
+      return target ?? deepLink?.toString();
     },
     routes: [
       GoRoute(
@@ -85,6 +86,23 @@ GoRouter createRouter(AuthController auth) {
       ...kasRoutes(),
       ...groupRoutes,
     ],
+  );
+}
+
+/// The custom scheme of the web-to-app handoff: `petepete://join/<token>?claim=<id>`.
+const _customScheme = 'petepete';
+
+/// The in-app location of a `petepete://join/<token>?claim=<id>` link, or null for
+/// any other URI. In that form `join` is the URI host and the token the path, which
+/// no route matches, so the router rewrites it to `/join/<token>?claim=<id>`, the
+/// same location the https invite link (`https://<host>/join/<token>`) already has.
+Uri? customSchemeJoinLocation(Uri uri) {
+  if (uri.scheme != _customScheme || uri.host != 'join') return null;
+  final segments = uri.pathSegments.where((s) => s.isNotEmpty).toList();
+  if (segments.length != 1) return null;
+  return Uri(
+    path: '${GroupRoutes.joinPrefix}${segments.single}',
+    queryParameters: uri.hasQuery ? uri.queryParameters : null,
   );
 }
 

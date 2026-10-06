@@ -417,7 +417,7 @@ defmodule Petepete.Ledger do
         {:error, :already_reversed}
 
       kind == "cash_payment_cancelled" and
-          DateTime.diff(at, orig.inserted_at) > @undo_window_seconds ->
+          not cash_undo_window_open?(orig.inserted_at, at) ->
         {:error, :undo_window_expired}
 
       true ->
@@ -515,6 +515,15 @@ defmodule Petepete.Ledger do
   end
 
   defp balances_before(_event, _), do: nil
+
+  @doc """
+  Whether a `cash_received` txn written at `cash_at` can still be undone by a
+  `CashPaymentCancelled` at `at` (24 hours). The Ledger stays authoritative; callers use
+  this only to decide whether to offer the action.
+  """
+  @spec cash_undo_window_open?(DateTime.t(), DateTime.t()) :: boolean()
+  def cash_undo_window_open?(%DateTime{} = cash_at, %DateTime{} = at),
+    do: DateTime.diff(at, cash_at) <= @undo_window_seconds
 
   # ── Reading ────────────────────────────────────────────────────────────────
 

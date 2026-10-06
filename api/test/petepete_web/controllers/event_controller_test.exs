@@ -12,11 +12,11 @@ defmodule PetepeteWeb.EventControllerTest do
     other = group_fixture()
 
     host = user_fixture(%{phone: valid_phone()})
-    member_fixture(group, "host", host)
+    member_fixture(group, role: "host", user: host)
     plain = user_fixture(%{phone: valid_phone()})
-    member_fixture(group, "member", plain)
+    member_fixture(group, role: "member", user: plain)
     outsider_host = user_fixture(%{phone: valid_phone()})
-    member_fixture(other, "host", outsider_host)
+    member_fixture(other, role: "host", user: outsider_host)
 
     %{conn: conn, group: group, other: other, host: host, plain: plain, outsider: outsider_host}
   end
@@ -82,7 +82,7 @@ defmodule PetepeteWeb.EventControllerTest do
   end
 
   test "a cost template naming a member of another group is refused", ctx do
-    stranger = member_fixture(ctx.other, "member")
+    stranger = member_fixture(ctx.other, role: "member")
 
     params =
       Map.put(@recurring, "cost_template", %{

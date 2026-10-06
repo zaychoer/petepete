@@ -2,15 +2,11 @@
 
 import { useState, type FormEvent } from "react";
 import { ApiError, apiFetch } from "@/lib/api";
+import { appInviteUrl } from "@/lib/invite-url";
 
 interface JoinResult {
   member_id: number;
   group: { id: number; name: string };
-}
-
-/** Opens the app on the invite; the entry just created is passed so the app can claim it. */
-export function appLink(token: string, memberId: number): string {
-  return `petepete://join/${encodeURIComponent(token)}?member=${memberId}`;
 }
 
 /** The API's field messages are English changeset text; the page speaks Indonesian. */
@@ -103,15 +99,14 @@ export function JoinForm({
           </p>
         </section>
         <a
-          href={appLink(token, joined.member_id)}
+          href={appInviteUrl(window.location.origin, token, joined.member_id)}
           className="w-full rounded-lg bg-green-700 px-4 py-3 text-center font-medium text-white"
         >
           Buka di aplikasi
         </a>
         <p className="text-sm">
-          Kalau aplikasinya belum terpasang, tombol di atas nggak akan
-          melakukan apa-apa. Lewati saja, kamu tetap bisa bayar lewat link dari
-          host.
+          Kalau aplikasinya belum terpasang, tombol di atas cuma membuka halaman
+          ini lagi. Lewati saja, kamu tetap bisa bayar lewat link dari host.
         </p>
       </>
     );

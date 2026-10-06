@@ -1,5 +1,8 @@
 defmodule PetepeteWeb.EventController do
-  @moduledoc "Creating events (`POST /api/groups/:group_id/events`), host only."
+  @moduledoc """
+  Creating events (`POST /api/groups/:group_id/events`), host only. A template cost item
+  without `paid_by_member_id` is paid by the creating host.
+  """
   use PetepeteWeb, :controller
 
   alias Petepete.Sessions
@@ -8,7 +11,7 @@ defmodule PetepeteWeb.EventController do
   plug PetepeteWeb.Plugs.GroupAccess, role: :host
 
   def create(conn, params) do
-    case Sessions.create_event(conn.assigns.member.group_id, params) do
+    case Sessions.create_event(conn.assigns.member, params) do
       {:ok, %{event: event, session: session}} ->
         conn
         |> put_status(:created)

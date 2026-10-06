@@ -16,10 +16,10 @@ defmodule Petepete.MetricsTest do
 
     group = group_fixture()
     {user, host} = host_fixture(group)
-    payout_account!(group, host)
-    guest = member_fixture(group, "guest")
+    payout_account_fixture(group, host)
+    guest = member_fixture(group, role: "guest")
     {_account, installed} = plain_member_fixture(group)
-    session = session_fixture(group)
+    session = session_fixture(event_fixture(group))
     for m <- [host, guest, installed], do: attendance_fixture(session, m)
     cost_item_fixture(session, amount: 90_000, paid_by: host)
 
@@ -70,7 +70,7 @@ defmodule Petepete.MetricsTest do
       assert sid == ctx.session.id
 
       # Cost items are the earlier edits here.
-      other = session_fixture(ctx.group)
+      other = session_fixture(event_fixture(ctx.group))
       attendance_fixture(other, ctx.host)
       cost_item_fixture(other, amount: 50_000, paid_by: ctx.host)
       backdate(other, cost: 7_200, attendance: 60)

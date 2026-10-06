@@ -1,10 +1,11 @@
 defmodule Petepete.SessionsTest do
   use Petepete.DataCase, async: true
 
-  import Petepete.Fixtures, only: [group!: 0, member!: 1, member!: 2]
+  import Petepete.Fixtures, only: [group_fixture: 0, member_fixture: 1, member_fixture: 2]
 
   alias Petepete.Billing
   alias Petepete.Billing.{CostItem, CostItemMember, Participant, Session}
+  alias Petepete.Groups.Member
   alias Petepete.Sessions
   alias Petepete.Sessions.Event
 
@@ -24,12 +25,17 @@ defmodule Petepete.SessionsTest do
   end
 
   setup do
-    group = group!()
-    a = member!(group)
-    b = member!(group)
-    guest = member!(group, role: "guest")
+    group = group_fixture()
+    a = member_fixture(group)
+    b = member_fixture(group)
+    guest = member_fixture(group, role: "guest")
+    member_fixture(group, role: "host")
     %{group: group, a: a, b: b, guest: guest}
   end
+
+  # The host who creates the event is the group's host member.
+  defp create_event(group, params),
+    do: Sessions.create_event(Repo.get_by!(Member, group_id: group.id, role: "host"), params)
 
   defp recurring!(group, attrs \\ %{}) do
     params =
@@ -43,7 +49,7 @@ defmodule Petepete.SessionsTest do
         attrs
       )
 
-    {:ok, %{event: event}} = Sessions.create_event(group.id, params)
+    {:ok, %{event: event}} = create_event(group, params)
     event
   end
 
@@ -53,7 +59,7 @@ defmodule Petepete.SessionsTest do
     test "a recurring event stores the canonical rrule with its WIB time and creates no session",
          %{group: group} do
       assert {:ok, %{event: event, session: nil}} =
-               Sessions.create_event(group.id, %{
+               create_event(group, %{
                  "type" => "recurring",
                  "rrule" => "FREQ=WEEKLY;BYDAY=TH",
                  "time" => "19:00",
@@ -82,7 +88,7 @@ defmodule Petepete.SessionsTest do
       }
 
       assert {:ok, %{event: event, session: session}} =
-               Sessions.create_event(group.id, %{
+               create_event(group, %{
                  "type" => "one_off",
                  "name" => "Turnamen",
                  "starts_at" => "2026-10-08T19:00:00+07:00",
@@ -97,16 +103,17 @@ defmodule Petepete.SessionsTest do
 
       items = Repo.all(from c in CostItem, where: c.session_id == ^session.id, order_by: c.id)
 
-      assert [{"lapangan", 100_000, "all", paid_by}, {"minum", 20_000, "subset", nil}] =
+      assert [{"lapangan", 100_000, "all", paid_by}, {"minum", 20_000, "subset", default_payer}] =
                Enum.map(items, &{&1.category, &1.amount, &1.scope, &1.paid_by_member_id})
 
       assert paid_by == a.id
+      assert default_payer == Repo.get_by!(Member, group_id: group.id, role: "host").id
       assert Repo.all(from m in CostItemMember, select: m.member_id) == [a.id]
     end
 
     test "an invalid event writes nothing and names the offending fields", %{group: group} do
-      other = group!()
-      stranger = member!(other)
+      other = group_fixture()
+      stranger = member_fixture(other)
 
       cases = [
         {%{"type" => "recurring", "rrule" => "FREQ=DAILY;BYDAY=TH", "time" => "19:00"}, :rrule},
@@ -142,7 +149,7 @@ defmodule Petepete.SessionsTest do
       ]
 
       for {params, field} <- cases do
-        assert {:error, changeset} = Sessions.create_event(group.id, params)
+        assert {:error, changeset} = create_event(group, params)
         assert Map.has_key?(errors_on(changeset), field), "#{inspect(params)}"
       end
 
@@ -261,7 +268,7 @@ defmodule Petepete.SessionsTest do
       Repo.update_all(from(e in Event, where: e.id == ^inactive.id), set: [active: false])
 
       {:ok, _} =
-        Sessions.create_event(group.id, %{
+        create_event(group, %{
           "type" => "one_off",
           "starts_at" => "2026-10-08T12:00:00Z"
         })

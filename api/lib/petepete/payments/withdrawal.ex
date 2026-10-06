@@ -1,7 +1,8 @@
 defmodule Petepete.Payments.Withdrawal do
   @moduledoc """
   One request by the payout account owner to move money from the gateway sub-account to
-  the registered bank account. Status `submitted`: the gateway accepted it (`provider_ref`).
+  the registered bank account. Status `pending`: committed, the gateway outcome is not stored
+  yet. `failed`: the gateway refused it (the same `idempotency_key` tries again). `submitted`: the gateway accepted it (`provider_ref`).
   `managed`: the sub-account has no payout API, the host finishes on the gateway dashboard
   at `managed_url`. Withdrawals never touch the Ledger (the money was already recorded as
   held by the host).

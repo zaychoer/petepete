@@ -1,5 +1,20 @@
 defmodule Petepete.Fixtures do
-  @moduledoc "Test fixtures built by direct Repo inserts of the schemas. Parallel tickets append new functions at the end."
+  @moduledoc """
+  Test fixtures built by direct Repo inserts of the schemas (no business logic).
+
+  One attrs-based family: every `*_fixture` takes its parent record(s) and an `attrs`
+  keyword list or map. Unknown attrs are struct fields of the inserted schema, so they
+  override the defaults. Exceptions are noted per function (`member_fixture/2` accepts
+  `:role` and `:user`).
+
+    * `user_fixture/1`, `group_fixture/1`
+    * `member_fixture/2`, `event_fixture/2`, `payout_account_fixture/3`
+    * `session_fixture/2` takes the event (the group is derived from it);
+      `group_event_session_fixture/1` builds all three and returns `{group, event, session}`
+    * `bill_fixture/3`, `attendance_fixture/3`, `cost_item_fixture/2`
+    * `host_fixture/1`, `plain_member_fixture/1`, `guest_fixture/1`: `{user, member}` helpers
+    * `bearer_login/1`, `bearer_conn/2`, `valid_phone/0`: HTTP login helpers
+  """
   alias Petepete.Accounts.User
   alias Petepete.Billing.{Bill, Session}
   alias Petepete.Groups.{Group, Member, PayoutAccount}
@@ -8,106 +23,55 @@ defmodule Petepete.Fixtures do
 
   def uniq, do: System.unique_integer([:positive])
 
-  def user_fixture(attrs \\ %{}) do
+  def user_fixture(attrs \\ []) do
     n = uniq()
+    Repo.insert!(struct!(%User{phone: "62812#{n}", display_name: "User #{n}"}, attrs))
+  end
+
+  def group_fixture(attrs \\ []) do
+    n = uniq()
+    Repo.insert!(struct!(%Group{name: "Group #{n}", invite_token: "inv-#{n}"}, attrs))
+  end
+
+  @doc """
+  A roster entry. `:role` (`"host" | "member" | "guest"`, default `"member"`) and `:user`
+  (a `User`, links the account) are special; any other attr is a `Member` field.
+  """
+  def member_fixture(group, attrs \\ []) do
+    {role, attrs} = attrs |> Map.new() |> Map.pop(:role, "member")
+    {user, attrs} = Map.pop(attrs, :user)
 
     Repo.insert!(
-      struct!(User, Map.merge(%{phone: "62812#{n}", display_name: "User #{n}"}, Map.new(attrs)))
+      struct!(
+        %Member{
+          group_id: group.id,
+          user_id: user && user.id,
+          role: role,
+          display_name: "Member #{uniq()}"
+        },
+        attrs
+      )
     )
   end
 
-  def group_fixture(attrs \\ %{}) do
-    n = uniq()
-
-    Repo.insert!(
-      struct!(Group, Map.merge(%{name: "Group #{n}", invite_token: "inv-#{n}"}, Map.new(attrs)))
-    )
-  end
-
-  @doc "A roster entry. `role` is `\"host\" | \"member\" | \"guest\"`; `user` links an account (optional)."
-  def member_fixture(group, role, user \\ nil) do
-    Repo.insert!(%Member{
-      group_id: group.id,
-      user_id: user && user.id,
-      role: role,
-      display_name: "Member #{uniq()}"
-    })
-  end
-
-  @doc "Returns `{user, member}` with `role` host/member/guest in `group`."
+  @doc "Returns `{user, member}` with role host in `group`."
   def host_fixture(group), do: user_member(group, "host")
+  @doc "Returns `{user, member}` with role member in `group`."
   def plain_member_fixture(group), do: user_member(group, "member")
+  @doc "Returns `{user, member}` with role guest in `group`."
   def guest_fixture(group), do: user_member(group, "guest")
 
   defp user_member(group, role) do
     user = user_fixture()
-    {user, member_fixture(group, role, user)}
+    {user, member_fixture(group, role: role, user: user)}
   end
 
-  def event_fixture(group, attrs \\ %{}) do
+  def event_fixture(group, attrs \\ []) do
     Repo.insert!(
       struct!(
-        Event,
-        Map.merge(%{group_id: group.id, name: "Event #{uniq()}", type: "one_off"}, Map.new(attrs))
-      )
-    )
-  end
-
-  def session_fixture(group, attrs \\ %{}) do
-    attrs = Map.new(attrs)
-    event = Map.get_lazy(attrs, :event, fn -> event_fixture(group) end)
-
-    Repo.insert!(
-      struct!(
-        Session,
-        Map.merge(
-          %{
-            group_id: group.id,
-            event_id: event.id,
-            starts_at: DateTime.utc_now() |> DateTime.truncate(:second)
-          },
-          Map.delete(attrs, :event)
-        )
-      )
-    )
-  end
-
-  def bill_fixture(session, member, attrs \\ %{}) do
-    Repo.insert!(
-      struct!(
-        Bill,
-        Map.merge(
-          %{
-            session_id: session.id,
-            member_id: member.id,
-            share: 10_000,
-            amount_due: 10_000,
-            pay_token: "pay-#{uniq()}",
-            token_expires_at:
-              DateTime.utc_now() |> DateTime.add(7, :day) |> DateTime.truncate(:second)
-          },
-          Map.new(attrs)
-        )
-      )
-    )
-  end
-
-  def group!(attrs \\ []) do
-    Repo.insert!(struct(%Group{name: "Futsal", invite_token: "inv#{uniq()}"}, attrs))
-  end
-
-  def member!(group, attrs \\ []) do
-    Repo.insert!(
-      struct(%Member{group_id: group.id, display_name: "M#{uniq()}", role: "member"}, attrs)
-    )
-  end
-
-  def event!(group, attrs \\ []) do
-    Repo.insert!(
-      struct(
         %Event{
           group_id: group.id,
-          name: "Futsal Kamis",
+          name: "Event #{uniq()}",
           type: "one_off",
           starts_at: ~U[2026-10-08 12:00:00Z]
         },
@@ -116,9 +80,10 @@ defmodule Petepete.Fixtures do
     )
   end
 
-  def session!(event, attrs \\ []) do
+  @doc "A session of `event` (its group is `event.group_id`)."
+  def session_fixture(event, attrs \\ []) do
     Repo.insert!(
-      struct(
+      struct!(
         %Session{
           event_id: event.id,
           group_id: event.group_id,
@@ -129,9 +94,16 @@ defmodule Petepete.Fixtures do
     )
   end
 
-  def bill!(session, member, attrs \\ []) do
+  @doc "A group with an event and a session (`attrs` go to the session): `{group, event, session}`."
+  def group_event_session_fixture(attrs \\ []) do
+    group = group_fixture()
+    event = event_fixture(group)
+    {group, event, session_fixture(event, attrs)}
+  end
+
+  def bill_fixture(session, member, attrs \\ []) do
     Repo.insert!(
-      struct(
+      struct!(
         %Bill{
           session_id: session.id,
           member_id: member.id,
@@ -145,20 +117,9 @@ defmodule Petepete.Fixtures do
     )
   end
 
-  @doc "A draft session with its event and group, plus the members passed in `:members` names."
-  def session_with_group!(attrs \\ []) do
-    group = group!()
-    event = event!(group)
-    {group, event, session!(event, attrs)}
-  end
-
-  def user!(attrs \\ []) do
-    Repo.insert!(struct(%User{phone: "62#{uniq()}", display_name: "User#{uniq()}"}, attrs))
-  end
-
-  def payout_account!(group, owner, attrs \\ []) do
+  def payout_account_fixture(group, owner, attrs \\ []) do
     Repo.insert!(
-      struct(
+      struct!(
         %PayoutAccount{
           group_id: group.id,
           owner_member_id: owner.id,
