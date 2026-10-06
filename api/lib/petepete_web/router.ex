@@ -28,5 +28,10 @@ defmodule PetepeteWeb.Router do
     get "/groups/:group_id/balances", LedgerController, :balances
     get "/groups/:group_id/txns", LedgerController, :txns
     post "/txns/:id/correction", LedgerController, :correction
+
+    get "/sessions/:id", SessionController, :show
+    put "/sessions/:id/costs/:cid", SessionController, :put_cost
+    delete "/sessions/:id/costs/:cid", SessionController, :delete_cost
+    put "/sessions/:id/attendance", SessionController, :put_attendance
   end
 end
