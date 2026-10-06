@@ -106,10 +106,7 @@ void main() {
     await tester.tap(_withdrawButton);
     await tester.pumpAndSettle();
 
-    expect(
-      find.text(_serverMessage('insufficient_balance')),
-      findsOneWidget,
-    );
+    expect(find.text(_serverMessage('insufficient_balance')), findsOneWidget);
   });
 
   group('managed sub-account', () {

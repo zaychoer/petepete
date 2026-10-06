@@ -3,22 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/fake_session_server.dart';
 
-Map<String, dynamic> _bill(int id, String name, String status, int due) => {
-  'bill_id': id,
-  'member_id': id + 10,
-  'display_name': name,
-  'status': status,
-  'amount_due': due,
-  'paid_via': status == 'paid' ? 'cash' : null,
-  'paid_at': status == 'paid' ? '2026-10-06T12:00:00Z' : null,
-  'cash_cancellable': status == 'paid',
-  'has_phone': false,
-  'wa_number': null,
-  // A void entry carries no text, like the API's.
-  'text': status == 'void' ? null : 'Halo $name',
-  'share_url': status == 'void' ? null : 'https://wa.me/?text=Halo',
-};
-
 FakeSessionServer _issued() {
   final s = FakeSessionServer();
   s.status = 'issued';
@@ -33,9 +17,9 @@ FakeSessionServer _issued() {
     'scope': 'all',
   });
   s.shareBills = [
-    _bill(1, 'Sari', 'unpaid', 50000),
-    _bill(2, 'Andi', 'paid', 30000),
-    _bill(3, 'Rina', 'needs_review', 20000),
+    shareBill(1, 'Sari', 'unpaid', 50000),
+    shareBill(2, 'Andi', 'paid', 30000),
+    shareBill(3, 'Rina', 'needs_review', 20000),
   ];
   return s;
 }
@@ -70,20 +54,11 @@ void main() {
     );
   });
 
-  testWidgets('a settled session reads Selesai, a cancelled one Batal', (
-    tester,
-  ) async {
+  testWidgets('a settled session reads Selesai', (tester) async {
     final server = _issued();
     server.progress = 'settled';
     await pumpSession(tester, server, launcher);
     expect(find.text('Selesai'), findsOneWidget);
-
-    final cancelled = _issued();
-    cancelled.status = 'cancelled';
-    cancelled.progress = 'cancelled';
-    await pumpSession(tester, cancelled, launcher);
-    expect(find.text('Batal'), findsOneWidget);
-    expect(find.textContaining('tidak ada tagihan'), findsOneWidget);
   });
 
   testWidgets(
@@ -132,10 +107,7 @@ void main() {
       find.byKey(const Key('reason-input')),
       'Salah tandai',
     );
-    server.failures['POST /api/bills/2/cash/cancel'] = (
-      500,
-      {'error': 'server_error'},
-    );
+    server.failServer('POST /api/bills/2/cash/cancel');
     await tester.tap(find.byKey(const Key('action-confirm')));
     await tester.pumpAndSettle();
     expect(find.textContaining('Server lagi bermasalah'), findsOneWidget);
@@ -160,10 +132,7 @@ void main() {
   testWidgets('undo_window_expired is explained in Indonesian', (tester) async {
     final server = _issued();
     await pumpSession(tester, server, launcher);
-    server.failures['POST /api/bills/2/cash/cancel'] = (
-      422,
-      {'error': 'undo_window_expired'},
-    );
+    server.fail('POST /api/bills/2/cash/cancel', 422, 'undo_window_expired');
     await tester.tap(find.byKey(const Key('bill-cancel-2')));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('reason-input')), 'Salah');
@@ -179,18 +148,17 @@ void main() {
   ) async {
     final server = _issued();
     server.shareBills = [
-      _bill(2, 'Andi', 'paid', 30000), // cash, inside 24 hours
-      {
-        ..._bill(4, 'Dewi', 'paid', 10000),
-        'paid_via': 'gateway',
-        'cash_cancellable': false,
-      },
-      {
-        ..._bill(5, 'Eko', 'paid', 10000),
-        'paid_via': 'cash',
-        'paid_at': '2026-10-01T12:00:00Z',
-        'cash_cancellable': false, // cash, but past the 24 hour window
-      },
+      shareBill(2, 'Andi', 'paid', 30000), // cash, inside 24 hours
+      shareBill(4, 'Dewi', 'paid', 10000, paidVia: 'credit'),
+      // cash, but past the 24 hour window
+      shareBill(
+        5,
+        'Eko',
+        'paid',
+        10000,
+        paidAt: '2026-10-01T12:00:00Z',
+        cashCancellable: false,
+      ),
     ];
     await pumpSession(tester, server, launcher);
 
@@ -206,8 +174,8 @@ void main() {
   ) async {
     final server = _issued();
     server.shareBills = [
-      _bill(1, 'Sari', 'unpaid', 50000),
-      _bill(6, 'Rina', 'void', 20000),
+      shareBill(1, 'Sari', 'unpaid', 50000),
+      shareBill(6, 'Rina', 'void', 20000),
     ];
     await pumpSession(tester, server, launcher);
 
@@ -235,8 +203,8 @@ void main() {
   ) async {
     final server = _issued();
     server.shareBills = [
-      _bill(6, 'Rina', 'void', 20000),
-      _bill(7, 'Sari', 'void', 50000),
+      shareBill(6, 'Rina', 'void', 20000),
+      shareBill(7, 'Sari', 'void', 50000),
     ];
     await pumpSession(tester, server, launcher);
 

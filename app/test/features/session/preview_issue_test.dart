@@ -3,14 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/fake_session_server.dart';
 
-Map<String, dynamic> _line(int id, String label, int amount) => {
-  'cost_item_id': id,
-  'category': label,
-  'label': label,
-  'fraction': {'numerator': amount, 'denominator': 1},
-  'amount': amount,
-};
-
 FakeSessionServer _server() {
   final s = FakeSessionServer();
   s.participants[1] = {'attended': true, 'weight': 1000};
@@ -24,13 +16,15 @@ FakeSessionServer _server() {
     'paid_by': 1,
     'scope': 'all',
   });
-  s.previewJson = {
-    'total_cost': 100000,
-    'total_billed': 101000,
-    'kas_remainder': 1000,
-    'credit_used': 10000,
-    'total_due': 91000,
-    'items': [
+  s.previewJson = previewBody(
+    totals: {
+      'total_cost': 100000,
+      'total_billed': 101000,
+      'kas_remainder': 1000,
+      'credit_used': 10000,
+      'total_due': 91000,
+    },
+    items: [
       {
         'id': 101,
         'category': 'Lapangan',
@@ -42,12 +36,12 @@ FakeSessionServer _server() {
         'total_weight': 2200,
       },
     ],
-    'members': [
+    members: [
       {
         'member_id': 1,
         'display_name': 'Budi',
         'weight': 1000,
-        'lines': [_line(101, 'Lapangan', 45455)],
+        'lines': [previewLine(101, 'Lapangan', 45455)],
         'share': 46000,
         'rounding': 545,
         'credit_applied': 10000,
@@ -57,56 +51,43 @@ FakeSessionServer _server() {
         'member_id': 2,
         'display_name': 'Sari',
         'weight': 1200,
-        'lines': [_line(101, 'Lapangan', 54545)],
+        'lines': [previewLine(101, 'Lapangan', 54545)],
         'share': 55000,
         'rounding': 455,
         'credit_applied': 0,
         'amount_due': 55000,
       },
     ],
-  };
+  );
   s.shareBills = [
-    {
-      'bill_id': 1,
-      'member_id': 2,
-      'display_name': 'Sari',
-      'status': 'unpaid',
-      'amount_due': 55000,
-      'paid_via': null,
-      'paid_at': null,
-      'cash_cancellable': false,
-      'has_phone': true,
-      'wa_number': '6281234567890',
-      'text': 'Halo Sari, tagihan Rp55.000 & link: https://pay.test/p/abc',
-      'share_url': 'https://wa.me/?text=Halo%20Sari',
-    },
-    {
-      'bill_id': 2,
-      'member_id': 3,
-      'display_name': 'Andi',
-      'status': 'unpaid',
-      'amount_due': 20000,
-      'paid_via': null,
-      'paid_at': null,
-      'cash_cancellable': false,
-      'has_phone': false,
-      'wa_number': null,
-      'text': 'Halo Andi, tagihan Rp20.000',
-      'share_url': 'https://wa.me/?text=Halo%20Andi%2C%20tagihan%20Rp20.000',
-    },
+    shareBill(
+      1,
+      'Sari',
+      'unpaid',
+      55000,
+      waNumber: '6281234567890',
+      text: 'Halo Sari, tagihan Rp55.000 & link: https://pay.test/p/abc',
+      shareUrl: 'https://wa.me/?text=Halo%20Sari',
+    ),
+    shareBill(
+      2,
+      'Andi',
+      'unpaid',
+      20000,
+      text: 'Halo Andi, tagihan Rp20.000',
+      shareUrl: 'https://wa.me/?text=Halo%20Andi%2C%20tagihan%20Rp20.000',
+    ),
   ];
-  s.reminderJson = {
+  s.reminderJson = reminderBody(s.shareBills, {
     'session_id': 10,
-    'count': 2,
     'group_text': 'Pengingat: Sari, Andi belum bayar',
     'share_url': 'https://wa.me/?text=Pengingat',
-    'bills': s.shareBills,
-  };
-  s.summaryJson = {
+  });
+  s.summaryJson = summaryBody({
     'session_id': 10,
     'text': 'Ringkasan',
     'share_url': 'https://wa.me/?text=Ringkasan',
-  };
+  });
   return s;
 }
 
@@ -173,10 +154,7 @@ void main() {
     await pumpSession(tester, server, launcher);
     await _openPreview(tester);
 
-    server.failures['POST /api/sessions/10/issue'] = (
-      500,
-      {'error': 'server_error'},
-    );
+    server.failServer('POST /api/sessions/10/issue');
     await tester.ensureVisible(find.byKey(const Key('issue-button')));
     await tester.tap(find.byKey(const Key('issue-button')));
     await tester.pumpAndSettle();

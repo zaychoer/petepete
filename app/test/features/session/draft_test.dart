@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/fake_session_server.dart';
+import '../../support/sample.dart';
 
 FakeSessionServer _server() {
   final s = FakeSessionServer();
@@ -104,16 +105,22 @@ void main() {
     ) async {
       final server = _server();
       await pumpSession(tester, server, launcher);
-      server.failures['PUT /api/sessions/10/costs/new'] = (
+      server.fail(
+        'PUT /api/sessions/10/costs/new',
         409,
-        {'error': 'session_not_editable', 'status': 'issued'},
+        'session_not_editable',
       );
       await tester.tap(find.byKey(const Key('chip-Lapangan')));
       await tester.pumpAndSettle();
       await tester.enterText(find.byKey(const Key('cost-amount')), '1000');
       await tester.tap(find.byKey(const Key('cost-save')));
       await tester.pumpAndSettle();
-      expect(find.textContaining('Batalkan tagihan dulu'), findsOneWidget);
+      expect(
+        find.text(
+          Sample.error('session_not_editable').json['message'] as String,
+        ),
+        findsOneWidget,
+      );
       expect(find.byKey(const Key('cost-save')), findsOneWidget);
     });
   });
@@ -169,15 +176,15 @@ void main() {
       expect(find.text('Kirim tagihan'), findsNothing);
 
       // Andi checks in: the preview no longer has a problem.
-      server.previewJson = {
-        'total_cost': 60000,
-        'total_billed': 60000,
-        'kas_remainder': 0,
-        'credit_used': 0,
-        'total_due': 60000,
-        'items': [],
-        'members': [],
-      };
+      server.previewJson = previewBody(
+        totals: {
+          'total_cost': 60000,
+          'total_billed': 60000,
+          'kas_remainder': 0,
+          'credit_used': 0,
+          'total_due': 60000,
+        },
+      );
       await tester.tap(find.text('Kembali dan perbaiki'));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('attend-3')));

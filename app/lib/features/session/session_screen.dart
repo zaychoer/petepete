@@ -129,6 +129,8 @@ class _SessionScreenState extends State<SessionScreen> {
       startsAt: d.startsAt,
       status: d.status,
       progress: d.progress,
+      statusLabel: d.statusLabel,
+      progressLabel: d.progressLabel,
       costItems: items,
       participants: d.participants,
     );
@@ -208,8 +210,8 @@ class _SessionScreenState extends State<SessionScreen> {
             Padding(
               padding: const EdgeInsets.only(right: 12),
               child: StatusChip.session(
-                detail.status,
-                settled: detail.progress == 'settled',
+                detail.progress,
+                label: detail.progressLabel,
               ),
             ),
         ],
