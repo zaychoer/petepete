@@ -61,6 +61,8 @@ fly secrets set -a petepete-staging --stage WEB_BASE_URL=https://<web-app-host>
 
 `WEB_BASE_URL` is the public origin of the web app. Group invite links are `<WEB_BASE_URL>/join/<token>`. **The app refuses to boot in production without it.**
 
+The web app needs the opposite link: set the Vercel project env var `NEXT_PUBLIC_API_BASE_URL` to the API's public origin (e.g. `https://petepete-staging.fly.dev`, no trailing slash) and redeploy, because it is baked in at build time. The pay page (`/pay/<token>`) and join page (`/join/<token>`) call the API from the browser; the API answers CORS only for the `WEB_BASE_URL` origin, so the two values must name the same site.
+
 ### 5. Give GitHub a deploy token
 
 The workflow reads `FLY_API_TOKEN` from the GitHub environment named exactly like the `environment:` key in the workflow (`staging` or `production`). Create the environment first: `gh secret set --env` fails if it doesn't exist. Creating an environment that already exists is harmless.

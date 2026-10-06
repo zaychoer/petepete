@@ -42,6 +42,7 @@ defmodule PetepeteWeb.Router do
   scope "/api", PetepeteWeb do
     pipe_through [:api, :optionally_authenticated]
 
+    get "/invites/:token", InviteController, :show
     post "/invites/:token/join", InviteController, :join
   end
 
