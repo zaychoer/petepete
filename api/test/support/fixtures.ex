@@ -2,7 +2,7 @@ defmodule Petepete.Fixtures do
   @moduledoc "Test fixtures built by direct Repo inserts of the schemas. Parallel tickets append new functions at the end."
   alias Petepete.Accounts.User
   alias Petepete.Billing.{Bill, Session}
-  alias Petepete.Groups.{Group, Member}
+  alias Petepete.Groups.{Group, Member, PayoutAccount}
   alias Petepete.Repo
   alias Petepete.Sessions.Event
 
@@ -150,5 +150,24 @@ defmodule Petepete.Fixtures do
     group = group!()
     event = event!(group)
     {group, event, session!(event, attrs)}
+  end
+
+  def user!(attrs \\ []) do
+    Repo.insert!(struct(%User{phone: "62#{uniq()}", display_name: "User#{uniq()}"}, attrs))
+  end
+
+  def payout_account!(group, owner, attrs \\ []) do
+    Repo.insert!(
+      struct(
+        %PayoutAccount{
+          group_id: group.id,
+          owner_member_id: owner.id,
+          provider: "fake",
+          provider_account_id: "acc#{uniq()}",
+          status: "active"
+        },
+        attrs
+      )
+    )
   end
 end
