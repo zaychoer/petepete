@@ -34,6 +34,7 @@ defmodule PetepeteWeb.PayoutAccountControllerTest do
              Repo.all(from a in AuditLog, where: a.action == "payout_account.register")
 
     refute inspect(meta) =~ "1234567890"
+    assert Repo.aggregate(AuditLog, :count) == 1
   end
 
   test "bad bank data is 422 and leaves nothing behind", ctx do
