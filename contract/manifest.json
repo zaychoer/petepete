@@ -87,6 +87,7 @@
       "pay_page.void"
     ],
     "GET /api/sessions/:id": [
+      "session.cancelled",
       "session.draft",
       "session.issued",
       "session.settled"

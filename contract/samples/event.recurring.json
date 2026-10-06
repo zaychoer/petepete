@@ -4,23 +4,33 @@
     "cost_template": {
       "items": [
         {
+          "amount": 60000,
+          "category": "minum",
+          "label": null,
+          "member_ids": [
+            1808
+          ],
+          "paid_by_member_id": 1808,
+          "scope": "subset"
+        },
+        {
           "amount": 350000,
           "category": "lapangan",
           "label": null,
           "member_ids": [],
-          "paid_by_member_id": 2556,
+          "paid_by_member_id": 1808,
           "scope": "all"
         }
       ]
     },
-    "group_id": 1107,
-    "id": 503,
-    "name": "Group 30210",
+    "group_id": 741,
+    "id": 343,
+    "name": "Group 132",
     "rrule": "FREQ=WEEKLY;BYDAY=TH;BYHOUR=19;BYMINUTE=0",
     "split_rule": "equal",
     "starts_at": null,
     "type": "recurring"
   },
-  "event_id": 503,
+  "event_id": 343,
   "session_id": null
 }

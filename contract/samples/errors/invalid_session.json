@@ -4,7 +4,8 @@
   "problems": [
     {
       "code": "item_without_bearers",
-      "id": 25
+      "id": 295,
+      "message": "Pos \"lapangan\" belum ada peserta hadir yang menanggung. Centang kehadiran atau ubah \"Hanya untuk…\"."
     }
   ]
 }

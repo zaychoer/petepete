@@ -12,7 +12,8 @@ defmodule PetepeteWeb.SessionProblems do
   @doc "Every problem code that has text."
   @spec codes() :: [String.t()]
   def codes,
-    do: ~w(invalid_amount invalid_rounding_unit invalid_weight item_without_bearers item_without_payer total_cost_not_positive)
+    do:
+      ~w(invalid_amount invalid_rounding_unit invalid_weight item_without_bearers item_without_payer total_cost_not_positive)
 
   @doc """
   The wire problems (`%{code, id, message}`) of Calculation `errors` for `session_id`;

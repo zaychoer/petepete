@@ -3,21 +3,21 @@
   "fronted": [
     {
       "amount": 100000,
-      "member_id": 12
+      "member_id": 1847
     }
   ],
   "items": [
     {
       "amount": 100000,
       "bearer_ids": [
-        12,
-        14,
-        15
+        1847,
+        1848,
+        1849
       ],
       "category": "lapangan",
-      "id": 4,
+      "id": 294,
       "label": null,
-      "paid_by_member_id": 12,
+      "paid_by_member_id": 1847,
       "scope": "all",
       "total_weight": 3000
     }
@@ -29,13 +29,13 @@
       "credit_applied": 34000,
       "credit_available": 100000,
       "credit_balance": 0,
-      "display_name": "Member 6631",
+      "display_name": "Member 2596",
       "fronted": 100000,
       "lines": [
         {
           "amount": 33333,
           "category": "lapangan",
-          "cost_item_id": 4,
+          "cost_item_id": 294,
           "fraction": {
             "denominator": 3,
             "numerator": 100000
@@ -43,7 +43,7 @@
           "label": null
         }
       ],
-      "member_id": 12,
+      "member_id": 1847,
       "raw_share": {
         "denominator": 3,
         "numerator": 100000
@@ -57,13 +57,13 @@
       "credit_applied": 0,
       "credit_available": 0,
       "credit_balance": 0,
-      "display_name": "Member 6695",
+      "display_name": "Member 2628",
       "fronted": 0,
       "lines": [
         {
           "amount": 33333,
           "category": "lapangan",
-          "cost_item_id": 4,
+          "cost_item_id": 294,
           "fraction": {
             "denominator": 3,
             "numerator": 100000
@@ -71,7 +71,7 @@
           "label": null
         }
       ],
-      "member_id": 14,
+      "member_id": 1848,
       "raw_share": {
         "denominator": 3,
         "numerator": 100000
@@ -85,13 +85,13 @@
       "credit_applied": 0,
       "credit_available": 0,
       "credit_balance": 0,
-      "display_name": "Member 6791",
+      "display_name": "Member 2660",
       "fronted": 0,
       "lines": [
         {
           "amount": 33333,
           "category": "lapangan",
-          "cost_item_id": 4,
+          "cost_item_id": 294,
           "fraction": {
             "denominator": 3,
             "numerator": 100000
@@ -99,7 +99,7 @@
           "label": null
         }
       ],
-      "member_id": 15,
+      "member_id": 1849,
       "raw_share": {
         "denominator": 3,
         "numerator": 100000
@@ -110,7 +110,7 @@
     }
   ],
   "rounding_unit": 1000,
-  "session_id": 5,
+  "session_id": 362,
   "total_billed": 102000,
   "total_cost": 100000,
   "total_due": 68000

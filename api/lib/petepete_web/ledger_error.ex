@@ -47,7 +47,8 @@ defmodule PetepeteWeb.LedgerError do
   text (and without a contract sample: see `PetepeteWeb.ErrorInventoryTest`).
   """
   @spec codes() :: [String.t()]
-  def codes, do: ["gateway_error" | @messages |> Map.keys() |> Enum.map(&Atom.to_string/1)] |> Enum.sort()
+  def codes,
+    do: ["gateway_error" | @messages |> Map.keys() |> Enum.map(&Atom.to_string/1)] |> Enum.sort()
 
   @doc "Sends the 422 response and returns the conn."
   @spec render(Plug.Conn.t(), atom()) :: Plug.Conn.t()

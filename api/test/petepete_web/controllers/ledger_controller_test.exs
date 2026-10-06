@@ -4,7 +4,7 @@ defmodule PetepeteWeb.LedgerControllerTest do
   import Petepete.Fixtures
   import Ecto.Query
 
-  alias Petepete.{Contract, Ledger}
+  alias Petepete.{BillingScenario, Billing, Contract, Ledger}
   alias Petepete.Ledger.{AuditLog, Event, Txn}
   alias Petepete.Repo
 
@@ -284,6 +284,63 @@ defmodule PetepeteWeb.LedgerControllerTest do
                Enum.find(body["members"], &(&1["display_name"] == "Andi"))
 
       assert ctx.outsider_conn |> get(~p"/api/groups/#{ctx.g.id}/balances") |> json_response(404)
+    end
+
+    test "history labels every one of the eight ledger kinds in Indonesian", %{conn: conn} do
+      ctx = BillingScenario.issued()
+      [bill_a, bill_b] = for m <- [ctx.a, ctx.b], do: ctx.bills[m.id]
+
+      # cash_received + cash_payment_cancelled, gateway_payment_received
+      {:ok, _} = Billing.mark_paid_cash(bill_a.id, BillingScenario.opts(ctx))
+      {:ok, _} = Billing.cancel_cash(bill_a.id, BillingScenario.opts(ctx, reason: "salah"))
+      {:ok, _} = Billing.mark_paid_cash(bill_a.id, BillingScenario.opts(ctx))
+      BillingScenario.gateway_payment!(ctx, bill_b, bill_b.amount_due)
+
+      # session_billed + session_bills_cancelled on a second session
+      second = session_fixture(event_fixture(ctx.group))
+      for m <- [ctx.host, ctx.a], do: attendance_fixture(second, m)
+      cost_item_fixture(second, amount: 20_000, paid_by: ctx.host)
+      BillingScenario.issue(%{ctx | session: second})
+
+      assert {:ok, _} =
+               Petepete.Payments.void_issue(second.id, BillingScenario.opts(ctx, reason: "batal"))
+
+      user = ctx.user |> Ecto.Changeset.change(phone: valid_phone()) |> Repo.update!()
+      host_conn = bearer_conn(conn, user)
+
+      # settlement, kas_spend, correction
+      body = %{from_member_id: ctx.a.id, to_member_id: ctx.b.id, amount: 5_000}
+
+      settled =
+        host_conn |> keyed(key()) |> post(~p"/api/groups/#{ctx.group.id}/settlements", body)
+
+      %{"txn_id" => settlement_id} = json_response(settled, 201)
+
+      host_conn
+      |> keyed(key())
+      |> post(~p"/api/groups/#{ctx.group.id}/kas-spends", %{member_id: ctx.a.id, amount: 1_000})
+      |> json_response(201)
+
+      host_conn
+      |> keyed(key())
+      |> post(~p"/api/txns/#{settlement_id}/correction", %{reason: "salah"})
+      |> json_response(201)
+
+      %{"txns" => txns} =
+        host_conn |> get(~p"/api/groups/#{ctx.group.id}/txns") |> json_response(200)
+
+      kinds = txns |> Enum.map(&{&1["kind"], &1["kind_label"]}) |> Enum.uniq() |> Enum.sort()
+
+      assert kinds == [
+               {"cash_payment_cancelled", "Tunai dibatalkan"},
+               {"cash_received", "Bayar tunai"},
+               {"correction", "Koreksi"},
+               {"gateway_payment_received", "Bayar online"},
+               {"kas_spend", "Belanja kas"},
+               {"session_billed", "Tagihan sesi"},
+               {"session_bills_cancelled", "Tagihan dibatalkan"},
+               {"settlement", "Pelunasan"}
+             ]
     end
 
     test "history is visible to plain members, describes txns in casual text, filters by member",
