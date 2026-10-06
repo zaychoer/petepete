@@ -52,8 +52,9 @@ MVP Petepete dipecah menjadi 11 epic dan 39 tiket P0, total 116 story point (≈
 - [ ] Fungsi uang (hitung, ledger, webhook) punya unit test; semua angka dalam rupiah integer, tanpa float.
 - [ ] Endpoint yang memposting ledger diuji dengan request ganda: hasil tetap satu txn.
 - [ ] Otorisasi per grup diuji: anggota grup lain tidak bisa membaca data.
-- [ ] Teks UI berbahasa Indonesia santai, status selalu disertai teks (bukan warna saja).
+- [ ] Teks UI berbahasa Indonesia santai, status selalu disertai teks (bukan warna saja); label status dan pesan galat datang dari server (ADR-0004), klien hanya menentukan ikon dan warna.
 - [ ] Error dikirim ke Sentry; tidak ada nomor HP di log.
+- [ ] Endpoint yang dipanggil klien punya sampel kontrak di `contract/samples/` (ADR-0004); fake di tes app dan web memakai sampel itu, bukan JSON tulisan tangan.
 
 ## Diagram flow
 
