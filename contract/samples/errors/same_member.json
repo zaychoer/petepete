@@ -1,0 +1,4 @@
+{
+  "error": "same_member",
+  "message": "Pembayar dan penerima tidak boleh orang yang sama."
+}

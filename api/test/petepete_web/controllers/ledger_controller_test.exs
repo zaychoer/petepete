@@ -4,7 +4,7 @@ defmodule PetepeteWeb.LedgerControllerTest do
   import Petepete.Fixtures
   import Ecto.Query
 
-  alias Petepete.Ledger
+  alias Petepete.{Contract, Ledger}
   alias Petepete.Ledger.{AuditLog, Event, Txn}
   alias Petepete.Repo
 
@@ -85,6 +85,9 @@ defmodule PetepeteWeb.LedgerControllerTest do
 
       conn = ctx.host_conn |> keyed(key()) |> post(~p"/api/groups/#{ctx.g.id}/settlements", body)
 
+      # 201 here and 200 on a replay (`replayed: true`) share this one sample.
+      Contract.check!("settlement.recorded", conn)
+
       assert %{"txn_id" => id, "replayed" => false} = json_response(conn, 201)
       assert %Txn{kind: "settlement", reason: "talangan"} = Repo.get!(Txn, id)
 
@@ -104,6 +107,7 @@ defmodule PetepeteWeb.LedgerControllerTest do
           amount: 1000
         })
 
+      Contract.check!("errors/same_member", conn)
       assert %{"error" => "same_member"} = json_response(conn, 422)
       assert audit_rows(ctx.g.id, "settlement.record") == []
     end
@@ -130,6 +134,14 @@ defmodule PetepeteWeb.LedgerControllerTest do
       assert ctx.conn |> keyed(key()) |> post(path, body) |> json_response(401)
       assert txn_count(ctx.g.id) == 0
     end
+
+    test "the Idempotency-Key header is required", ctx do
+      body = %{from_member_id: ctx.andi.id, to_member_id: ctx.budi.id, amount: 1000}
+      conn = post(ctx.host_conn, ~p"/api/groups/#{ctx.g.id}/settlements", body)
+
+      Contract.check!("errors/idempotency_key_required", conn)
+      assert %{"error" => "idempotency_key_required"} = json_response(conn, 422)
+    end
   end
 
   describe "POST kas-spends" do
@@ -141,12 +153,14 @@ defmodule PetepeteWeb.LedgerControllerTest do
 
       c1 = ctx.host_conn |> keyed(k) |> post(path, body)
       c2 = ctx.host_conn |> keyed(k) |> post(path, body)
+      Contract.check!("kas_spend.recorded", c1)
       assert %{"txn_id" => id} = json_response(c1, 201)
       assert %{"txn_id" => ^id, "replayed" => true} = json_response(c2, 200)
       assert Ledger.balances(ctx.g.id).kas == 40_000
       assert length(audit_rows(ctx.g.id, "kas_spend.record")) == 1
 
       over = ctx.host_conn |> keyed(key()) |> post(path, %{body | amount: 40_001})
+      Contract.check!("errors/insufficient_kas", over)
       assert %{"error" => "insufficient_kas"} = json_response(over, 422)
       assert Ledger.balances(ctx.g.id).kas == 40_000
       assert length(audit_rows(ctx.g.id, "kas_spend.record")) == 1
@@ -167,6 +181,7 @@ defmodule PetepeteWeb.LedgerControllerTest do
       c1 = ctx.host_conn |> keyed(k) |> post(path, %{reason: "salah orang"})
       c2 = ctx.host_conn |> keyed(k) |> post(path, %{reason: "salah orang"})
 
+      Contract.check!("correction.recorded", c1)
       assert %{"txn_id" => cid, "replayed" => false} = json_response(c1, 201)
       assert %{"txn_id" => ^cid, "replayed" => true} = json_response(c2, 200)
       assert txn_count(ctx.g.id) == 2
@@ -190,6 +205,7 @@ defmodule PetepeteWeb.LedgerControllerTest do
       conn =
         ctx.host_conn |> keyed(key()) |> post(~p"/api/txns/#{ctx.settlement_id}/correction", %{})
 
+      Contract.check!("errors/reason_required", conn)
       assert %{"error" => "reason_required"} = json_response(conn, 422)
       assert audit_rows(ctx.g.id, "txn.correct") == []
     end
@@ -198,6 +214,7 @@ defmodule PetepeteWeb.LedgerControllerTest do
       path = ~p"/api/txns/#{ctx.settlement_id}/correction"
       assert ctx.host_conn |> keyed(key()) |> post(path, %{reason: "x"}) |> json_response(201)
       conn = ctx.host_conn |> keyed(key()) |> post(path, %{reason: "lagi"})
+      Contract.check!("errors/already_reversed", conn)
       assert %{"error" => "already_reversed"} = json_response(conn, 422)
     end
 
@@ -221,6 +238,7 @@ defmodule PetepeteWeb.LedgerControllerTest do
         |> keyed(key())
         |> post(~p"/api/txns/#{billed.id}/correction", %{reason: "x"})
 
+      Contract.check!("errors/not_undoable", conn)
       assert %{"error" => "not_undoable"} = json_response(conn, 422)
     end
 
@@ -240,7 +258,9 @@ defmodule PetepeteWeb.LedgerControllerTest do
     test "any member reads balances; outsiders get 404", ctx do
       fund_kas(ctx.g, ctx.host_m, ctx.andi, 20_000)
 
-      body = ctx.plain_conn |> get(~p"/api/groups/#{ctx.g.id}/balances") |> json_response(200)
+      conn = get(ctx.plain_conn, ~p"/api/groups/#{ctx.g.id}/balances")
+      Contract.check!("balances.members", conn)
+      body = json_response(conn, 200)
       assert body["kas"] == 20_000
 
       assert %{"member_id" => _, "display_name" => "Andi", "balance" => -20_000} =
@@ -251,7 +271,13 @@ defmodule PetepeteWeb.LedgerControllerTest do
 
     test "history is visible to plain members, describes txns in casual text, filters by member",
          ctx do
-      body = %{from_member_id: ctx.andi.id, to_member_id: ctx.budi.id, amount: 1_245_000}
+      body = %{
+        from_member_id: ctx.andi.id,
+        to_member_id: ctx.budi.id,
+        amount: 1_245_000,
+        note: "talangan"
+      }
+
       ctx.host_conn |> keyed(key()) |> post(~p"/api/groups/#{ctx.g.id}/settlements", body)
 
       ctx.host_conn
@@ -263,16 +289,26 @@ defmodule PetepeteWeb.LedgerControllerTest do
       })
 
       path = ~p"/api/groups/#{ctx.g.id}/txns"
-      all = ctx.plain_conn |> get(path) |> json_response(200)
+      conn = get(ctx.plain_conn, path)
+      Contract.check!("txns.history", conn)
+      all = json_response(conn, 200)
 
-      assert [%{"description" => "Andi bayar Rp1.245.000 ke Budi", "entries" => [_, _]}, _] =
+      assert [
+               %{
+                 "description" => "Andi bayar Rp1.245.000 ke Budi (talangan)",
+                 "entries" => [_, _]
+               },
+               _
+             ] =
                all["txns"]
 
       filtered = ctx.plain_conn |> get(path, %{member_id: ctx.andi.id}) |> json_response(200)
-      assert [%{"description" => "Andi bayar Rp1.245.000 ke Budi"}] = filtered["txns"]
+      assert [%{"description" => "Andi bayar Rp1.245.000 ke Budi (talangan)"}] = filtered["txns"]
 
       assert ctx.outsider_conn |> get(path) |> json_response(404)
-      assert ctx.plain_conn |> get(path, %{member_id: "abc"}) |> json_response(422)
+
+      assert %{"error" => "invalid_params", "message" => _} =
+               ctx.plain_conn |> get(path, %{member_id: "abc"}) |> json_response(422)
     end
   end
 end

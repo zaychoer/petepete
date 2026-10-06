@@ -1,0 +1,12 @@
+{
+  "action": {
+    "qr_string": "FAKEQRIS|143-1|34268",
+    "type": "qr_string"
+  },
+  "amount_due": 34000,
+  "expires_at": "2026-10-06T04:00:00Z",
+  "fee": 268,
+  "gross_amount": 34268,
+  "method": "qris",
+  "reused": true
+}

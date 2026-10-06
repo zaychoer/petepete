@@ -4,12 +4,14 @@ defmodule PetepeteWeb.PayoutAccountController do
   The context (`Payments.register_payout_account/4`) writes the audit row with the account.
 
   `POST /groups/:group_id/payout-account` needs an `Idempotency-Key` header: 201 for a new
-  account, 200 with the original account (`replayed: true`) for a repeated key.
+  account, 200 with the original account (`replayed: true`) for a repeated key. The body is
+  `payout_account_id`, `status` (`pending_kyc | active`), `status_label`, `replayed`. A
+  gateway failure is 502 `gateway_error`.
   """
   use PetepeteWeb, :controller
 
   alias Petepete.Payments
-  alias PetepeteWeb.LedgerError
+  alias PetepeteWeb.{Labels, LedgerError}
   alias PetepeteWeb.Plugs.{GroupAccess, IdempotencyKey}
 
   plug GroupAccess, role: :host
@@ -28,15 +30,18 @@ defmodule PetepeteWeb.PayoutAccountController do
       {:ok, %{payout_account: account, replayed: replayed}} ->
         conn
         |> put_status(if replayed, do: 200, else: 201)
-        |> json(%{payout_account_id: account.id, status: account.status, replayed: replayed})
+        |> json(%{
+          payout_account_id: account.id,
+          status: account.status,
+          status_label: Labels.payout_account(account.status),
+          replayed: replayed
+        })
 
       {:error, %Ecto.Changeset{} = changeset} ->
         LedgerError.render_invalid(conn, changeset_errors(changeset))
 
       {:error, _reason} ->
-        conn
-        |> put_status(502)
-        |> json(%{error: "gateway_error", message: "Gateway sedang bermasalah. Coba lagi nanti."})
+        LedgerError.render_gateway_error(conn)
     end
   end
 

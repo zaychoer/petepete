@@ -5,7 +5,7 @@ defmodule PetepeteWeb.WithdrawalController do
   get 403). Withdrawals never touch the ledger.
 
     * `GET /groups/:group_id/payout-account/balance`: `balance`, `payout_account_id`,
-      `status`, `bank_name`, `account_last4`, `owner` (the caller owns the account) and
+      `status`, `status_label`, `bank_name`, `account_last4`, `owner` (the caller owns the account) and
       `can_withdraw` (owner and the account is active).
     * `POST /groups/:group_id/withdrawals` `{"amount": rupiah}` with `Idempotency-Key`:
       `withdrawal_id`, `status` (`pending | submitted | managed | failed`), `status_label`, `managed_url`
@@ -19,18 +19,11 @@ defmodule PetepeteWeb.WithdrawalController do
 
   alias Petepete.Payments
   alias Petepete.Payments.Withdrawal
-  alias PetepeteWeb.{FallbackController, LedgerError}
+  alias PetepeteWeb.{FallbackController, Labels, LedgerError}
   alias PetepeteWeb.Plugs.{GroupAccess, IdempotencyKey}
 
   plug GroupAccess, role: :host
   plug IdempotencyKey when action == :create
-
-  @status_labels %{
-    "pending" => "Penarikan lagi diproses",
-    "failed" => "Penarikan gagal. Coba lagi.",
-    "submitted" => "Penarikan diajukan",
-    "managed" => "Selesaikan di dashboard gateway"
-  }
 
   def balance(conn, _params) do
     actor = conn.assigns.actor
@@ -43,6 +36,7 @@ defmodule PetepeteWeb.WithdrawalController do
           balance: balance,
           payout_account_id: account.id,
           status: account.status,
+          status_label: Labels.payout_account(account.status),
           bank_name: account.bank_name,
           account_last4: account.account_last4,
           owner: owner?,
@@ -64,7 +58,7 @@ defmodule PetepeteWeb.WithdrawalController do
         |> json(%{
           withdrawal_id: withdrawal.id,
           status: withdrawal.status,
-          status_label: Map.fetch!(@status_labels, withdrawal.status),
+          status_label: Labels.withdrawal(withdrawal.status),
           managed_url: withdrawal.managed_url,
           replayed: replayed
         })
@@ -88,7 +82,7 @@ defmodule PetepeteWeb.WithdrawalController do
       id: w.id,
       amount: w.amount,
       status: w.status,
-      status_label: Map.fetch!(@status_labels, w.status),
+      status_label: Labels.withdrawal(w.status),
       provider_ref: w.provider_ref,
       managed_url: w.managed_url,
       inserted_at: w.inserted_at
@@ -97,11 +91,7 @@ defmodule PetepeteWeb.WithdrawalController do
 
   defp render_error(conn, :forbidden), do: FallbackController.call(conn, {:error, :forbidden})
 
-  defp render_error(conn, {:gateway_error, _reason}) do
-    conn
-    |> put_status(502)
-    |> json(%{error: "gateway_error", message: "Gateway sedang bermasalah. Coba lagi nanti."})
-  end
+  defp render_error(conn, {:gateway_error, _reason}), do: LedgerError.render_gateway_error(conn)
 
   defp render_error(conn, reason), do: LedgerError.render(conn, reason)
 end

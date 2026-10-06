@@ -1,0 +1,50 @@
+{
+  "txns": [
+    {
+      "actor_type": "host",
+      "description": "Andi bayar Rp1.245.000 ke Budi (talangan)",
+      "entries": [
+        {
+          "account_type": "member",
+          "amount": 1245000,
+          "display_name": "Andi",
+          "member_id": 278
+        },
+        {
+          "account_type": "member",
+          "amount": -1245000,
+          "display_name": "Budi",
+          "member_id": 279
+        }
+      ],
+      "id": 60,
+      "inserted_at": "2026-10-06T14:43:35Z",
+      "kind": "settlement",
+      "reason": "talangan",
+      "reverses_txn_id": null
+    },
+    {
+      "actor_type": "host",
+      "description": "Member 5700 bayar Rp45.000 ke Budi",
+      "entries": [
+        {
+          "account_type": "member",
+          "amount": 45000,
+          "display_name": "Member 5700",
+          "member_id": 275
+        },
+        {
+          "account_type": "member",
+          "amount": -45000,
+          "display_name": "Budi",
+          "member_id": 279
+        }
+      ],
+      "id": 61,
+      "inserted_at": "2026-10-06T14:43:35Z",
+      "kind": "settlement",
+      "reason": null,
+      "reverses_txn_id": null
+    }
+  ]
+}

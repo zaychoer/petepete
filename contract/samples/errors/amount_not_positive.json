@@ -1,0 +1,4 @@
+{
+  "error": "amount_not_positive",
+  "message": "Nominal harus lebih dari Rp0."
+}

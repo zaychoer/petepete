@@ -30,32 +30,16 @@ defmodule PetepeteWeb.PayController do
 
   alias Petepete.{Payments, Wib}
   alias Petepete.Payments.PaymentAttempt
-  alias PetepeteWeb.LedgerError
-
-  @status_labels %{
-    "unpaid" => "Belum bayar",
-    "paid" => "Lunas",
-    "needs_review" => "Perlu dicek",
-    "void" => "Dibatalkan"
-  }
-
-  @status_messages %{
-    "paid" => "Tagihan ini sudah lunas. Makasih ya!",
-    "needs_review" => "Pembayaranmu lagi dicek host. Tunggu sebentar ya.",
-    "void" => "Tagihan dibatalkan"
-  }
-
-  @method_labels %{"qris" => "QRIS", "va" => "Virtual Account", "ewallet" => "E-wallet"}
+  alias PetepeteWeb.{Labels, LedgerError}
 
   @errors %{
     not_found: {404, "Link bayar tidak ditemukan."},
     unsupported_method:
       {422, "Metode bayar tidak dikenal. Pilih QRIS, Virtual Account, atau e-wallet."},
     bill_paid: {409, "Tagihan ini sudah lunas."},
-    bill_void: {409, "Tagihan dibatalkan"},
-    bill_needs_review: {409, "Pembayaranmu lagi dicek host. Tunggu sebentar ya."},
-    token_expired: {410, "Link bayar sudah kedaluwarsa. Minta link baru ke host."},
-    gateway_error: {502, "Gateway sedang bermasalah. Coba lagi nanti."}
+    bill_void: {409, Labels.bill_message("void")},
+    bill_needs_review: {409, Labels.bill_message("needs_review")},
+    token_expired: {410, "Link bayar sudah kedaluwarsa. Minta link baru ke host."}
   }
 
   def show(conn, %{"token" => token}) do
@@ -81,6 +65,8 @@ defmodule PetepeteWeb.PayController do
     LedgerError.render_invalid(conn, %{"method" => "wajib diisi"})
   end
 
+  defp render_error(conn, :gateway_error), do: LedgerError.render_gateway_error(conn)
+
   defp render_error(conn, reason) do
     {status, message} = Map.fetch!(@errors, reason)
 
@@ -96,8 +82,8 @@ defmodule PetepeteWeb.PayController do
       session_date: page.session_starts_at |> Wib.date() |> Date.to_iso8601(),
       session_starts_at: page.session_starts_at,
       status: bill.status,
-      status_label: Map.fetch!(@status_labels, bill.status),
-      message: Map.get(@status_messages, bill.status),
+      status_label: Labels.bill(bill.status),
+      message: Labels.bill_message(bill.status),
       token_expired: view.token_expired,
       can_pay: view.can_pay
     }
@@ -112,8 +98,7 @@ defmodule PetepeteWeb.PayController do
         rounding: page.rounding,
         lines: page.lines,
         paid_at: bill.paid_at,
-        methods:
-          for(m <- view.methods, do: Map.put(m, :label, Map.fetch!(@method_labels, m.method))),
+        methods: for(m <- view.methods, do: Map.put(m, :label, Labels.payment_method(m.method))),
         attempt: view.attempt && attempt_data(view.attempt),
         attempt_expired: view.attempt_expired,
         expired_method: view.expired_method

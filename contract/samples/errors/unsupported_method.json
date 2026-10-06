@@ -1,0 +1,4 @@
+{
+  "error": "unsupported_method",
+  "message": "Metode bayar tidak dikenal. Pilih QRIS, Virtual Account, atau e-wallet."
+}
