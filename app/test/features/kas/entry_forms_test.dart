@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/fake_kas_api.dart';
+import '../../support/sample.dart';
 
 final _amountField = find.widgetWithText(TextField, 'Nominal (Rp)');
 final _dropdowns = find.byType(DropdownButtonFormField<int>);
@@ -127,37 +128,28 @@ void main() {
       expect(fake.posts[1].body['amount'], 25000);
     });
 
-    testWidgets(
-      'a refusal shows the server message, or ours when it sends none',
-      (tester) async {
-        final fake = FakeKasApi();
-        await open(tester, fake);
-        await _pick(tester, 1, 'Andi');
-        await _enterAmount(tester, '5000');
+    testWidgets('a refusal shows the server message of its error code', (
+      tester,
+    ) async {
+      final fake = FakeKasApi();
+      await open(tester, fake);
+      await _pick(tester, 1, 'Andi');
+      await _enterAmount(tester, '5000');
+      String message(String code) =>
+          Sample.error(code).json['message'] as String;
 
-        fake.failNextWith = (
-          status: 422,
-          code: 'member_not_in_group',
-          message: 'Anggota itu bukan bagian dari grup ini.',
-        );
-        await tester.tap(_submitFinder('Catat pelunasan'));
-        await tester.pumpAndSettle();
-        expect(
-          find.text('Anggota itu bukan bagian dari grup ini.'),
-          findsOneWidget,
-        );
+      fake.failNextWith = (status: 422, code: 'same_member');
+      await tester.tap(_submitFinder('Catat pelunasan'));
+      await tester.pumpAndSettle();
+      expect(find.text(message('same_member')), findsOneWidget);
 
-        fake.failNextWith = (status: 403, code: 'forbidden', message: null);
-        await tester.tap(_submitFinder('Catat pelunasan'));
-        await tester.pumpAndSettle();
-        expect(find.text('Kamu tidak punya akses untuk ini.'), findsOneWidget);
-        expect(
-          find.text('Anggota itu bukan bagian dari grup ini.'),
-          findsNothing,
-        );
-        expect(fake.ledgerTxnCount, 0);
-      },
-    );
+      fake.failNextWith = (status: 403, code: 'forbidden');
+      await tester.tap(_submitFinder('Catat pelunasan'));
+      await tester.pumpAndSettle();
+      expect(find.text(message('forbidden')), findsOneWidget);
+      expect(find.text(message('same_member')), findsNothing);
+      expect(fake.ledgerTxnCount, 0);
+    });
   });
 
   group('Belanja dari kas', () {

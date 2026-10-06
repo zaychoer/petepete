@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/fake_kas_api.dart';
+import '../../support/sample.dart';
+import '../../support/wire_labels.dart';
 
 const _location = '/groups/1/withdraw';
 final _amountField = find.widgetWithText(TextField, 'Mau tarik berapa? (Rp)');
@@ -12,26 +14,27 @@ Future<void> _enterAmount(WidgetTester tester, String text) async {
   await tester.pump();
 }
 
+String _serverMessage(String code) =>
+    Sample.error(code).json['message'] as String;
+
 void main() {
   testWidgets('shows the sub-account balance, the target account and history', (
     tester,
   ) async {
     final fake = FakeKasApi();
-    fake.withdrawals.add({
-      'id': 5,
-      'amount': 100000,
-      'status': 'submitted',
-      'status_label': 'Penarikan diajukan',
-      'provider_ref': 'po-1',
-      'managed_url': null,
-      'inserted_at': DateTime.utc(2026, 10, 1, 3).toIso8601String(),
-    });
+    fake.addWithdrawal(
+      id: 5,
+      amount: 100000,
+      status: 'submitted',
+      providerRef: 'po-1',
+      insertedAt: DateTime.utc(2026, 10, 1, 3),
+    );
     await pumpKas(tester, fake, location: _location);
 
     expect(find.text('Rp250.000'), findsOneWidget);
     expect(find.textContaining('BCA ••••4321'), findsOneWidget);
     expect(find.text('Rp100.000'), findsOneWidget);
-    expect(find.text('Penarikan diajukan'), findsOneWidget);
+    expect(find.text(WireLabels.withdrawal('submitted')), findsOneWidget);
   });
 
   testWidgets('withdraws to the registered account and refreshes the balance', (
@@ -49,7 +52,8 @@ void main() {
     expect(fake.posts.single.key, isNotEmpty);
     expect(find.text('Penarikan Rp100.000 diajukan.'), findsOneWidget);
     expect(find.text('Rp150.000'), findsOneWidget); // new sub-account balance
-    expect(find.text('Penarikan diajukan'), findsOneWidget); // history row
+    // history row
+    expect(find.text(WireLabels.withdrawal('submitted')), findsOneWidget);
     expect(tester.widget<TextField>(_amountField).controller!.text, isEmpty);
   });
 
@@ -96,18 +100,14 @@ void main() {
   testWidgets('a server refusal shows its Indonesian message', (tester) async {
     final fake = FakeKasApi();
     await pumpKas(tester, fake, location: _location);
-    fake.failNextWith = (
-      status: 422,
-      code: 'insufficient_balance',
-      message: 'Saldo sub-account tidak cukup untuk penarikan ini.',
-    );
+    fake.failNextWith = (status: 422, code: 'insufficient_balance');
 
     await _enterAmount(tester, '100000');
     await tester.tap(_withdrawButton);
     await tester.pumpAndSettle();
 
     expect(
-      find.text('Saldo sub-account tidak cukup untuk penarikan ini.'),
+      find.text(_serverMessage('insufficient_balance')),
       findsOneWidget,
     );
   });
@@ -131,7 +131,7 @@ void main() {
         find.textContaining('perlu diselesaikan di dashboard gateway'),
         findsOneWidget,
       );
-      expect(find.text('Selesaikan di dashboard gateway'), findsOneWidget);
+      expect(find.text(WireLabels.withdrawal('managed')), findsOneWidget);
 
       // The history row can open it again.
       await tester.tap(find.text('Buka dashboard'));
@@ -173,7 +173,7 @@ void main() {
   });
 
   testWidgets('an account that is not active yet says why', (tester) async {
-    final fake = FakeKasApi()..payoutStatus = 'pending';
+    final fake = FakeKasApi()..payoutStatus = 'pending_kyc';
     await pumpKas(tester, fake, location: _location);
 
     expect(find.textContaining('belum aktif'), findsOneWidget);
@@ -186,7 +186,7 @@ void main() {
     final fake = FakeKasApi()..hasPayoutAccount = false;
     await pumpKas(tester, fake, location: _location);
 
-    expect(find.text('Grup belum punya rekening pencairan.'), findsOneWidget);
+    expect(find.text(_serverMessage('no_payout_account')), findsOneWidget);
     await tester.tap(find.text('Daftarkan rekening pencairan'));
     await tester.pumpAndSettle();
     expect(find.text('Daftar rekening pencairan'), findsOneWidget);
