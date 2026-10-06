@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
-void main() {
-  runApp(const PetepeteApp());
+import 'error_reporting.dart';
+
+Future<void> main() async {
+  await runWithErrorReporting(() => runApp(const PetepeteApp()));
 }
 
 class PetepeteApp extends StatelessWidget {
