@@ -5,7 +5,9 @@ import '../features/auth/login_screen.dart';
 import '../features/auth/name_screen.dart';
 import '../features/auth/otp_screen.dart';
 import '../features/auth/restore_screen.dart';
-import '../features/home/placeholder_screen.dart';
+import '../features/groups/group_paths.dart';
+import '../features/groups/group_routes.dart';
+import '../features/groups/landing_screen.dart';
 
 /// Route names; navigate with `context.goNamed(AppRoutes.home)`. Later tickets add
 /// their names here, under [home] (e.g. a group is `/grup/:groupId`).
@@ -15,7 +17,7 @@ abstract final class AppRoutes {
   static const otp = 'otp';
   static const name = 'name';
 
-  /// Landing screen once logged in. PP-GRP-01 onboarding replaces its builder.
+  /// Landing screen once logged in: onboarding for a new host, else the group home.
   static const home = 'home';
 }
 
@@ -29,15 +31,31 @@ const _homePath = '/';
 /// their [AuthStatus] allows, and moves on when it changes (login, logout, expired
 /// session).
 GoRouter createRouter(AuthController auth) {
+  // An invite link opened while signed out: login comes first, then the link.
+  String? returnTo;
   return GoRouter(
     initialLocation: _homePath,
     refreshListenable: auth,
-    redirect: (context, state) => _redirect(auth, state.matchedLocation),
+    redirect: (context, state) {
+      final location = state.matchedLocation;
+      final target = _redirect(auth, location);
+      if (auth.status != AuthStatus.signedIn &&
+          location.startsWith(GroupRoutes.joinPrefix)) {
+        returnTo = state.uri.toString();
+      } else if (target == _homePath &&
+          auth.status == AuthStatus.signedIn &&
+          returnTo != null) {
+        final back = returnTo;
+        returnTo = null;
+        return back;
+      }
+      return target;
+    },
     routes: [
       GoRoute(
         path: _homePath,
         name: AppRoutes.home,
-        builder: (context, state) => const PlaceholderScreen(),
+        builder: (context, state) => const LandingScreen(),
       ),
       GoRoute(
         path: _restorePath,
@@ -61,6 +79,7 @@ GoRouter createRouter(AuthController auth) {
         name: AppRoutes.name,
         builder: (context, state) => const NameScreen(),
       ),
+      ...groupRoutes,
     ],
   );
 }

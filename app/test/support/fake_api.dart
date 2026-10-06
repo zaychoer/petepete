@@ -135,6 +135,8 @@ class FakeApi {
         }
         accounts[phone]!['display_name'] = name;
         return _json({..._user(phone), 'phone': phone});
+      case 'GET /api/groups':
+        return _json({'groups': <Object>[]});
       case 'POST /api/groups/g1/kas-spends':
         moneyKeys.add(request.headers['idempotency-key']);
         return _json({'ok': true});
