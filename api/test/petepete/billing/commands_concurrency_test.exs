@@ -38,7 +38,7 @@ defmodule Petepete.Billing.CommandsConcurrencyTest do
 
     assert first.txn.id == second.txn.id
     assert Repo.aggregate(from(t in Txn, where: t.kind == "session_bills_cancelled"), :count) == 1
-    assert Repo.aggregate(AuditLog, :count) == 1
+    assert Repo.aggregate(from(a in AuditLog, where: a.action != "session.issue"), :count) == 1
   end
 
   test "two cash requests with one key: one txn, one audit row", ctx do
@@ -52,7 +52,7 @@ defmodule Petepete.Billing.CommandsConcurrencyTest do
              Enum.sort_by(results, fn {:ok, r} -> r.replayed end)
 
     assert Repo.aggregate(from(t in Txn, where: t.kind == "cash_received"), :count) == 1
-    assert Repo.aggregate(AuditLog, :count) == 1
+    assert Repo.aggregate(from(a in AuditLog, where: a.action != "session.issue"), :count) == 1
   end
 
   test "a webhook payment racing a void never deadlocks and leaves the same credit", ctx do

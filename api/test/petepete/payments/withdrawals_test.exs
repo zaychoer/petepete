@@ -2,7 +2,7 @@ defmodule Petepete.Payments.WithdrawalsTest do
   # Not async: the fake gateway's behaviour is application config.
   use Petepete.DataCase, async: false
 
-  import Ecto.Query, only: [from: 2]
+  import Ecto.Query, only: [from: 2, like: 2]
 
   alias Petepete.{BillingScenario, FakeGateway, Payments}
   alias Petepete.Ledger.AuditLog
@@ -19,7 +19,13 @@ defmodule Petepete.Payments.WithdrawalsTest do
     do: Payments.withdraw(ctx.group.id, ctx.host, ctx.user.id, key, amount)
 
   defp audit_actions,
-    do: Repo.all(from a in AuditLog, order_by: a.id, select: a.action)
+    do:
+      Repo.all(
+        from a in AuditLog,
+          where: like(a.action, "withdrawal.%"),
+          order_by: a.id,
+          select: a.action
+      )
 
   test "the request is committed pending, with its audit row, before the gateway is asked",
        %{ctx: ctx} do

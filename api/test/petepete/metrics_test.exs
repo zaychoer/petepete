@@ -47,6 +47,8 @@ defmodule Petepete.MetricsTest do
     Repo.all(from e in Event, where: e.group_id == ^ctx.group.id and e.name == ^name)
   end
 
+  defp events_for(ctx, name, bill), do: Enum.filter(events(ctx, name), &(&1.bill_id == bill.id))
+
   defp bill_of(issue, member), do: Enum.find(issue.bills, &(&1.member_id == member.id))
 
   defp pay_gateway(bill, key \\ "gw-1", seq \\ 1) do
@@ -127,8 +129,7 @@ defmodule Petepete.MetricsTest do
                  opts(ctx) |> Keyword.put(:idempotency_key, "cash-1")
                )
 
-      assert [%{value_ms: 90_000, bill_id: bill_id}] = events(ctx, "time_to_paid")
-      assert bill_id == bill.id
+      assert [%{value_ms: 90_000}] = events_for(ctx, "time_to_paid", bill)
       assert events(ctx, "paid_without_install") == []
 
       assert {:ok, %{replayed: true}} =
@@ -137,7 +138,18 @@ defmodule Petepete.MetricsTest do
                  opts(ctx) |> Keyword.put(:idempotency_key, "cash-1")
                )
 
-      assert [_one] = events(ctx, "time_to_paid")
+      assert [_one] = events_for(ctx, "time_to_paid", bill)
+    end
+
+    test "a bill paid at issue by credit counts with time_to_paid 0, once", ctx do
+      result = issue!(ctx)
+      credit_bill = Enum.find(result.bills, &(&1.amount_due == 0 and &1.status == "paid"))
+      assert credit_bill
+
+      assert [%{value_ms: 0}] = events_for(ctx, "time_to_paid", credit_bill)
+      assert events_for(ctx, "paid_without_install", credit_bill) == []
+      issue!(ctx)
+      assert [_one] = events_for(ctx, "time_to_paid", credit_bill)
     end
 
     test "cancelling and taking the cash again counts the bill once", ctx do
@@ -147,7 +159,7 @@ defmodule Petepete.MetricsTest do
       Clock.advance(600)
       {:ok, %{replayed: false}} = Billing.mark_paid_cash(bill.id, opts(ctx))
 
-      assert [%{value_ms: 0}] = events(ctx, "time_to_paid")
+      assert [%{value_ms: 0}] = events_for(ctx, "time_to_paid", bill)
     end
   end
 
@@ -159,8 +171,7 @@ defmodule Petepete.MetricsTest do
 
       assert {:ok, {:ok, :paid}} = pay_gateway(bill)
 
-      assert [%{value_ms: 120_000, bill_id: bill_id}] = events(ctx, "time_to_paid")
-      assert bill_id == bill.id
+      assert [%{value_ms: 120_000, bill_id: bill_id}] = events_for(ctx, "time_to_paid", bill)
       assert [%{bill_id: ^bill_id, value_ms: nil}] = events(ctx, "paid_without_install")
     end
 
@@ -168,7 +179,7 @@ defmodule Petepete.MetricsTest do
       bill = bill_of(issue!(ctx), ctx.installed)
       assert {:ok, {:ok, :paid}} = pay_gateway(bill)
 
-      assert [_one] = events(ctx, "time_to_paid")
+      assert [_one] = events_for(ctx, "time_to_paid", bill)
       assert events(ctx, "paid_without_install") == []
     end
 
@@ -207,7 +218,7 @@ defmodule Petepete.MetricsTest do
                end)
 
       assert Repo.aggregate(Event, :count) == before
-      assert events(ctx, "time_to_paid") == []
+      assert events_for(ctx, "time_to_paid", bill) == []
     end
   end
 

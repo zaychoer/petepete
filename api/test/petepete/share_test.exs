@@ -80,19 +80,46 @@ defmodule Petepete.ShareTest do
       assert {:ok, %{bills: [%{has_phone: false, wa_number: nil}]}} = Share.bills(ctx.session.id)
     end
 
-    test "a paid bill has no pay link; a void one is skipped" do
+    test "a paid bill has no pay link; a void-only member is listed as void without text" do
       ctx = issued_session()
       {paid, _} = bill_for(ctx, %{name: "Budi", status: "paid", paid_via: "cash"})
-      {_, _} = bill_for(ctx, %{name: "Citra", status: "void"})
+      {void, _} = bill_for(ctx, %{name: "Citra", status: "void"})
 
       {credit, _} =
         bill_for(ctx, %{name: "Dewi", status: "paid", paid_via: "credit", amount_due: 0})
 
-      assert {:ok, %{bills: [budi, dewi]}} = Share.bills(ctx.session.id)
-      assert budi.bill_id == paid.id and dewi.bill_id == credit.id
+      assert {:ok, %{bills: [budi, citra, dewi]}} = Share.bills(ctx.session.id)
+      assert budi.bill_id == paid.id and dewi.bill_id == credit.id and citra.bill_id == void.id
       assert budi.pay_url == nil and budi.text =~ "Lunas" and budi.text =~ "Budi"
       refute budi.text =~ "/pay/"
       assert dewi.text =~ "saldo"
+      assert %{status: "void", text: nil, share_url: nil, pay_url: nil} = citra
+    end
+
+    test "cash_cancellable is true only for cash paid within the 24 hour window" do
+      ctx = issued_session()
+      now = Petepete.Clock.now()
+
+      {recent, _} =
+        bill_for(ctx, %{name: "Budi", status: "paid", paid_via: "cash", paid_at: now})
+
+      {old, _} =
+        bill_for(ctx, %{
+          name: "Eka",
+          status: "paid",
+          paid_via: "cash",
+          paid_at: DateTime.add(now, -25 * 3600, :second)
+        })
+
+      {gateway, _} =
+        bill_for(ctx, %{name: "Fani", status: "paid", paid_via: "gateway", paid_at: now})
+
+      {:ok, %{bills: bills}} = Share.bills(ctx.session.id)
+      by_id = Map.new(bills, &{&1.bill_id, &1})
+
+      assert %{cash_cancellable: true, paid_via: "cash", paid_at: ^now} = by_id[recent.id]
+      assert %{cash_cancellable: false} = by_id[old.id]
+      assert %{cash_cancellable: false, paid_via: "gateway"} = by_id[gateway.id]
     end
 
     test "a needs_review bill says so and keeps the link for the status page" do
