@@ -15,8 +15,13 @@ defmodule PetepeteWeb.GroupController do
   def index(conn, _params) do
     groups =
       for %{group: group, member: member} <- Groups.list_groups(conn.assigns.current_scope) do
-        %{id: group.id, name: group.name, template: group.template,
-          role: member.role, role_label: Labels.role(member.role)}
+        %{
+          id: group.id,
+          name: group.name,
+          template: group.template,
+          role: member.role,
+          role_label: Labels.role(member.role)
+        }
       end
 
     json(conn, %{groups: groups})

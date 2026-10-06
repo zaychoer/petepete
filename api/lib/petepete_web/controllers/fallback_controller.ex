@@ -16,7 +16,8 @@ defmodule PetepeteWeb.FallbackController do
     "claim_pending" => "Klaim kamu masih menunggu persetujuan host.",
     "no_claim" => "Nggak ada klaim yang menunggu keputusan.",
     "session_not_issued" => "Sesi ini belum ditagih.",
-    "session_not_editable" => "Sesi ini sudah ditagih, jadi nggak bisa diubah lagi. Muat ulang dulu ya.",
+    "session_not_editable" =>
+      "Sesi ini sudah ditagih, jadi nggak bisa diubah lagi. Muat ulang dulu ya.",
     "invalid" => "Ada isian yang belum benar. Cek lagi ya.",
     "invalid_event" => "Ada isian acara yang belum benar. Cek lagi ya.",
     "unauthenticated" => "Sesi login habis. Masuk lagi ya.",
