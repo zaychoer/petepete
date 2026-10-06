@@ -12,10 +12,7 @@ defmodule PetepeteWeb.LedgerErrorTest do
     assert %{"message" => "Batas waktu pembatalan 24 jam" <> _} = json_response(conn, 422)
   end
 
-  test "an atom without text still answers with a message", %{conn: conn} do
-    assert %{"error" => "something_new", "message" => message} =
-             conn |> LedgerError.render(:something_new) |> json_response(422)
-
-    assert message != ""
+  test "an atom without text raises, so a code cannot ship without a message", %{conn: conn} do
+    assert_raise KeyError, fn -> LedgerError.render(conn, :something_new) end
   end
 end

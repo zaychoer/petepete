@@ -230,7 +230,7 @@ defmodule Petepete.ContractTest do
     end
   end
 
-  describe "audit/3" do
+  describe "audit/4" do
     setup do
       dir = Path.join(System.tmp_dir!(), "contract-audit-#{System.unique_integer([:positive])}")
       File.mkdir_p!(Path.join(dir, "samples/errors"))
@@ -257,16 +257,16 @@ defmodule Petepete.ContractTest do
 
     test "a fully recorded contract has no problems", %{dir: dir} do
       valid_dir(dir)
-      assert Contract.audit(["GET /api/a", "POST /api/b"], [], dir) == []
+      assert Contract.audit(["GET /api/a", "POST /api/b"], [], dir, %{}) == []
     end
 
     test "an empty contract directory is fine while every required route is pending", %{dir: dir} do
-      assert Contract.audit(["GET /api/a"], ["GET /api/a"], dir) == []
+      assert Contract.audit(["GET /api/a"], ["GET /api/a"], dir, %{}) == []
     end
 
     test "a required route neither recorded nor pending fails", %{dir: dir} do
       valid_dir(dir)
-      assert [problem] = Contract.audit(["GET /api/a", "POST /api/b", "GET /api/c"], [], dir)
+      assert [problem] = Contract.audit(["GET /api/a", "POST /api/b", "GET /api/c"], [], dir, %{})
       assert problem =~ "GET /api/c is a client route with no recorded sample"
     end
 
@@ -274,7 +274,12 @@ defmodule Petepete.ContractTest do
       valid_dir(dir)
 
       assert [recorded, unknown] =
-               Contract.audit(["GET /api/a", "POST /api/b"], ["GET /api/a", "GET /api/zzz"], dir)
+               Contract.audit(
+                 ["GET /api/a", "POST /api/b"],
+                 ["GET /api/a", "GET /api/zzz"],
+                 dir,
+                 %{}
+               )
 
       assert recorded =~ "GET /api/a, which now has samples"
       assert unknown =~ "GET /api/zzz, which is not a client route"
@@ -282,14 +287,14 @@ defmodule Petepete.ContractTest do
 
     test "a manifest route that is not a client route fails", %{dir: dir} do
       valid_dir(dir)
-      assert [problem] = Contract.audit(["GET /api/a"], [], dir)
+      assert [problem] = Contract.audit(["GET /api/a"], [], dir, %{})
       assert problem =~ "manifest lists POST /api/b, which is not a client route"
     end
 
     test "a manifest entry whose file is missing fails", %{dir: dir} do
       valid_dir(dir)
       File.rm!(Path.join(dir, "samples/b.created.json"))
-      assert [problem] = Contract.audit(["GET /api/a", "POST /api/b"], [], dir)
+      assert [problem] = Contract.audit(["GET /api/a", "POST /api/b"], [], dir, %{})
       assert problem =~ "manifest lists b.created but"
       assert problem =~ "b.created.json is missing"
     end
@@ -297,7 +302,7 @@ defmodule Petepete.ContractTest do
     test "an error code listed without its file fails", %{dir: dir} do
       valid_dir(dir)
       File.rm!(Path.join(dir, "samples/errors/nope.json"))
-      assert [problem] = Contract.audit(["GET /api/a", "POST /api/b"], [], dir)
+      assert [problem] = Contract.audit(["GET /api/a", "POST /api/b"], [], dir, %{})
       assert problem =~ "manifest lists errors/nope but"
     end
 
@@ -306,7 +311,7 @@ defmodule Petepete.ContractTest do
       write!(dir, "samples/stray.one.json", %{"x" => 1})
       write!(dir, "samples/errors/stray.json", %{"error" => "stray", "message" => "x"})
 
-      assert [one, two] = Contract.audit(["GET /api/a", "POST /api/b"], [], dir)
+      assert [one, two] = Contract.audit(["GET /api/a", "POST /api/b"], [], dir, %{})
       assert one =~ "samples/errors/stray.json is not in the manifest"
       assert two =~ "samples/stray.one.json is not in the manifest"
     end
@@ -314,21 +319,69 @@ defmodule Petepete.ContractTest do
     test "an error sample without a message fails", %{dir: dir} do
       valid_dir(dir)
       write!(dir, "samples/errors/nope.json", %{"error" => "nope"})
-      assert [problem] = Contract.audit(["GET /api/a", "POST /api/b"], [], dir)
+      assert [problem] = Contract.audit(["GET /api/a", "POST /api/b"], [], dir, %{})
       assert problem =~ ~s(errors/nope.json must have "error": "nope" and a non-empty "message")
     end
 
     test "a sample that is not JSON fails", %{dir: dir} do
       valid_dir(dir)
       write!(dir, "samples/a.one.json", "{oops")
-      assert [problem] = Contract.audit(["GET /api/a", "POST /api/b"], [], dir)
+      assert [problem] = Contract.audit(["GET /api/a", "POST /api/b"], [], dir, %{})
       assert problem =~ "a.one.json is not valid JSON"
+    end
+
+    test "a sample with an empty array anywhere in its shape fails", %{dir: dir} do
+      valid_dir(dir)
+      write!(dir, "samples/a.one.json", %{"x" => 1, "lines" => [%{"tags" => []}], "none" => []})
+
+      assert [tags, none] = Contract.audit(["GET /api/a", "POST /api/b"], [], dir, %{})
+      assert tags =~ "a.one.json: $.lines[].tags is an empty array"
+      assert none =~ "a.one.json: $.none is an empty array"
+    end
+
+    test "an empty array is fine where the allowed list names its path", %{dir: dir} do
+      valid_dir(dir)
+      write!(dir, "samples/a.one.json", %{"x" => 1, "lines" => [%{"tags" => []}], "none" => []})
+      allowed = %{"a.one" => ["$.lines[].tags", "$.none"]}
+
+      assert Contract.audit(["GET /api/a", "POST /api/b"], [], dir, allowed) == []
+    end
+
+    test "an empty array after the first element does not matter", %{dir: dir} do
+      valid_dir(dir)
+      write!(dir, "samples/a.one.json", %{"rows" => [%{"t" => [1]}, %{"t" => []}]})
+      assert Contract.audit(["GET /api/a", "POST /api/b"], [], dir, %{}) == []
+    end
+
+    test "an allowed-empty entry that is no longer empty or no longer a sample fails", %{dir: dir} do
+      valid_dir(dir)
+      allowed = %{"a.one" => ["$.x"], "gone.sample" => ["$.y"]}
+
+      assert [full, gone] = Contract.audit(["GET /api/a", "POST /api/b"], [], dir, allowed)
+      assert full =~ "@allowed_empty lists $.x of a.one, which is not an empty array"
+      assert gone =~ "@allowed_empty lists gone.sample, which is not a recorded sample"
     end
 
     test "a malformed manifest fails", %{dir: dir} do
       write!(dir, "manifest.json", ~s({"routes": []}))
-      assert [problem] = Contract.audit([], [], dir)
+      assert [problem] = Contract.audit([], [], dir, %{})
       assert problem =~ "manifest.json must be"
+    end
+  end
+
+  describe "unexercised/2" do
+    @manifest %{
+      "routes" => %{"GET /api/a" => ["a.one", "a.two"], "POST /api/b" => ["b.created"]},
+      "errors" => ["nope"]
+    }
+
+    test "lists the manifest samples no test compared, sorted" do
+      assert Contract.unexercised(@manifest, ["a.one", "errors/nope"]) == ["a.two", "b.created"]
+    end
+
+    test "is empty when every sample was compared" do
+      all = ["a.one", "a.two", "b.created", "errors/nope", "stray.extra"]
+      assert Contract.unexercised(@manifest, all) == []
     end
   end
 end
