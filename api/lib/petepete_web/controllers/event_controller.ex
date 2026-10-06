@@ -7,7 +7,7 @@ defmodule PetepeteWeb.EventController do
 
   alias Petepete.Sessions
   alias Petepete.Sessions.Event
-  alias PetepeteWeb.FallbackController
+  alias PetepeteWeb.{FallbackController, FieldErrors}
 
   plug PetepeteWeb.Plugs.GroupAccess, role: :host
 
@@ -24,7 +24,7 @@ defmodule PetepeteWeb.EventController do
 
       {:error, %Ecto.Changeset{} = changeset} ->
         FallbackController.respond(conn, 422, "invalid_event", %{
-          details: FallbackController.changeset_errors(changeset)
+          details: FieldErrors.changeset_errors(changeset)
         })
     end
   end

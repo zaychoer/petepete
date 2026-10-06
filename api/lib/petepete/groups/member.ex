@@ -40,8 +40,11 @@ defmodule Petepete.Groups.Member do
          {:ok, phone} <- Accounts.normalize_phone(raw) do
       put_change(changeset, :phone, phone)
     else
-      nil -> changeset
-      {:error, :invalid_phone} -> add_error(changeset, :phone, "is invalid")
+      nil ->
+        changeset
+
+      {:error, :invalid_phone} ->
+        add_error(changeset, :phone, "is invalid", validation: :invalid_phone)
     end
   end
 end

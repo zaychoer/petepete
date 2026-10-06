@@ -26,14 +26,14 @@ defmodule Petepete.Sessions.RRule do
   defstruct [:days, :time]
 
   @type t :: %__MODULE__{days: [1..7], time: Time.t() | nil}
-
-  @supported_help "only FREQ=WEEKLY;BYDAY=<MO,TU,WE,TH,FR,SA,SU list> with a time of day is supported"
+  @type error :: {atom(), keyword()}
 
   @doc """
   Parses a rule. `days` come back sorted Monday (1) to Sunday (7) without duplicates.
-  Returns `{:error, message}` for anything outside the supported subset.
+  Returns `{:error, {kind, opts}}` for anything outside the supported subset; the kind is
+  worded for clients by `PetepeteWeb.FieldErrors`.
   """
-  @spec parse(term()) :: {:ok, t()} | {:error, String.t()}
+  @spec parse(term()) :: {:ok, t()} | {:error, error()}
   def parse(rrule) when is_binary(rrule) do
     with {:ok, parts} <- split(rrule),
          :ok <- check_unsupported(parts),
@@ -44,7 +44,7 @@ defmodule Petepete.Sessions.RRule do
     end
   end
 
-  def parse(_), do: {:error, "must be a string like FREQ=WEEKLY;BYDAY=TH"}
+  def parse(_), do: {:error, {:rrule_type, []}}
 
   defp split(rrule) do
     parts =
@@ -62,13 +62,13 @@ defmodule Petepete.Sessions.RRule do
 
     cond do
       parts == [] ->
-        {:error, "is empty; " <> @supported_help}
+        {:error, {:rrule_empty, []}}
 
       Enum.any?(parts, fn {_, value} -> value in [nil, ""] end) ->
-        {:error, "has a part without a value"}
+        {:error, {:rrule_part_without_value, []}}
 
       length(keys) != length(Enum.uniq(keys)) ->
-        {:error, "repeats a part"}
+        {:error, {:rrule_repeated_part, []}}
 
       true ->
         {:ok, Map.new(parts)}
@@ -81,18 +81,17 @@ defmodule Petepete.Sessions.RRule do
         :ok
 
       unsupported ->
-        {:error,
-         "#{Enum.join(Enum.sort(unsupported), ", ")} is not supported; " <> @supported_help}
+        {:error, {:rrule_unsupported, parts: Enum.sort(unsupported)}}
     end
   end
 
   defp check_freq(%{"FREQ" => freq}) do
     if String.upcase(freq) == "WEEKLY",
       do: :ok,
-      else: {:error, "FREQ=#{freq} is not supported; " <> @supported_help}
+      else: {:error, {:rrule_freq_unsupported, freq: freq}}
   end
 
-  defp check_freq(_), do: {:error, "needs FREQ=WEEKLY; " <> @supported_help}
+  defp check_freq(_), do: {:error, {:rrule_freq_required, []}}
 
   defp parse_days(%{"BYDAY" => value}) do
     codes = value |> String.split(",") |> Enum.map(&(&1 |> String.trim() |> String.upcase()))
@@ -102,11 +101,11 @@ defmodule Petepete.Sessions.RRule do
         {:ok, codes |> Enum.map(&Map.fetch!(@day_numbers, &1)) |> Enum.uniq() |> Enum.sort()}
 
       bad ->
-        {:error, "BYDAY has unknown day #{Enum.join(bad, ", ")}; use #{Enum.join(@days, ",")}"}
+        {:error, {:rrule_unknown_day, days: bad, allowed: @days}}
     end
   end
 
-  defp parse_days(_), do: {:error, "needs BYDAY; " <> @supported_help}
+  defp parse_days(_), do: {:error, {:rrule_day_required, []}}
 
   defp parse_time(parts) do
     case {Map.fetch(parts, "BYHOUR"), Map.fetch(parts, "BYMINUTE")} do
@@ -120,7 +119,7 @@ defmodule Petepete.Sessions.RRule do
         end
 
       {:error, {:ok, _}} ->
-        {:error, "BYMINUTE needs BYHOUR"}
+        {:error, {:rrule_minute_needs_hour, []}}
     end
   end
 
@@ -132,35 +131,36 @@ defmodule Petepete.Sessions.RRule do
       {n, ""} ->
         if n in range,
           do: {:ok, n},
-          else: {:error, "#{name} must be #{range.first}..#{range.last}"}
+          else: {:error, {:rrule_out_of_range, name: name, min: range.first, max: range.last}}
 
       _ ->
-        {:error, "#{name} must be a whole number"}
+        {:error, {:rrule_not_whole, name: name}}
     end
   end
 
   @doc """
-  Adds a wall-clock WIB time of day given as `"HH:MM"` to a rule that has none. Returns an
-  error message for a malformed time or when the rule already carries one.
+  Adds a wall-clock WIB time of day given as `"HH:MM"` to a rule that has none. Returns
+  `{:error, {:time_format | :time_conflict, []}}` for a malformed time or when the rule already
+  carries one.
   """
-  @spec put_time(t(), term()) :: {:ok, t()} | {:error, String.t()}
+  @spec put_time(t(), term()) :: {:ok, t()} | {:error, error()}
   def put_time(%__MODULE__{time: nil} = rule, time) when is_binary(time) do
     case Regex.run(~r/\A(\d{1,2}):(\d{2})\z/, String.trim(time), capture: :all_but_first) do
       [h, m] ->
         case Time.new(String.to_integer(h), String.to_integer(m), 0) do
           {:ok, parsed} -> {:ok, %{rule | time: parsed}}
-          {:error, _} -> {:error, "time must be HH:MM between 00:00 and 23:59"}
+          {:error, _} -> {:error, {:time_format, []}}
         end
 
       _ ->
-        {:error, "time must be HH:MM between 00:00 and 23:59"}
+        {:error, {:time_format, []}}
     end
   end
 
   def put_time(%__MODULE__{time: %Time{}}, _time),
-    do: {:error, "time conflicts with BYHOUR/BYMINUTE in the rrule; give the time once"}
+    do: {:error, {:time_conflict, []}}
 
-  def put_time(%__MODULE__{}, _time), do: {:error, "time must be HH:MM between 00:00 and 23:59"}
+  def put_time(%__MODULE__{}, _time), do: {:error, {:time_format, []}}
 
   @doc "The canonical text of a rule (`FREQ=WEEKLY;BYDAY=MO,TH;BYHOUR=19;BYMINUTE=0`)."
   @spec to_string(t()) :: String.t()

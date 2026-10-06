@@ -9,9 +9,6 @@ interface JoinResult {
   group: { id: number; name: string };
 }
 
-/** Client-side check before any request; every answer from the server brings its own text. */
-const NAME_REQUIRED = "Isi namamu dulu ya.";
-
 export function JoinForm({
   token,
   groupName,
@@ -30,18 +27,12 @@ export function JoinForm({
     event.preventDefault();
     if (submitting) return;
 
-    const name = displayName.trim();
-    if (!name) {
-      setFieldErrors({ display_name: NAME_REQUIRED });
-      return;
-    }
-
     setSubmitting(true);
     setFieldErrors({});
     setFormError(null);
     try {
       const body: { display_name: string; phone?: string } = {
-        display_name: name,
+        display_name: displayName.trim(),
       };
       if (phone.trim()) body.phone = phone.trim();
       setJoined(
@@ -52,10 +43,8 @@ export function JoinForm({
       );
     } catch (error) {
       if (error instanceof ApiError && Object.keys(error.fields).length > 0) {
-        // The server's text for the whole answer under each field it flagged.
-        setFieldErrors(
-          Object.fromEntries(Object.keys(error.fields).map((key) => [key, error.message])),
-        );
+        // Each field shows the server's own text for it.
+        setFieldErrors(error.fields);
       } else {
         setFormError(errorMessage(error));
       }

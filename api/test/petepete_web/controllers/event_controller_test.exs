@@ -68,7 +68,7 @@ defmodule PetepeteWeb.EventControllerTest do
 
     Contract.check!("errors/invalid_event", invalid)
 
-    assert message =~ "INTERVAL"
+    assert message =~ "INTERVAL belum didukung"
     assert Repo.aggregate(Event, :count) == 0
   end
 

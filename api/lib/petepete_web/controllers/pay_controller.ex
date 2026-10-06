@@ -30,7 +30,7 @@ defmodule PetepeteWeb.PayController do
 
   alias Petepete.{Payments, Wib}
   alias Petepete.Payments.PaymentAttempt
-  alias PetepeteWeb.{Labels, LedgerError}
+  alias PetepeteWeb.{FieldErrors, Labels, LedgerError}
 
   @errors %{
     not_found: {404, "Link bayar tidak ditemukan."},
@@ -62,7 +62,7 @@ defmodule PetepeteWeb.PayController do
   end
 
   def create_payment(conn, _params) do
-    LedgerError.render_invalid(conn, %{"method" => "wajib diisi"})
+    LedgerError.render_invalid(conn, %{"method" => FieldErrors.message(:required)})
   end
 
   defp render_error(conn, :gateway_error), do: LedgerError.render_gateway_error(conn)

@@ -2,12 +2,12 @@
   "error": "invalid",
   "errors": {
     "name": [
-      "can't be blank"
+      "wajib diisi"
     ]
   },
   "fields": {
     "name": [
-      "can't be blank"
+      "wajib diisi"
     ]
   },
   "message": "Ada isian yang belum benar. Cek lagi ya."

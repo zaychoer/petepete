@@ -152,7 +152,7 @@ defmodule PetepeteWeb.SessionControllerTest do
              put(conn, cost_path(session, "new"), %{category: "lapangan", amount: 0})
              |> json_response(422)
 
-    assert %{"error" => "invalid", "errors" => %{"amount" => ["is invalid"]}} =
+    assert %{"error" => "invalid", "errors" => %{"amount" => ["harus angka"]}} =
              put(conn, cost_path(session, "new"), %{category: "lapangan", amount: 1000.5})
              |> json_response(422)
 

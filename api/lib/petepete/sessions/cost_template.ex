@@ -21,9 +21,10 @@ defmodule Petepete.Sessions.CostTemplate do
 
   @doc """
   Validates and normalises a template for `group_id`; an item that names no payer is paid
-  by `default_payer_id`. Errors are human-readable messages.
+  by `default_payer_id`. Errors are `{kind, opts}` pairs worded for clients by `PetepeteWeb.FieldErrors`.
   """
-  @spec cast(term(), pos_integer(), pos_integer()) :: {:ok, map()} | {:error, [String.t()]}
+  @spec cast(term(), pos_integer(), pos_integer()) ::
+          {:ok, map()} | {:error, [{atom(), keyword()}]}
   def cast(nil, _group_id, _default_payer_id), do: {:ok, %{"items" => []}}
 
   def cast(template, _group_id, _default_payer_id) when template == %{},
@@ -48,7 +49,7 @@ defmodule Petepete.Sessions.CostTemplate do
   end
 
   def cast(_other, _group_id, _default_payer_id),
-    do: {:error, ["must look like {\"items\": [{category, amount, …}]}"]}
+    do: {:error, [{:cost_template_shape, []}]}
 
   defp cast_item(%{} = item, n, default_payer_id) do
     category = item["category"]
@@ -62,16 +63,16 @@ defmodule Petepete.Sessions.CostTemplate do
       Enum.reject(
         [
           not (is_binary(category) and String.trim(category) != "") &&
-            "item #{n}: category is required",
+            {:cost_item_category, item: n},
           not (is_integer(amount) and amount > 0) &&
-            "item #{n}: amount must be a positive whole number of rupiah",
-          scope not in ["all", "subset"] && "item #{n}: scope must be all or subset",
-          not (is_nil(label) or is_binary(label)) && "item #{n}: label must be text",
+            {:cost_item_amount, item: n},
+          scope not in ["all", "subset"] && {:cost_item_scope, item: n},
+          not (is_nil(label) or is_binary(label)) && {:cost_item_label, item: n},
           not (is_nil(paid_by) or is_integer(paid_by)) &&
-            "item #{n}: paid_by_member_id must be a member id",
+            {:cost_item_paid_by, item: n},
           not (is_list(member_ids) and Enum.all?(member_ids, &is_integer/1)) &&
-            "item #{n}: member_ids must be a list of member ids",
-          (scope == "subset" and member_ids == []) && "item #{n}: a subset item needs member_ids"
+            {:cost_item_member_ids, item: n},
+          (scope == "subset" and member_ids == []) && {:cost_item_subset_members, item: n}
         ],
         &(&1 == false)
       )
@@ -93,7 +94,7 @@ defmodule Petepete.Sessions.CostTemplate do
     end
   end
 
-  defp cast_item(_other, n, _default_payer_id), do: {:error, ["item #{n}: must be an object"]}
+  defp cast_item(_other, n, _default_payer_id), do: {:error, [{:cost_item_not_object, item: n}]}
 
   defp roster_errors([], _group_id), do: []
 
@@ -109,7 +110,7 @@ defmodule Petepete.Sessions.CostTemplate do
 
     case wanted -- on_roster do
       [] -> []
-      missing -> ["members not in this group: #{Enum.join(Enum.sort(missing), ", ")}"]
+      missing -> [{:cost_template_members_not_in_group, ids: Enum.sort(missing)}]
     end
   end
 
