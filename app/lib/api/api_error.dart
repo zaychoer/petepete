@@ -62,6 +62,24 @@ const _messages = <String, String>{
   'forbidden': 'Kamu tidak punya akses untuk ini.',
   'not_found': 'Data tidak ditemukan.',
   'invalid': 'Data yang dikirim belum benar. Cek lagi ya.',
+  // Money endpoints normally send their own message; these cover a reply without one.
+  'invalid_params': 'Data yang dikirim belum lengkap atau salah format.',
+  'amount_not_positive': 'Nominal harus lebih dari Rp0.',
+  'same_member': 'Pembayar dan penerima tidak boleh orang yang sama.',
+  'member_not_in_group': 'Anggota itu bukan bagian dari grup ini.',
+  'insufficient_kas': 'Saldo kas tidak cukup untuk belanja ini.',
+  'reason_required': 'Alasan wajib diisi.',
+  'not_undoable':
+      'Catatan ini tidak bisa dikoreksi. Hanya pelunasan antar anggota dan belanja kas yang bisa dikoreksi.',
+  'already_reversed': 'Catatan ini sudah pernah dikoreksi.',
+  'undo_window_expired': 'Batas waktu pembatalan sudah lewat.',
+  'idempotency_key_conflict':
+      'Permintaan ini bentrok dengan catatan sebelumnya. Muat ulang lalu coba lagi.',
+  'insufficient_balance': 'Saldo sub-account tidak cukup untuk penarikan ini.',
+  'payout_account_not_active':
+      'Rekening pencairan belum aktif. Selesaikan verifikasi dulu.',
+  'no_payout_account': 'Grup belum punya rekening pencairan.',
+  'gateway_error': 'Gateway sedang bermasalah. Coba lagi nanti.',
 };
 
 /// Indonesian text for an API error [code]; a generic one for unknown codes.
