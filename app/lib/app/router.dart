@@ -7,6 +7,7 @@ import '../features/auth/otp_screen.dart';
 import '../features/auth/restore_screen.dart';
 import '../features/home/placeholder_screen.dart';
 import '../features/kas/kas_routes.dart';
+import '../features/session/session_routes.dart';
 
 /// Route names; navigate with `context.goNamed(AppRoutes.home)`. Later tickets add
 /// their names here, under [home] (e.g. a group is `/grup/:groupId`).
@@ -40,6 +41,7 @@ GoRouter createRouter(AuthController auth) {
         name: AppRoutes.home,
         builder: (context, state) => const PlaceholderScreen(),
       ),
+      sessionRoute(),
       GoRoute(
         path: _restorePath,
         name: AppRoutes.restore,
