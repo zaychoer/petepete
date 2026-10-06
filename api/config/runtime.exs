@@ -23,6 +23,12 @@ end
 config :petepete, PetepeteWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
+# Sentry is disabled (dsn nil) when SENTRY_DSN is absent or blank.
+# The environment name comes from SENTRY_ENVIRONMENT (set per Fly app).
+if sentry_dsn = System.get_env("SENTRY_DSN") do
+  config :sentry, dsn: if(String.trim(sentry_dsn) == "", do: nil, else: sentry_dsn)
+end
+
 if config_env() == :dev do
   config :petepete, PetepeteWeb.Endpoint,
     secret_key_base:

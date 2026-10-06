@@ -27,6 +27,12 @@ config :logger, :default_formatter,
   format: "$time $metadata[$level] $message\n",
   metadata: [:request_id]
 
+# Sentry: DSN comes from SENTRY_DSN in config/runtime.exs; without it nothing is sent.
+# Every event carries the layer tag; Petepete.ErrorReporting masks phone numbers.
+config :sentry,
+  tags: %{layer: "api"},
+  before_send: {Petepete.ErrorReporting, :before_send}
+
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 

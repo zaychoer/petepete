@@ -7,6 +7,8 @@ defmodule Petepete.Application do
 
   @impl true
   def start(_type, _args) do
+    Petepete.ErrorReporting.install_logger_handlers()
+
     children = [
       PetepeteWeb.Telemetry,
       Petepete.Repo,

@@ -46,6 +46,8 @@ defmodule PetepeteWeb.Endpoint do
     pass: ["*/*"],
     json_decoder: Phoenix.json_library()
 
+  plug Sentry.PlugContext, body_scrubber: {Petepete.ErrorReporting, :scrub_body}
+
   plug Plug.MethodOverride
   plug Plug.Head
   plug Plug.Session, @session_options
