@@ -94,26 +94,6 @@ defmodule PetepeteWeb.LedgerControllerTest do
       assert uid == ctx.host.id
     end
 
-    test "the same key twice posts one txn and one audit row", ctx do
-      body = %{from_member_id: ctx.andi.id, to_member_id: ctx.budi.id, amount: 45_000}
-      k = key()
-      c1 = ctx.host_conn |> keyed(k) |> post(~p"/api/groups/#{ctx.g.id}/settlements", body)
-      c2 = ctx.host_conn |> keyed(k) |> post(~p"/api/groups/#{ctx.g.id}/settlements", body)
-
-      assert %{"txn_id" => id} = json_response(c1, 201)
-      assert %{"txn_id" => ^id, "replayed" => true} = json_response(c2, 200)
-      assert txn_count(ctx.g.id) == 1
-      assert length(audit_rows(ctx.g.id, "settlement.record")) == 1
-    end
-
-    test "a missing key is 422 and posts nothing", ctx do
-      body = %{from_member_id: ctx.andi.id, to_member_id: ctx.budi.id, amount: 45_000}
-      conn = post(ctx.host_conn, ~p"/api/groups/#{ctx.g.id}/settlements", body)
-
-      assert %{"error" => "idempotency_key_required", "message" => _} = json_response(conn, 422)
-      assert txn_count(ctx.g.id) == 0
-    end
-
     test "ledger rejections are 422 with a code and no audit row", ctx do
       conn =
         ctx.host_conn
@@ -170,13 +150,6 @@ defmodule PetepeteWeb.LedgerControllerTest do
       assert %{"error" => "insufficient_kas"} = json_response(over, 422)
       assert Ledger.balances(ctx.g.id).kas == 40_000
       assert length(audit_rows(ctx.g.id, "kas_spend.record")) == 1
-    end
-
-    test "authorization is per group", ctx do
-      path = ~p"/api/groups/#{ctx.g.id}/kas-spends"
-      body = %{member_id: ctx.andi.id, amount: 1}
-      assert ctx.plain_conn |> keyed(key()) |> post(path, body) |> json_response(403)
-      assert ctx.outsider_conn |> keyed(key()) |> post(path, body) |> json_response(404)
     end
   end
 

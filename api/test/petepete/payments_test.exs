@@ -102,7 +102,8 @@ defmodule Petepete.PaymentsTest do
     end
 
     test "becomes active once the gateway reports KYC done", %{group: g, actor: actor} do
-      {:ok, %{payout_account: account}} = Payments.register_payout_account(actor, g.id, "k1", @bank)
+      {:ok, %{payout_account: account}} =
+        Payments.register_payout_account(actor, g.id, "k1", @bank)
 
       assert {:ok, %{status: "active"}} = Payments.refresh_payout_account(account)
       assert Repo.get!(PayoutAccount, account.id).status == "active"
@@ -110,7 +111,9 @@ defmodule Petepete.PaymentsTest do
 
     test "stays pending_kyc while the gateway says so", %{group: g, actor: actor} do
       put_fake!(:kyc_status, :pending_kyc)
-      {:ok, %{payout_account: account}} = Payments.register_payout_account(actor, g.id, "k1", @bank)
+
+      {:ok, %{payout_account: account}} =
+        Payments.register_payout_account(actor, g.id, "k1", @bank)
 
       assert {:ok, %{status: "pending_kyc"}} = Payments.refresh_payout_account(account)
     end

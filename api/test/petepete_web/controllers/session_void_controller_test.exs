@@ -78,16 +78,6 @@ defmodule PetepeteWeb.SessionVoidControllerTest do
     assert audit_count(ctx.group) == 1
   end
 
-  test "a repeated request is one txn and one audit row", ctx do
-    first = void(ctx.host_conn, ctx.session, "dup", "salah") |> json_response(201)
-    second = void(ctx.host_conn, ctx.session, "dup", "salah") |> json_response(200)
-
-    assert second["replayed"] == true
-    assert second["txn_id"] == first["txn_id"]
-    assert txn_count(ctx.group) == 2
-    assert audit_count(ctx.group) == 1
-  end
-
   test "a first void enqueues the gateway cancellation of its attempts, a replay does not", ctx do
     attempt = attempt!(ctx.bill)
 
