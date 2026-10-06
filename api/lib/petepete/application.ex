@@ -10,6 +10,7 @@ defmodule Petepete.Application do
     children = [
       PetepeteWeb.Telemetry,
       Petepete.Repo,
+      {Oban, Application.fetch_env!(:petepete, Oban)},
       {DNSCluster, query: Application.get_env(:petepete, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Petepete.PubSub},
       # Start a worker by calling: Petepete.Worker.start_link(arg)
