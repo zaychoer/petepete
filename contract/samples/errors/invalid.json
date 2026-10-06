@@ -1,0 +1,14 @@
+{
+  "error": "invalid",
+  "errors": {
+    "name": [
+      "can't be blank"
+    ]
+  },
+  "fields": {
+    "name": [
+      "can't be blank"
+    ]
+  },
+  "message": "Ada isian yang belum benar. Cek lagi ya."
+}

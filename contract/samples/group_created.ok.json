@@ -1,0 +1,15 @@
+{
+  "cost_categories": [
+    "Sewa lapangan",
+    "Air minum",
+    "Bola",
+    "Wasit",
+    "Parkir"
+  ],
+  "group_id": 986,
+  "invite_url": "https://petepete.test/join/1HVSrnFhOWXsbPIzX9pwqw",
+  "member_id": 2316,
+  "name": "Futsal Kamis",
+  "rounding_unit": 1000,
+  "template": "Futsal"
+}

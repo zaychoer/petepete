@@ -1,0 +1,41 @@
+{
+  "cost_categories": [
+    "Sewa lapangan",
+    "Shuttlecock",
+    "Air minum",
+    "Parkir"
+  ],
+  "id": 980,
+  "invite_url": null,
+  "members": [
+    {
+      "display_name": "Member 2278",
+      "has_account": true,
+      "id": 2305,
+      "role": "host",
+      "role_label": "Host"
+    },
+    {
+      "display_name": "Member 2406",
+      "has_account": true,
+      "id": 2306,
+      "role": "member",
+      "role_label": "Anggota"
+    },
+    {
+      "display_name": "Member 2438",
+      "has_account": false,
+      "id": 2307,
+      "role": "guest",
+      "role_label": "Tamu"
+    }
+  ],
+  "name": "Badminton Jumat",
+  "rounding_unit": 1000,
+  "template": "Badminton",
+  "you": {
+    "member_id": 2306,
+    "role": "member",
+    "role_label": "Anggota"
+  }
+}

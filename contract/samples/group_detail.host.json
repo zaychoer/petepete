@@ -1,0 +1,38 @@
+{
+  "cost_categories": [
+    "Sewa lapangan",
+    "Shuttlecock",
+    "Air minum",
+    "Parkir"
+  ],
+  "id": 977,
+  "invite_url": "https://petepete.test/join/inv-5543",
+  "members": [
+    {
+      "display_name": "Member 5575",
+      "has_account": true,
+      "id": 2301,
+      "pending_claim": null,
+      "phone": null,
+      "role": "host",
+      "role_label": "Host"
+    },
+    {
+      "display_name": "Member 5607",
+      "has_account": false,
+      "id": 2302,
+      "pending_claim": null,
+      "phone": null,
+      "role": "guest",
+      "role_label": "Tamu"
+    }
+  ],
+  "name": "Badminton Jumat",
+  "rounding_unit": 1000,
+  "template": "Badminton",
+  "you": {
+    "member_id": 2301,
+    "role": "host",
+    "role_label": "Host"
+  }
+}

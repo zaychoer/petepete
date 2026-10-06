@@ -3,7 +3,7 @@ defmodule PetepeteWeb.Plugs.Authenticate do
   Requires `authorization: Bearer <access token>`.
 
   Assigns `conn.assigns.current_scope` (`Petepete.Accounts.Scope`); otherwise halts
-  with 401 `{"error": "unauthenticated"}`.
+  with 401 `unauthenticated` (`PetepeteWeb.FallbackController`).
   """
   @behaviour Plug
 
@@ -22,8 +22,7 @@ defmodule PetepeteWeb.Plugs.Authenticate do
     else
       _ ->
         conn
-        |> put_resp_content_type("application/json")
-        |> send_resp(401, ~s({"error":"unauthenticated"}))
+        |> PetepeteWeb.FallbackController.respond(401, "unauthenticated")
         |> halt()
     end
   end

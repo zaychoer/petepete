@@ -78,12 +78,11 @@ defmodule PetepeteWeb.BillControllerTest do
 
     test "only the host of the bill's group: member 403, other group's host and anon 404/401",
          ctx do
-      assert cash(ctx.plain_conn, ctx.bill, "k1") |> json_response(403) == %{
-               "error" => "forbidden"
-             }
+      assert %{"error" => "forbidden"} =
+               cash(ctx.plain_conn, ctx.bill, "k1") |> json_response(403)
 
-      assert cash(ctx.stranger_conn, ctx.bill, "k2") |> json_response(404) ==
-               %{"error" => "not_found"}
+      assert %{"error" => "not_found"} =
+               cash(ctx.stranger_conn, ctx.bill, "k2") |> json_response(404)
 
       assert cash(ctx.host_conn, %{id: 0}, "k3") |> json_response(404)
 

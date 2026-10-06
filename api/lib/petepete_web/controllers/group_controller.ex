@@ -4,6 +4,7 @@ defmodule PetepeteWeb.GroupController do
 
   alias Petepete.Groups
   alias Petepete.Groups.Templates
+  alias PetepeteWeb.Labels
   alias PetepeteWeb.Plugs.GroupAccess
 
   action_fallback PetepeteWeb.FallbackController
@@ -14,7 +15,8 @@ defmodule PetepeteWeb.GroupController do
   def index(conn, _params) do
     groups =
       for %{group: group, member: member} <- Groups.list_groups(conn.assigns.current_scope) do
-        %{id: group.id, name: group.name, template: group.template, role: member.role}
+        %{id: group.id, name: group.name, template: group.template,
+          role: member.role, role_label: Labels.role(member.role)}
       end
 
     json(conn, %{groups: groups})
@@ -49,7 +51,7 @@ defmodule PetepeteWeb.GroupController do
       cost_categories: Templates.cost_categories(group.template),
       invite_url: (host? && Groups.invite_url(group)) || nil,
       members: Enum.map(members, &member_json(&1, host?)),
-      you: %{member_id: viewer.id, role: viewer.role}
+      you: %{member_id: viewer.id, role: viewer.role, role_label: Labels.role(viewer.role)}
     })
   end
 
@@ -70,6 +72,7 @@ defmodule PetepeteWeb.GroupController do
       id: member.id,
       display_name: member.display_name,
       role: member.role,
+      role_label: Labels.role(member.role),
       has_account: member.user_id != nil
     }
 

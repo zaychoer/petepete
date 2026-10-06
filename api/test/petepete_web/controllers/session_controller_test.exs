@@ -41,7 +41,7 @@ defmodule PetepeteWeb.SessionControllerTest do
           delete(conn, cost_path(session, 1)),
           put(conn, ~p"/api/sessions/#{session.id}/attendance", %{})
         ] do
-      assert json_response(conn, 401) == %{"error" => "unauthenticated"}
+      assert %{"error" => "unauthenticated"} = json_response(conn, 401)
     end
   end
 
@@ -164,9 +164,8 @@ defmodule PetepeteWeb.SessionControllerTest do
            }).status ==
              403
 
-    assert json_response(get(ctx.other_conn, ~p"/api/sessions/#{session.id}"), 404) == %{
-             "error" => "not_found"
-           }
+    assert %{"error" => "not_found"} =
+             json_response(get(ctx.other_conn, ~p"/api/sessions/#{session.id}"), 404)
 
     assert put(ctx.other_conn, cost_path(session, "new"), %{category: "x", amount: 1}).status ==
              404

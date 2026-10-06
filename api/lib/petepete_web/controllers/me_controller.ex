@@ -27,5 +27,5 @@ defmodule PetepeteWeb.MeController do
 
   defp render_user(user), do: %{id: user.id, phone: user.phone, display_name: user.display_name}
 
-  defp error(conn, status, code), do: conn |> put_status(status) |> json(%{error: code})
+  defp error(conn, status, code), do: PetepeteWeb.FallbackController.respond(conn, status, code)
 end

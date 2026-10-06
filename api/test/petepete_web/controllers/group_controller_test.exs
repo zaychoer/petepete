@@ -4,7 +4,7 @@ defmodule PetepeteWeb.GroupControllerTest do
   import Petepete.Fixtures
 
   alias Petepete.Groups.{Group, Member, Templates}
-  alias Petepete.Repo
+  alias Petepete.{Contract, Repo}
 
   describe "POST /api/groups" do
     test "creates the group from its template, with the caller as host and Rp1.000 rounding", %{
@@ -12,9 +12,9 @@ defmodule PetepeteWeb.GroupControllerTest do
     } do
       {conn, user} = bearer_login(conn)
 
-      body =
-        post(conn, ~p"/api/groups", %{name: "Futsal Kamis", template: "Futsal"})
-        |> json_response(201)
+      created = post(conn, ~p"/api/groups", %{name: "Futsal Kamis", template: "Futsal"})
+      body = json_response(created, 201)
+      Contract.check!("group_created.ok", created)
 
       assert %{"group_id" => id, "invite_url" => url, "member_id" => member_id} = body
       assert body["rounding_unit"] == 1000
@@ -49,9 +49,9 @@ defmodule PetepeteWeb.GroupControllerTest do
     test "rejects a missing name and an unknown template", %{conn: conn} do
       {conn, _} = bearer_login(conn)
 
-      assert %{"error" => "invalid", "fields" => %{"name" => _}} =
-               post(conn, ~p"/api/groups", %{name: "  ", template: "Futsal"})
-               |> json_response(422)
+      invalid = post(conn, ~p"/api/groups", %{name: "  ", template: "Futsal"})
+      assert %{"error" => "invalid", "fields" => %{"name" => _}} = json_response(invalid, 422)
+      Contract.check!("errors/invalid", invalid)
 
       assert %{"error" => "invalid", "fields" => %{"template" => _}} =
                post(conn, ~p"/api/groups", %{name: "G", template: "Catur"}) |> json_response(422)
@@ -64,7 +64,7 @@ defmodule PetepeteWeb.GroupControllerTest do
 
     test "needs a login", %{conn: conn} do
       conn = post(conn, ~p"/api/groups", %{name: "G", template: "Futsal"})
-      assert json_response(conn, 401) == %{"error" => "unauthenticated"}
+      assert %{"error" => "unauthenticated"} = json_response(conn, 401)
     end
   end
 
@@ -78,11 +78,25 @@ defmodule PetepeteWeb.GroupControllerTest do
       member_fixture(joined, role: "member", user: user)
       member_fixture(other, role: "host", user: user_fixture())
 
-      assert %{"groups" => groups} = get(conn, ~p"/api/groups") |> json_response(200)
+      listed = get(conn, ~p"/api/groups")
+      assert %{"groups" => groups} = json_response(listed, 200)
+      Contract.check!("group_list.groups", listed)
 
       assert groups == [
-               %{"id" => mine.id, "name" => "Mine", "template" => "Padel", "role" => "host"},
-               %{"id" => joined.id, "name" => "Joined", "template" => nil, "role" => "member"}
+               %{
+                 "id" => mine.id,
+                 "name" => "Mine",
+                 "template" => "Padel",
+                 "role" => "host",
+                 "role_label" => "Host"
+               },
+               %{
+                 "id" => joined.id,
+                 "name" => "Joined",
+                 "template" => nil,
+                 "role" => "member",
+                 "role_label" => "Anggota"
+               }
              ]
     end
   end
@@ -98,14 +112,21 @@ defmodule PetepeteWeb.GroupControllerTest do
     test "a host sees name, rounding, template, roster with roles, phones and the invite link",
          ctx do
       guest = member_fixture(ctx.group, role: "guest")
-      body = get(ctx.conn, ~p"/api/groups/#{ctx.group.id}") |> json_response(200)
+      shown = get(ctx.conn, ~p"/api/groups/#{ctx.group.id}")
+      body = json_response(shown, 200)
+      Contract.check!("group_detail.host", shown)
 
       assert %{"name" => "Badminton Jumat", "rounding_unit" => 1000, "template" => "Badminton"} =
                body
 
       assert body["cost_categories"] == Templates.cost_categories("Badminton")
       assert body["invite_url"] == "https://petepete.test/join/" <> ctx.group.invite_token
-      assert body["you"] == %{"member_id" => ctx.host.id, "role" => "host"}
+
+      assert body["you"] == %{
+               "member_id" => ctx.host.id,
+               "role" => "host",
+               "role_label" => "Host"
+             }
 
       assert [%{"id" => hid, "role" => "host", "phone" => _}, %{"id" => gid, "role" => "guest"}] =
                body["members"]
@@ -120,24 +141,32 @@ defmodule PetepeteWeb.GroupControllerTest do
       guest = member_fixture(ctx.group, role: "guest")
       Repo.update!(Ecto.Changeset.change(guest, phone: "628123456789"))
 
-      body = get(conn, ~p"/api/groups/#{ctx.group.id}") |> json_response(200)
+      shown = get(conn, ~p"/api/groups/#{ctx.group.id}")
+      body = json_response(shown, 200)
+      Contract.check!("group_detail.member", shown)
 
       assert body["invite_url"] == nil
       assert length(body["members"]) == 3
 
       for member <- body["members"] do
-        assert Map.keys(member) |> Enum.sort() == ["display_name", "has_account", "id", "role"]
+        assert Map.keys(member) |> Enum.sort() == [
+                 "display_name",
+                 "has_account",
+                 "id",
+                 "role",
+                 "role_label"
+               ]
       end
     end
 
     test "someone outside the group gets 404, as for a group that does not exist", ctx do
       {outsider, _} = bearer_login(build_conn())
 
-      assert json_response(get(outsider, ~p"/api/groups/#{ctx.group.id}"), 404) == %{
-               "error" => "not_found"
-             }
+      not_found = get(outsider, ~p"/api/groups/#{ctx.group.id}")
+      assert %{"error" => "not_found"} = json_response(not_found, 404)
+      Contract.check!("errors/not_found", not_found)
 
-      assert json_response(get(outsider, ~p"/api/groups/0"), 404) == %{"error" => "not_found"}
+      assert %{"error" => "not_found"} = json_response(get(outsider, ~p"/api/groups/0"), 404)
     end
   end
 
@@ -150,9 +179,9 @@ defmodule PetepeteWeb.GroupControllerTest do
     end
 
     test "a guest needs only a name and shows up in the roster for later sessions", ctx do
-      assert %{"member_id" => id} =
-               post(ctx.conn, ~p"/api/groups/#{ctx.group.id}/guests", %{name: "Om Budi"})
-               |> json_response(201)
+      added = post(ctx.conn, ~p"/api/groups/#{ctx.group.id}/guests", %{name: "Om Budi"})
+      assert %{"member_id" => id} = json_response(added, 201)
+      Contract.check!("guest.created", added)
 
       assert %Member{role: "guest", display_name: "Om Budi", phone: nil, user_id: nil} =
                Repo.get!(Member, id)
@@ -198,11 +227,11 @@ defmodule PetepeteWeb.GroupControllerTest do
 
       path = ~p"/api/groups/#{ctx.group.id}/guests"
 
-      assert json_response(post(member_conn, path, %{name: "X"}), 403) == %{
-               "error" => "forbidden"
-             }
+      forbidden = post(member_conn, path, %{name: "X"})
+      assert %{"error" => "forbidden"} = json_response(forbidden, 403)
+      Contract.check!("errors/forbidden", forbidden)
 
-      assert json_response(post(other_host, path, %{name: "X"}), 404) == %{"error" => "not_found"}
+      assert %{"error" => "not_found"} = json_response(post(other_host, path, %{name: "X"}), 404)
       assert Repo.aggregate(Member, :count) == 3
     end
   end
@@ -217,10 +246,12 @@ defmodule PetepeteWeb.GroupControllerTest do
       old_url = "https://petepete.test/join/" <> group.invite_token
 
       path = ~p"/api/groups/#{group.id}/invite/reset"
-      assert json_response(post(member_conn, path), 403) == %{"error" => "forbidden"}
+      assert %{"error" => "forbidden"} = json_response(post(member_conn, path), 403)
       assert Repo.get!(Group, group.id).invite_token == group.invite_token
 
-      assert %{"invite_url" => new_url} = post(host_conn, path) |> json_response(200)
+      reset = post(host_conn, path)
+      assert %{"invite_url" => new_url} = json_response(reset, 200)
+      Contract.check!("invite_reset.ok", reset)
       assert new_url != old_url
       assert new_url == "https://petepete.test/join/" <> Repo.get!(Group, group.id).invite_token
     end
@@ -230,9 +261,8 @@ defmodule PetepeteWeb.GroupControllerTest do
       member_fixture(group_fixture(), role: "host", user: user)
       group = group_fixture()
 
-      assert json_response(post(conn, ~p"/api/groups/#{group.id}/invite/reset"), 404) == %{
-               "error" => "not_found"
-             }
+      assert %{"error" => "not_found"} =
+               json_response(post(conn, ~p"/api/groups/#{group.id}/invite/reset"), 404)
 
       assert Repo.get!(Group, group.id).invite_token == group.invite_token
     end

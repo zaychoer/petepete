@@ -1,0 +1,11 @@
+{
+  "access_token": "SFMyNTY.g2gDdAAAAAJtAAAAA2V4cGJqxGe0bQAAAAN1aWRiAAAH6G4GACtGrRGhAWIAAVGA.IM1dKYDsjLOSn_MHcqj16DOUO3XfpGpm0pjWRX3TjsY",
+  "expires_in": 900,
+  "new_user": true,
+  "refresh_token": "Mpa7tixuY-Yy-ezNowxSk-Vt3Eg695pXldl716FJCjE",
+  "token_type": "Bearer",
+  "user": {
+    "display_name": "",
+    "id": 2024
+  }
+}

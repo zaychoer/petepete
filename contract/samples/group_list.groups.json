@@ -1,0 +1,18 @@
+{
+  "groups": [
+    {
+      "id": 989,
+      "name": "Mine",
+      "role": "host",
+      "role_label": "Host",
+      "template": "Padel"
+    },
+    {
+      "id": 990,
+      "name": "Joined",
+      "role": "member",
+      "role_label": "Anggota",
+      "template": null
+    }
+  ]
+}

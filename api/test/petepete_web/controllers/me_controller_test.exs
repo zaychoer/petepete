@@ -4,7 +4,7 @@ defmodule PetepeteWeb.MeControllerTest do
   import Ecto.Query
   import Petepete.Fixtures
 
-  alias Petepete.{Clock, Ledger, Repo}
+  alias Petepete.{Clock, Contract, Ledger, Repo}
   alias Petepete.Accounts.{OtpChallenge, RefreshToken, User}
   alias Petepete.Groups.Member
   alias Petepete.Ledger.Entry
@@ -19,7 +19,9 @@ defmodule PetepeteWeb.MeControllerTest do
 
   describe "GET and PATCH /api/me" do
     test "need a bearer token", %{conn: conn} do
-      assert get(conn, ~p"/api/me") |> json_response(401) == %{"error" => "unauthenticated"}
+      unauthenticated = get(conn, ~p"/api/me")
+      assert %{"error" => "unauthenticated"} = json_response(unauthenticated, 401)
+      Contract.check!("errors/unauthenticated", unauthenticated)
       assert patch(conn, ~p"/api/me", %{display_name: "Budi"}) |> json_response(401)
       assert delete(conn, ~p"/api/me") |> json_response(401)
     end
@@ -28,14 +30,15 @@ defmodule PetepeteWeb.MeControllerTest do
       phone = unique_phone()
       %{"new_user" => true, "access_token" => token, "user" => %{"id" => id}} = login(conn, phone)
 
-      assert %{"id" => ^id, "phone" => ^phone, "display_name" => ""} =
-               conn |> authed(token) |> get(~p"/api/me") |> json_response(200)
+      shown = conn |> authed(token) |> get(~p"/api/me")
+      assert %{"id" => ^id, "phone" => ^phone, "display_name" => ""} = json_response(shown, 200)
+      Contract.check!("me.show", shown)
 
-      assert %{"id" => ^id, "display_name" => "Budi Santoso"} =
-               conn
-               |> authed(token)
-               |> patch(~p"/api/me", %{display_name: "  Budi Santoso "})
-               |> json_response(200)
+      updated =
+        conn |> authed(token) |> patch(~p"/api/me", %{display_name: "  Budi Santoso "})
+
+      assert %{"id" => ^id, "display_name" => "Budi Santoso"} = json_response(updated, 200)
+      Contract.check!("me.updated", updated)
 
       assert Repo.get!(User, id).display_name == "Budi Santoso"
 
@@ -47,8 +50,9 @@ defmodule PetepeteWeb.MeControllerTest do
       %{"access_token" => token, "user" => %{"id" => id}} = login(conn, unique_phone())
 
       for bad <- [%{display_name: "   "}, %{display_name: ""}, %{}, %{display_name: 5}] do
-        assert conn |> authed(token) |> patch(~p"/api/me", bad) |> json_response(422) ==
-                 %{"error" => "invalid_display_name"}
+        rejected = conn |> authed(token) |> patch(~p"/api/me", bad)
+        assert %{"error" => "invalid_display_name"} = json_response(rejected, 422)
+        Contract.check!("errors/invalid_display_name", rejected)
       end
 
       long = String.duplicate("a", 51)
@@ -158,9 +162,9 @@ defmodule PetepeteWeb.MeControllerTest do
       assert length(entries_before) == 2
       assert Enum.any?(entries_before, &(&1.member_id == leaver.id))
 
-      assert conn |> authed(access) |> delete(~p"/api/me") |> json_response(200) == %{
-               "ok" => true
-             }
+      deleted = conn |> authed(access) |> delete(~p"/api/me")
+      assert json_response(deleted, 200) == %{"ok" => true}
+      Contract.check!("me.deleted", deleted)
 
       user = Repo.get!(User, id)
       assert user.phone == "deleted:#{id}"
@@ -203,8 +207,9 @@ defmodule PetepeteWeb.MeControllerTest do
       {conn, id} = login_as_host(conn, group = group_fixture())
       member_fixture(group, role: "guest")
 
-      assert conn |> delete(~p"/api/me") |> json_response(422) ==
-               %{"error" => "still_host"}
+      refused = delete(conn, ~p"/api/me")
+      assert %{"error" => "still_host"} = json_response(refused, 422)
+      Contract.check!("errors/still_host", refused)
 
       assert %{deleted_at: nil, display_name: "Host"} = Repo.get!(User, id)
       assert conn |> get(~p"/api/me") |> json_response(200)
@@ -215,8 +220,7 @@ defmodule PetepeteWeb.MeControllerTest do
       session_fixture(event_fixture(group), status: "cancelled")
       session_fixture(event_fixture(group), status: "issued", starts_at: ~U[2026-10-07 03:00:00Z])
 
-      assert conn |> delete(~p"/api/me") |> json_response(422) ==
-               %{"error" => "still_host"}
+      assert %{"error" => "still_host"} = conn |> delete(~p"/api/me") |> json_response(422)
     end
 
     test "is accepted for a host whose group is empty or only has cancelled sessions",

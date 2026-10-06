@@ -50,13 +50,13 @@ defmodule PetepeteWeb.Plugs.AuthenticateTest do
         ] do
       conn = Authenticate.call(conn, [])
       assert conn.halted
-      assert json_response(conn, 401) == %{"error" => "unauthenticated"}
+      assert %{"error" => "unauthenticated"} = json_response(conn, 401)
       refute Map.has_key?(conn.assigns, :current_scope)
     end
   end
 
   test "a refresh token is not an access token", %{conn: conn, refresh: refresh} do
-    assert json_response(call(conn, refresh), 401) == %{"error" => "unauthenticated"}
+    assert %{"error" => "unauthenticated"} = json_response(call(conn, refresh), 401)
   end
 
   test "access tokens expire after 15 minutes; refresh yields a fresh one", ctx do
@@ -64,7 +64,7 @@ defmodule PetepeteWeb.Plugs.AuthenticateTest do
     refute call(ctx.conn, ctx.access).halted
 
     Clock.advance(60)
-    assert json_response(call(ctx.conn, ctx.access), 401) == %{"error" => "unauthenticated"}
+    assert %{"error" => "unauthenticated"} = json_response(call(ctx.conn, ctx.access), 401)
 
     %{"access_token" => fresh} =
       post(ctx.conn, ~p"/api/auth/refresh", %{refresh_token: ctx.refresh}) |> json_response(200)
@@ -75,6 +75,6 @@ defmodule PetepeteWeb.Plugs.AuthenticateTest do
   test "a deleted user is unauthenticated", %{conn: conn, access: access, user_id: id} do
     Repo.get!(User, id) |> Ecto.Changeset.change(deleted_at: Clock.now()) |> Repo.update!()
 
-    assert json_response(call(conn, access), 401) == %{"error" => "unauthenticated"}
+    assert %{"error" => "unauthenticated"} = json_response(call(conn, access), 401)
   end
 end

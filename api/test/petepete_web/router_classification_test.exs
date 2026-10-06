@@ -119,23 +119,7 @@ defmodule PetepeteWeb.RouterClassificationTest do
 
   # `:client` routes with no recorded sample yet (route keys as in contract/manifest.json).
   @pending_samples [
-    "POST /api/auth/otp",
-    "POST /api/auth/verify",
-    "POST /api/auth/refresh",
-    "POST /api/auth/logout",
     "POST /api/pay/:token/payment",
-    "GET /api/invites/:token",
-    "POST /api/invites/:token/join",
-    "GET /api/groups",
-    "POST /api/groups",
-    "GET /api/groups/:group_id",
-    "POST /api/groups/:group_id/invite/reset",
-    "POST /api/groups/:group_id/guests",
-    "POST /api/groups/:group_id/events",
-    "GET /api/groups/:group_id/home",
-    "POST /api/members/:id/claim",
-    "POST /api/members/:id/claim/approve",
-    "POST /api/members/:id/claim/reject",
     "POST /api/groups/:group_id/payout-account",
     "GET /api/groups/:group_id/payout-account/balance",
     "GET /api/groups/:group_id/withdrawals",
@@ -155,10 +139,7 @@ defmodule PetepeteWeb.RouterClassificationTest do
     "GET /api/sessions/:id/share/summary",
     "POST /api/sessions/:id/void",
     "POST /api/bills/:id/cash",
-    "POST /api/bills/:id/cash/cancel",
-    "GET /api/me",
-    "PATCH /api/me",
-    "DELETE /api/me"
+    "POST /api/bills/:id/cash/cancel"
   ]
 
   defp all_routes do

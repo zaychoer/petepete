@@ -123,13 +123,11 @@ defmodule PetepeteWeb.SessionVoidControllerTest do
   end
 
   test "only the host of the session's group", ctx do
-    assert void(ctx.plain_conn, ctx.session, "k1", "x") |> json_response(403) == %{
-             "error" => "forbidden"
-           }
+    assert %{"error" => "forbidden"} =
+             void(ctx.plain_conn, ctx.session, "k1", "x") |> json_response(403)
 
-    assert void(ctx.stranger_conn, ctx.session, "k2", "x") |> json_response(404) == %{
-             "error" => "not_found"
-           }
+    assert %{"error" => "not_found"} =
+             void(ctx.stranger_conn, ctx.session, "k2", "x") |> json_response(404)
 
     assert void(ctx.host_conn, %{id: 0}, "k3", "x") |> json_response(404)
 

@@ -41,13 +41,13 @@ defmodule PetepeteWeb.Plugs.GroupAccessTest do
   test "403 for a plain member on a host route", ctx do
     conn = run(ctx.plain, ctx.a.id, :host)
     assert conn.halted
-    assert json_response(conn, 403) == %{"error" => "forbidden"}
+    assert %{"error" => "forbidden"} = json_response(conn, 403)
   end
 
   test "404 for another group and for malformed ids", ctx do
     conn = run(ctx.host, ctx.b.id, :member)
     assert conn.halted
-    assert json_response(conn, 404) == %{"error" => "not_found"}
-    assert json_response(run(ctx.host, "abc", :member), 404) == %{"error" => "not_found"}
+    assert %{"error" => "not_found"} = json_response(conn, 404)
+    assert %{"error" => "not_found"} = json_response(run(ctx.host, "abc", :member), 404)
   end
 end
