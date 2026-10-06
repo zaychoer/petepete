@@ -69,6 +69,9 @@ class ApiClient {
     authenticated: authenticated,
   );
 
+  Future<Json> put(String path, {Object? body, bool authenticated = true}) =>
+      _request('PUT', path, body: body, authenticated: authenticated);
+
   Future<Json> patch(String path, {Object? body, bool authenticated = true}) =>
       _request('PATCH', path, body: body, authenticated: authenticated);
 
@@ -193,7 +196,7 @@ class ApiClient {
         statusCode: response.statusCode,
         code: decoded['error'] as String,
         message: decoded['message'] as String?,
-        details: decoded['details'] ?? decoded['errors'],
+        details: decoded['details'] ?? decoded['errors'] ?? decoded['problems'],
       );
     }
     return ApiError(

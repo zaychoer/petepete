@@ -62,6 +62,20 @@ const _messages = <String, String>{
   'forbidden': 'Kamu tidak punya akses untuk ini.',
   'not_found': 'Data tidak ditemukan.',
   'invalid': 'Data yang dikirim belum benar. Cek lagi ya.',
+  'session_not_editable':
+      'Sesi ini sudah ditagih. Batalkan tagihan dulu kalau mau ubah biaya atau kehadiran.',
+  'session_not_draft': 'Sesi ini sudah ditagih atau dibatalkan.',
+  'session_not_issued': 'Sesi ini belum ditagih.',
+  'invalid_session':
+      'Sesi belum bisa ditagih. Cek pos biaya dan kehadiran dulu ya.',
+  'idempotency_key_conflict':
+      'Permintaan ini bentrok dengan yang sebelumnya. Muat ulang layar lalu coba lagi.',
+  'reason_required': 'Alasan wajib diisi.',
+  'undo_window_expired':
+      'Batas waktu pembatalan 24 jam sudah lewat, jadi pelunasan cash ini tidak bisa dibatalkan lagi.',
+  'not_cash_payment':
+      'Tagihan ini tidak dibayar cash, jadi tidak bisa dibatalkan di sini.',
+  'invalid_transition': 'Status tagihan ini tidak bisa diubah dengan aksi itu.',
 };
 
 /// Indonesian text for an API error [code]; a generic one for unknown codes.
