@@ -1,33 +1,32 @@
 defmodule Petepete.Billing.Editing do
   @moduledoc """
   The common prefix of every host command that edits a draft session (costs and
-  attendance): one transaction that locks the session row first, authorizes the caller as
-  the host of the session's group, and only then checks the session is still a draft.
+  attendance): one transaction that locks the session row first and only then checks the
+  session is still a draft.
 
-  Authorizing before the status check means a non-member learns nothing about the
-  session, not even its status.
+  The caller is a host `Petepete.Actor`: the HTTP edge (`PetepeteWeb.Plugs.SessionAccess`
+  with `role: :host`) already authorized it as host of the session's group, so nothing is
+  checked here (ADR-0003). These are host writes that do not change money: no audit row.
   """
 
-  alias Petepete.Accounts.Scope
+  alias Petepete.Actor
   alias Petepete.Billing
   alias Petepete.Billing.Locks
-  alias Petepete.Groups
   alias Petepete.Repo
 
   @doc """
-  Runs `fun.(session, host_member)` inside a transaction with the session locked.
+  Runs `fun.(session, actor)` inside a transaction with the session locked.
   `fun` returns `{:ok, value}` or `{:error, reason}`; an error rolls everything back.
-  Returns `{:error, :not_found | :forbidden | {:session_not_editable, status}}` before
-  `fun` runs when the prefix fails.
+  Returns `{:error, :not_found | {:session_not_editable, status}}` before `fun` runs when
+  the prefix fails.
   """
-  @spec run(Scope.t(), integer(), (struct(), struct() -> {:ok, term()} | {:error, term()})) ::
+  @spec run(Actor.t(), integer(), (struct(), Actor.t() -> {:ok, term()} | {:error, term()})) ::
           {:ok, term()} | {:error, term()}
-  def run(%Scope{} = scope, session_id, fun) when is_function(fun, 2) do
+  def run(%Actor{type: :host} = actor, session_id, fun) when is_function(fun, 2) do
     Repo.transaction(fn ->
       with {:ok, session} <- lock(session_id),
-           {:ok, host} <- Groups.authorize(scope, session.group_id, :host),
            :ok <- Billing.ensure_editable(session),
-           {:ok, value} <- fun.(session, host) do
+           {:ok, value} <- fun.(session, actor) do
         value
       else
         {:error, reason} -> Repo.rollback(reason)
