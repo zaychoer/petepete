@@ -6,8 +6,8 @@ import 'package:petepete/auth/token_store.dart';
 import '../../support/fake_api.dart';
 
 const _phone = '6281234567890';
-const _placeholderText =
-    'Patungan olahraga tanpa ribet. Aplikasinya lagi disiapin, sabar ya!';
+// A user with no group lands on the onboarding screen.
+const _homeText = 'Bikin grup pertamamu';
 
 final _phoneField = find.widgetWithText(TextField, 'Nomor WhatsApp');
 final _codeField = find.widgetWithText(TextField, 'Kode 6 digit');
@@ -62,8 +62,7 @@ void main() {
       await tester.tap(find.text('Lanjut'));
       await tester.pumpAndSettle();
 
-      expect(find.text(_placeholderText), findsOneWidget);
-      expect(find.text('Halo, Budi!'), findsOneWidget);
+      expect(find.text(_homeText), findsOneWidget);
       expect(fake.accounts[_phone]!['display_name'], 'Budi');
     });
 
@@ -78,7 +77,7 @@ void main() {
       await _enterCode(tester, '123456');
 
       expect(find.text('Siapa namamu?'), findsNothing);
-      expect(find.text('Halo, Sari!'), findsOneWidget);
+      expect(find.text(_homeText), findsOneWidget);
     });
 
     testWidgets('an account that never set a name is asked again', (
@@ -214,8 +213,7 @@ void main() {
 
       await _launch(tester, fake, tokens: tokens);
 
-      expect(find.text(_placeholderText), findsOneWidget);
-      expect(find.text('Halo, Budi!'), findsOneWidget);
+      expect(find.text(_homeText), findsOneWidget);
       expect(find.text('Masuk ke Petepete'), findsNothing);
     });
 
@@ -229,13 +227,13 @@ void main() {
       await tester.pump();
       await tester.tap(find.text('Lanjut'));
       await tester.pumpAndSettle();
-      expect(find.text('Halo, Budi!'), findsOneWidget);
+      expect(find.text(_homeText), findsOneWidget);
 
       // "Close" the app: tear down the widget tree, keep only the stored tokens.
       await tester.pumpWidget(const SizedBox());
       await _launch(tester, fake, tokens: store);
 
-      expect(find.text('Halo, Budi!'), findsOneWidget);
+      expect(find.text(_homeText), findsOneWidget);
     });
 
     testWidgets('an expired access token is refreshed once on restore', (
@@ -247,7 +245,7 @@ void main() {
 
       await _launch(tester, fake, tokens: tokens);
 
-      expect(find.text('Halo, Budi!'), findsOneWidget);
+      expect(find.text(_homeText), findsOneWidget);
       expect(fake.refreshCalls, 1);
     });
 
@@ -280,7 +278,7 @@ void main() {
       await tester.tap(find.text('Coba lagi'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Halo, Budi!'), findsOneWidget);
+      expect(find.text(_homeText), findsOneWidget);
     });
 
     testWidgets('Keluar ends the session and returns to login', (tester) async {
@@ -288,6 +286,8 @@ void main() {
       final tokens = MemoryTokenStore(fake.signIn(_phone));
       await _launch(tester, fake, tokens: tokens);
 
+      await tester.tap(find.byTooltip('Akun'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Keluar'));
       await tester.pumpAndSettle();
 
