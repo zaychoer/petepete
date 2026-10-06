@@ -12,7 +12,8 @@ defmodule PetepeteWeb.Endpoint do
   plug Plug.Parsers,
     parsers: [:json],
     pass: ["application/json"],
-    json_decoder: Phoenix.json_library()
+    json_decoder: Phoenix.json_library(),
+    body_reader: {PetepeteWeb.Plugs.RawBody, :read_body, []}
 
   plug Sentry.PlugContext, body_scrubber: {Petepete.ErrorReporting, :scrub_body}
 

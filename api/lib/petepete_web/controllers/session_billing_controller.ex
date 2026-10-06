@@ -55,6 +55,8 @@ defmodule PetepeteWeb.SessionBillingController do
 
     case Billing.void_issue(conn.assigns.session_id, opts) do
       {:ok, result} ->
+        enqueue_cancellations(result)
+
         conn
         |> put_status(if result.replayed, do: 200, else: 201)
         |> json(%{
@@ -71,6 +73,16 @@ defmodule PetepeteWeb.SessionBillingController do
   end
 
   def void(conn, _params), do: LedgerError.render(conn, :reason_required)
+
+  # After the void committed: tell the gateway to drop the attempts the void cancelled.
+  # A replay cancelled nothing new, so it enqueues nothing.
+  defp enqueue_cancellations(%{replayed: true}), do: :ok
+  defp enqueue_cancellations(%{cancelled_attempt_ids: []}), do: :ok
+
+  defp enqueue_cancellations(%{cancelled_attempt_ids: ids}) do
+    {:ok, _job} = Oban.insert(Petepete.Payments.CancelAttemptsJob.new(%{"attempt_ids" => ids}))
+    :ok
+  end
 
   defp encodable(preview) do
     Map.update!(preview, :fronted, fn fronted ->
