@@ -155,10 +155,13 @@ defmodule Petepete.Billing.Invoicing do
 
   # The earliest cost item or attendance row the host created for the draft.
   defp first_edit_at(%Session{id: session_id}) do
-    costs = Repo.one(from c in CostItem, where: c.session_id == ^session_id, select: min(c.inserted_at))
+    costs =
+      Repo.one(from c in CostItem, where: c.session_id == ^session_id, select: min(c.inserted_at))
 
     attendance =
-      Repo.one(from p in Participant, where: p.session_id == ^session_id, select: min(p.inserted_at))
+      Repo.one(
+        from p in Participant, where: p.session_id == ^session_id, select: min(p.inserted_at)
+      )
 
     case Enum.reject([costs, attendance], &is_nil/1) do
       [] -> nil
