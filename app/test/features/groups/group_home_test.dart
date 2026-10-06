@@ -2,15 +2,13 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/fake_groups_api.dart';
 
-Map<String, dynamic> _bill(int id, String name, String status, int amount) => {
+/// Overrides for one recorded bill row; status and label stay as recorded.
+Map<String, dynamic> _bill(int id, String name, int amount) => {
   'id': id,
-  'status': status,
   'amount_due': amount,
   'member_id': id,
   'member_name': name,
   'session_id': 11,
-  'session_starts_at': '2026-10-08T12:00:00Z',
-  'event_name': 'Futsal Kamis',
 };
 
 Future<AppHarness> _open(
@@ -34,25 +32,24 @@ void main() {
     'shows the next session, kas balance, unpaid and needs-review lists',
     (tester) async {
       final fake = FakeGroupsApi();
-      fake.homes[5] = {
-        ...emptyHome(5, 'Futsal Kamis'),
-        'next_session': {
-          'id': 11,
-          'event_id': 2,
-          'event_name': 'Futsal Kamis',
-          'starts_at': '2026-10-08T12:00:00Z',
-          'status': 'issued',
-          'progress': 'issued',
-          'cost_total': 350000,
-          'attended_count': 8,
-        },
-        'kas_balance': 150000,
-        'unpaid_bills': [
-          _bill(1, 'Andi', 'unpaid', 45000),
-          _bill(2, 'Sari', 'unpaid', 45000),
-        ],
-        'needs_review_bills': [_bill(3, 'Rudi', 'needs_review', 50000)],
-      };
+      fake.homes[5] = sessionHome(5, 'Futsal Kamis')
+          .patch({
+            'next_session': {
+              'id': 11,
+              'starts_at': '2026-10-08T12:00:00Z',
+              'status': 'issued',
+              'progress': 'issued',
+              'status_label': 'Ditagih',
+              'cost_total': 350000,
+              'attended_count': 8,
+            },
+            'kas_balance': 150000,
+          })
+          .withItems('unpaid_bills', [
+            _bill(1, 'Andi', 45000),
+            _bill(2, 'Sari', 45000),
+          ])
+          .withItems('needs_review_bills', [_bill(3, 'Rudi', 50000)]);
       await _open(tester, fake);
 
       // 12:00 UTC is 19:00 WIB.
@@ -112,20 +109,12 @@ void main() {
     tester,
   ) async {
     final fake = FakeGroupsApi();
-    fake.homes[5] = {
-      ...emptyHome(5, 'Futsal Kamis'),
-      'next_session': {
-        'id': 11,
-        'event_id': 2,
-        'event_name': 'Futsal Kamis',
-        'starts_at': '2026-10-08T12:00:00Z',
-        'status': 'draft',
-        'progress': 'draft',
-        'cost_total': 0,
-        'attended_count': 0,
-      },
-      'unpaid_bills': [_bill(1, 'Andi', 'unpaid', 45000)],
-    };
+    fake.homes[5] = sessionHome(5, 'Futsal Kamis')
+        .patch({
+          'next_session': {'id': 11},
+        })
+        .withItems('unpaid_bills', [_bill(1, 'Andi', 45000)])
+        .withItems('needs_review_bills', []);
     await _open(tester, fake);
 
     await tester.tap(find.text('Sesi berikutnya'));
