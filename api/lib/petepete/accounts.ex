@@ -23,12 +23,35 @@ defmodule Petepete.Accounts do
   so logout takes effect when it expires. Refresh tokens are random, stored as
   SHA-256, valid for 30 days and replaced by a new token of the same family on every
   use. Presenting a token that was already used or revoked revokes its whole family.
+
+  ## Profile and roster links
+
+  A new user has an empty `display_name`; `update_profile/2` sets it (the app asks on
+  first login). A verified login and every profile update call
+  `Petepete.Groups.link_members_by_phone/1`, so guests and members a host added by
+  number become the user's own roster entries, in the same transaction.
+
+  ## Account deletion (UU PDP)
+
+  `delete_account/1` anonymises instead of deleting rows, because ledger entries
+  must stay intact (append-only) and keep pointing at the member:
+
+  * `users.phone` becomes the unique placeholder `deleted:<id>` (never a valid phone),
+    `display_name` becomes "Mantan anggota" and `deleted_at` is set;
+  * the user's roster entries are anonymised (`Petepete.Groups.anonymize_roster/1`);
+  * all refresh tokens are revoked and the phone's OTP challenges are deleted;
+    access tokens of a deleted user are rejected by `authenticate_access_token/1`.
+
+  It is refused with `{:error, :still_host}` while the user hosts an active group
+  (see `Petepete.Groups.hosts_active_group?/1`: any non-cancelled session, or any
+  roster entry besides the host). The same phone can log in again afterwards and
+  gets a fresh user.
   """
 
   import Ecto.Query
 
   alias Petepete.Accounts.{OtpChallenge, OtpSender, RefreshToken, Scope, User}
-  alias Petepete.{Clock, Repo}
+  alias Petepete.{Clock, Groups, Repo}
 
   require Logger
 
@@ -208,6 +231,7 @@ defmodule Petepete.Accounts do
         )
 
         {user, new_user?} = find_or_create_user(phone, now)
+        Groups.link_members_by_phone(user)
         {:ok, user, issue_tokens(user, Ecto.UUID.generate(), now), new_user?}
     end
   end
@@ -221,6 +245,76 @@ defmodule Petepete.Accounts do
       )
 
     {Repo.get_by!(User, phone: phone), not is_nil(inserted.id)}
+  end
+
+  @max_name_length 50
+
+  @doc """
+  Sets the user's display name (trimmed, 1 to #{@max_name_length} characters) and links
+  roster entries added by this phone number.
+
+  Returns `{:error, :invalid_display_name}` for a blank, too long or non-string name.
+  """
+  @spec update_profile(Scope.t(), term()) :: {:ok, User.t()} | {:error, :invalid_display_name}
+  def update_profile(%Scope{user: %User{} = user}, display_name) when is_binary(display_name) do
+    name = String.trim(display_name)
+
+    if name == "" or String.length(name) > @max_name_length do
+      {:error, :invalid_display_name}
+    else
+      Repo.transaction(fn ->
+        updated =
+          user
+          |> Ecto.Changeset.change(display_name: name, updated_at: Clock.now())
+          |> Repo.update!()
+
+        Groups.link_members_by_phone(updated)
+        updated
+      end)
+    end
+  end
+
+  def update_profile(%Scope{}, _display_name), do: {:error, :invalid_display_name}
+
+  @doc """
+  Anonymises the caller's account. See the moduledoc, "Account deletion".
+
+  Returns `{:error, :still_host}` while the user hosts an active group.
+  """
+  @spec delete_account(Scope.t()) :: :ok | {:error, :still_host | :unauthenticated}
+  def delete_account(%Scope{user: %User{id: user_id}}) do
+    now = Clock.now()
+
+    result =
+      Repo.transaction(fn ->
+        with %User{deleted_at: nil} = user <-
+               Repo.one(from u in User, where: u.id == ^user_id, lock: "FOR UPDATE"),
+             false <- Groups.hosts_active_group?(user_id) do
+          phone_hash = hash_phone(user.phone)
+          Repo.delete_all(from c in OtpChallenge, where: c.phone_hash == ^phone_hash)
+
+          Repo.update_all(
+            from(t in RefreshToken, where: t.user_id == ^user_id and is_nil(t.revoked_at)),
+            set: [revoked_at: now]
+          )
+
+          Groups.anonymize_roster(user_id)
+
+          user
+          |> Ecto.Changeset.change(
+            phone: "deleted:#{user_id}",
+            display_name: Groups.former_member_label(),
+            deleted_at: now,
+            updated_at: now
+          )
+          |> Repo.update!()
+        else
+          true -> Repo.rollback(:still_host)
+          _ -> Repo.rollback(:unauthenticated)
+        end
+      end)
+
+    with {:ok, _user} <- result, do: :ok
   end
 
   @doc """

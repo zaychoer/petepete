@@ -33,5 +33,9 @@ defmodule PetepeteWeb.Router do
     put "/sessions/:id/costs/:cid", SessionController, :put_cost
     delete "/sessions/:id/costs/:cid", SessionController, :delete_cost
     put "/sessions/:id/attendance", SessionController, :put_attendance
+
+    get "/me", MeController, :show
+    patch "/me", MeController, :update
+    delete "/me", MeController, :delete
   end
 end
