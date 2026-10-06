@@ -5,16 +5,22 @@ defmodule PetepeteWeb.InviteController do
 
   `GET /api/invites/:token` answers `{group_name}` and nothing else (no members, no host,
   no phone numbers), so the join page can name the group before asking for a name.
+
+  An unknown or reset token is 404 `invite_not_found` (not the generic `not_found`), whose
+  message tells the person to ask the host for a new link.
   """
   use PetepeteWeb, :controller
 
   alias Petepete.Groups
+  alias PetepeteWeb.FallbackController
 
   action_fallback PetepeteWeb.FallbackController
 
   def show(conn, %{"token" => token}) do
     with {:ok, group_name} <- Groups.invite_group_name(token) do
       json(conn, %{group_name: group_name})
+    else
+      other -> failed(conn, other)
     end
   end
 
@@ -28,8 +34,15 @@ defmodule PetepeteWeb.InviteController do
         group: %{id: group.id, name: group.name},
         claim: claim_hint(member)
       })
+    else
+      other -> failed(conn, other)
     end
   end
+
+  defp failed(conn, {:error, :not_found}),
+    do: FallbackController.respond(conn, 404, "invite_not_found")
+
+  defp failed(conn, {:error, _} = error), do: FallbackController.call(conn, error)
 
   # A joiner without an account can later claim their entry from the app.
   defp claim_hint(%{user_id: nil, id: id}),

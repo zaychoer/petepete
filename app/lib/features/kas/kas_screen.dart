@@ -306,7 +306,7 @@ class _TxnTile extends StatelessWidget {
               runSpacing: 4,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                kindChip(txn.kind),
+                kindChip(txn.kind, label: txn.kindLabel),
                 if (reversed)
                   const Text('Sudah dikoreksi')
                 else if (canCorrect && txn.isCorrectable)

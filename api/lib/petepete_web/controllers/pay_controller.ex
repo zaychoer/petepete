@@ -42,6 +42,10 @@ defmodule PetepeteWeb.PayController do
     token_expired: {410, "Link bayar sudah kedaluwarsa. Minta link baru ke host."}
   }
 
+  @doc "Every error code the pay link renders itself (the others come from `LedgerError`)."
+  @spec codes() :: [String.t()]
+  def codes, do: @errors |> Map.keys() |> Enum.map(&Atom.to_string/1) |> Enum.sort()
+
   def show(conn, %{"token" => token}) do
     case Payments.pay_page(token) do
       {:ok, view} -> json(conn, page(view))

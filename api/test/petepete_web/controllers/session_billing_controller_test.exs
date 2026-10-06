@@ -90,10 +90,57 @@ defmodule PetepeteWeb.SessionBillingControllerTest do
 
       response = get(conn, ~p"/api/sessions/#{ctx.session.id}/preview")
 
-      assert %{"error" => "invalid_session", "problems" => [%{"code" => "item_without_bearers"}]} =
-               json_response(response, 422)
+      assert %{
+               "error" => "invalid_session",
+               "problems" => [
+                 %{"code" => "item_without_bearers", "message" => message, "id" => id}
+               ]
+             } = json_response(response, 422)
+
+      assert message =~ ~s(Pos "lapangan" belum ada peserta hadir)
+      assert is_integer(id)
 
       Contract.check!("errors/invalid_session", response)
+    end
+  end
+
+  describe "invalid_session problem messages" do
+    test "every problem code has server text naming the item or the member", %{user: user} do
+      ctx = group_with_session(user)
+      [item] = Petepete.Billing.list_cost_items(ctx.session.id)
+      Repo.update_all(Petepete.Billing.CostItem, set: [label: "Minum"])
+
+      assert [
+               %{code: "item_without_bearers", id: id, message: bearers},
+               %{code: "item_without_payer", message: payer},
+               %{code: "invalid_amount", message: amount},
+               %{code: "invalid_weight", id: member_id, message: weight},
+               %{code: "invalid_rounding_unit", id: nil, message: rounding},
+               %{code: "total_cost_not_positive", id: nil, message: total}
+             ] =
+               PetepeteWeb.SessionProblems.render(
+                 [
+                   {:item_without_bearers, item.id},
+                   {:item_without_payer, item.id},
+                   {:invalid_amount, item.id},
+                   {:invalid_weight, ctx.host.id},
+                   :invalid_rounding_unit,
+                   :total_cost_not_positive
+                 ],
+                 ctx.session.id
+               )
+
+      assert {id, member_id} == {item.id, ctx.host.id}
+
+      rendered = ~w(item_without_bearers item_without_payer invalid_amount invalid_weight
+                    invalid_rounding_unit total_cost_not_positive)
+
+      assert Enum.sort(rendered) == PetepeteWeb.SessionProblems.codes()
+      assert bearers =~ ~s(Pos "Minum")
+      assert payer =~ ~s(Pos "Minum")
+      assert amount =~ ~s(pos "Minum")
+      assert weight =~ ctx.host.display_name
+      assert Enum.all?([rounding, total], &(is_binary(&1) and &1 != ""))
     end
   end
 

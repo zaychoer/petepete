@@ -119,14 +119,17 @@ defmodule PetepeteWeb.InviteControllerTest do
 
     test "an unknown or reset token is 404", %{conn: conn, group: group} do
       unknown = get(conn, ~p"/api/invites/nope")
-      assert %{"error" => "not_found"} = json_response(unknown, 404)
-      Contract.check!("errors/not_found", unknown)
+
+      assert %{"error" => "invite_not_found", "message" => "Link undangan" <> _} =
+               json_response(unknown, 404)
+
+      Contract.check!("errors/invite_not_found", unknown)
 
       {host_conn, host_user} = bearer_login(build_conn())
       member_fixture(group, role: "host", user: host_user)
       post(host_conn, ~p"/api/groups/#{group.id}/invite/reset") |> json_response(200)
 
-      assert %{"error" => "not_found"} =
+      assert %{"error" => "invite_not_found"} =
                json_response(get(conn, ~p"/api/invites/#{group.invite_token}"), 404)
     end
   end
@@ -135,7 +138,7 @@ defmodule PetepeteWeb.InviteControllerTest do
     test "an unknown token is 404 and creates nothing", %{conn: conn} do
       before = Repo.aggregate(Member, :count)
 
-      assert %{"error" => "not_found"} =
+      assert %{"error" => "invite_not_found"} =
                json_response(post(conn, join_path("nope"), %{display_name: "X"}), 404)
 
       assert Repo.aggregate(Member, :count) == before
@@ -160,7 +163,7 @@ defmodule PetepeteWeb.InviteControllerTest do
       new = String.replace_prefix(url, "https://petepete.test/join/", "")
       assert new != old
 
-      assert %{"error" => "not_found"} =
+      assert %{"error" => "invite_not_found"} =
                json_response(post(conn, join_path(old), %{display_name: "Sesudah"}), 404)
 
       assert %{"member_id" => _} =

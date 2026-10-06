@@ -48,6 +48,11 @@ class Sample {
   factory Sample.error(String code, {Directory? contractDir}) =>
       Sample.load('errors/$code', contractDir: contractDir);
 
+  /// The server's `message` of the recorded error [code], the text a client
+  /// must show.
+  static String errorMessage(String code, {Directory? contractDir}) =>
+      Sample.error(code, contractDir: contractDir).json['message'] as String;
+
   /// The repository's `contract/` directory, found by walking up from the
   /// working directory (`flutter test` runs in `app/`) and the running script.
   static Directory contractRoot() {

@@ -41,10 +41,19 @@ defmodule PetepeteWeb.LedgerError do
     unbalanced_shares: "Total pembagian tidak cocok dengan biaya."
   }
 
+  @doc """
+  Every error code this module can render: the keys of the message table plus
+  `gateway_error`. A reason without a table entry raises, so a new code cannot ship without
+  text (and without a contract sample: see `PetepeteWeb.ErrorInventoryTest`).
+  """
+  @spec codes() :: [String.t()]
+  def codes,
+    do: ["gateway_error" | @messages |> Map.keys() |> Enum.map(&Atom.to_string/1)] |> Enum.sort()
+
   @doc "Sends the 422 response and returns the conn."
   @spec render(Plug.Conn.t(), atom()) :: Plug.Conn.t()
   def render(conn, reason) when is_atom(reason) do
-    message = Map.get(@messages, reason, "Permintaan ditolak.")
+    message = Map.fetch!(@messages, reason)
 
     conn
     |> put_status(422)

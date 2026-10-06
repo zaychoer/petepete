@@ -11,7 +11,7 @@ defmodule PetepeteWeb.LedgerController do
   alias Petepete.{Ledger, Repo}
   alias Petepete.Groups.Member
   alias Petepete.Ledger.{Description, HostActions}
-  alias PetepeteWeb.{FieldErrors, LedgerError}
+  alias PetepeteWeb.{FieldErrors, Labels, LedgerError}
   alias PetepeteWeb.Plugs.{GroupAccess, IdempotencyKey, TxnAccess}
 
   import Ecto.Query, only: [from: 2]
@@ -124,6 +124,7 @@ defmodule PetepeteWeb.LedgerController do
     %{
       id: txn.id,
       kind: txn.kind,
+      kind_label: Labels.txn_kind(txn.kind),
       description: Description.of(txn, names, all),
       reason: txn.reason,
       reverses_txn_id: txn.reverses_txn_id,

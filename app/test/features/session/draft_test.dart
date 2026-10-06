@@ -11,6 +11,11 @@ FakeSessionServer _server() {
   return s;
 }
 
+/// The `message` of the recorded `invalid_session` problem.
+String _problemMessage() =>
+    (Sample.error('invalid_session').json['problems'] as List).first['message']
+        as String;
+
 void main() {
   late FakeLauncher launcher;
   setUp(() => launcher = FakeLauncher());
@@ -169,10 +174,8 @@ void main() {
       await tester.tap(find.byKey(const Key('open-preview')));
       await tester.pumpAndSettle();
       expect(find.text('Tagihan belum bisa dikirim'), findsOneWidget);
-      expect(
-        find.textContaining('Pos "Minum" belum ada peserta hadir'),
-        findsOneWidget,
-      );
+      // The server's text of the problem, not one the app writes.
+      expect(find.text(_problemMessage()), findsOneWidget);
       expect(find.text('Kirim tagihan'), findsNothing);
 
       // Andi checks in: the preview no longer has a problem.
@@ -194,6 +197,27 @@ void main() {
         findsNothing,
       );
     });
+    testWidgets(
+      'a problem code the app has never seen still shows the server message',
+      (tester) async {
+        final server = _server()..problemCode = 'something_new';
+        await pumpSession(tester, server, launcher);
+        await tester.tap(find.byKey(const Key('chip-Minum')));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byKey(const Key('cost-amount')), '60000');
+        await tester.tap(find.byKey(const Key('subset-switch')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('subset-3')));
+        await tester.tap(find.byKey(const Key('cost-save')));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const Key('open-preview')));
+        await tester.pumpAndSettle();
+
+        expect(find.text(_problemMessage()), findsOneWidget);
+        expect(find.textContaining('something_new'), findsNothing);
+      },
+    );
   });
 
   group('attendance', () {

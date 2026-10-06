@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:petepete/ui/status_chip.dart';
 
 import '../../support/fake_kas_api.dart';
 import '../../support/sample.dart';
@@ -52,6 +53,27 @@ void main() {
       );
       expect(find.textContaining('6 Okt 2026, '), findsNWidgets(3));
       expect(find.text('Pelunasan'), findsOneWidget); // kind label as text
+    });
+
+    testWidgets('the kind chip shows the server kind_label, tone by kind', (
+      tester,
+    ) async {
+      final fake = _seeded();
+      fake.seed('settlement', 'Andi bayar Rp5.000 ke Citra', [
+        (2, 5000),
+        (3, -5000),
+      ], kindLabel: 'Label dari server');
+      fake.seed('jenis_baru', 'Sesuatu yang baru', [
+        (2, 1000),
+        (3, -1000),
+      ], kindLabel: 'Jenis baru');
+      await pumpKas(tester, fake);
+
+      StatusChip chip(String label) =>
+          tester.widget<StatusChip>(find.widgetWithText(StatusChip, label));
+      expect(chip('Label dari server').tone, StatusTone.info);
+      expect(chip('Jenis baru').tone, StatusTone.neutral);
+      expect(find.textContaining('jenis_baru'), findsNothing);
     });
 
     testWidgets('a negative kas says so in words', (tester) async {

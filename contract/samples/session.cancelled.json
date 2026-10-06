@@ -1,0 +1,40 @@
+{
+  "cost_items": [
+    {
+      "amount": 50000,
+      "bearer_ids": [
+        1781
+      ],
+      "category": "lapangan",
+      "id": 280,
+      "label": null,
+      "members": [
+        1781
+      ],
+      "paid_by": 1781,
+      "paid_by_name": "Member 4643",
+      "scope": "subset",
+      "session_id": 345
+    }
+  ],
+  "participants": [
+    {
+      "attended": true,
+      "display_name": "Member 4643",
+      "member_id": 1781,
+      "role": "host",
+      "role_label": "Host",
+      "weight": 1000
+    }
+  ],
+  "session": {
+    "event_id": 334,
+    "group_id": 723,
+    "id": 345,
+    "progress": "cancelled",
+    "progress_label": "Batal",
+    "starts_at": "2026-10-08T12:00:00Z",
+    "status": "cancelled",
+    "status_label": "Batal"
+  }
+}

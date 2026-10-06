@@ -2,49 +2,219 @@
   "txns": [
     {
       "actor_type": "host",
-      "description": "Andi bayar Rp1.245.000 ke Budi (talangan)",
+      "description": "Tagihan sesi terbit: Rp102.000 untuk 3 orang",
       "entries": [
         {
           "account_type": "member",
-          "amount": 1245000,
-          "display_name": "Andi",
-          "member_id": 278
+          "amount": -34000,
+          "display_name": "Member 2915",
+          "member_id": 11390
         },
         {
           "account_type": "member",
-          "amount": -1245000,
-          "display_name": "Budi",
-          "member_id": 279
+          "amount": -34000,
+          "display_name": "Member 3011",
+          "member_id": 11391
+        },
+        {
+          "account_type": "member",
+          "amount": -34000,
+          "display_name": "Member 3043",
+          "member_id": 11392
+        },
+        {
+          "account_type": "member",
+          "amount": 100000,
+          "display_name": "Member 2915",
+          "member_id": 11390
+        },
+        {
+          "account_type": "kas",
+          "amount": 2000,
+          "display_name": null,
+          "member_id": null
         }
       ],
-      "id": 60,
-      "inserted_at": "2026-10-06T14:43:35Z",
-      "kind": "settlement",
-      "reason": "talangan",
+      "id": 2913,
+      "inserted_at": "2026-10-06T15:53:19Z",
+      "kind": "session_billed",
+      "kind_label": "Tagihan sesi",
+      "reason": null,
       "reverses_txn_id": null
     },
     {
       "actor_type": "host",
-      "description": "Member 5700 bayar Rp45.000 ke Budi",
+      "description": "Member 3011 bayar Rp34.000 (tunai)",
       "entries": [
         {
           "account_type": "member",
-          "amount": 45000,
-          "display_name": "Member 5700",
-          "member_id": 275
+          "amount": 34000,
+          "display_name": "Member 3011",
+          "member_id": 11391
         },
         {
           "account_type": "member",
-          "amount": -45000,
-          "display_name": "Budi",
-          "member_id": 279
+          "amount": -34000,
+          "display_name": "Member 2915",
+          "member_id": 11390
         }
       ],
-      "id": 61,
-      "inserted_at": "2026-10-06T14:43:35Z",
-      "kind": "settlement",
+      "id": 2914,
+      "inserted_at": "2026-10-06T15:53:19Z",
+      "kind": "cash_received",
+      "kind_label": "Bayar tunai",
       "reason": null,
       "reverses_txn_id": null
+    },
+    {
+      "actor_type": "host",
+      "description": "Bayar tunai Member 2915 Rp34.000 dibatalkan. Alasan: salah",
+      "entries": [
+        {
+          "account_type": "member",
+          "amount": -34000,
+          "display_name": "Member 3011",
+          "member_id": 11391
+        },
+        {
+          "account_type": "member",
+          "amount": 34000,
+          "display_name": "Member 2915",
+          "member_id": 11390
+        }
+      ],
+      "id": 2915,
+      "inserted_at": "2026-10-06T15:53:19Z",
+      "kind": "cash_payment_cancelled",
+      "kind_label": "Tunai dibatalkan",
+      "reason": "salah",
+      "reverses_txn_id": 2914
+    },
+    {
+      "actor_type": "gateway",
+      "description": "Member 3043 bayar Rp34.000 (online)",
+      "entries": [
+        {
+          "account_type": "member",
+          "amount": 34000,
+          "display_name": "Member 3043",
+          "member_id": 11392
+        },
+        {
+          "account_type": "member",
+          "amount": -34000,
+          "display_name": "Member 2915",
+          "member_id": 11390
+        }
+      ],
+      "id": 2917,
+      "inserted_at": "2026-10-06T15:53:19Z",
+      "kind": "gateway_payment_received",
+      "kind_label": "Bayar online",
+      "reason": null,
+      "reverses_txn_id": null
+    },
+    {
+      "actor_type": "host",
+      "description": "Tagihan sesi dibatalkan. Alasan: batal",
+      "entries": [
+        {
+          "account_type": "member",
+          "amount": 10000,
+          "display_name": "Member 2915",
+          "member_id": 11390
+        },
+        {
+          "account_type": "member",
+          "amount": 10000,
+          "display_name": "Member 3011",
+          "member_id": 11391
+        },
+        {
+          "account_type": "member",
+          "amount": -20000,
+          "display_name": "Member 2915",
+          "member_id": 11390
+        }
+      ],
+      "id": 2919,
+      "inserted_at": "2026-10-06T15:53:19Z",
+      "kind": "session_bills_cancelled",
+      "kind_label": "Tagihan dibatalkan",
+      "reason": "batal",
+      "reverses_txn_id": 2918
+    },
+    {
+      "actor_type": "host",
+      "description": "Member 3011 bayar Rp5.000 ke Member 3043",
+      "entries": [
+        {
+          "account_type": "member",
+          "amount": 5000,
+          "display_name": "Member 3011",
+          "member_id": 11391
+        },
+        {
+          "account_type": "member",
+          "amount": -5000,
+          "display_name": "Member 3043",
+          "member_id": 11392
+        }
+      ],
+      "id": 2920,
+      "inserted_at": "2026-10-06T15:53:19Z",
+      "kind": "settlement",
+      "kind_label": "Pelunasan",
+      "reason": null,
+      "reverses_txn_id": null
+    },
+    {
+      "actor_type": "host",
+      "description": "Member 3011 belanja Rp1.000 pakai kas",
+      "entries": [
+        {
+          "account_type": "kas",
+          "amount": -1000,
+          "display_name": null,
+          "member_id": null
+        },
+        {
+          "account_type": "member",
+          "amount": 1000,
+          "display_name": "Member 3011",
+          "member_id": 11391
+        }
+      ],
+      "id": 2921,
+      "inserted_at": "2026-10-06T15:53:19Z",
+      "kind": "kas_spend",
+      "kind_label": "Belanja kas",
+      "reason": null,
+      "reverses_txn_id": null
+    },
+    {
+      "actor_type": "host",
+      "description": "Dikoreksi: Member 3011 bayar Rp5.000 ke Member 3043. Alasan: salah",
+      "entries": [
+        {
+          "account_type": "member",
+          "amount": -5000,
+          "display_name": "Member 3011",
+          "member_id": 11391
+        },
+        {
+          "account_type": "member",
+          "amount": 5000,
+          "display_name": "Member 3043",
+          "member_id": 11392
+        }
+      ],
+      "id": 2922,
+      "inserted_at": "2026-10-06T15:53:19Z",
+      "kind": "correction",
+      "kind_label": "Koreksi",
+      "reason": "salah",
+      "reverses_txn_id": 2920
     }
   ]
 }

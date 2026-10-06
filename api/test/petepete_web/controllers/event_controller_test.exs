@@ -12,13 +12,21 @@ defmodule PetepeteWeb.EventControllerTest do
     other = group_fixture()
 
     host = user_fixture(%{phone: valid_phone()})
-    member_fixture(group, role: "host", user: host)
+    host_member = member_fixture(group, role: "host", user: host)
     plain = user_fixture(%{phone: valid_phone()})
     member_fixture(group, role: "member", user: plain)
     outsider_host = user_fixture(%{phone: valid_phone()})
     member_fixture(other, role: "host", user: outsider_host)
 
-    %{conn: conn, group: group, other: other, host: host, plain: plain, outsider: outsider_host}
+    %{
+      conn: conn,
+      group: group,
+      other: other,
+      host: host,
+      host_member: host_member,
+      plain: plain,
+      outsider: outsider_host
+    }
   end
 
   defp create(conn, user, group, params),
@@ -32,8 +40,31 @@ defmodule PetepeteWeb.EventControllerTest do
     "split_rule" => "equal"
   }
 
+  # A subset item first: the recorded samples take their array shapes from the first item, so
+  # it must be the one with `member_ids`.
+  defp subset_template(ctx) do
+    %{
+      "items" => [
+        %{
+          "category" => "minum",
+          "amount" => 60_000,
+          "scope" => "subset",
+          "member_ids" => [ctx.host_member.id]
+        },
+        %{"category" => "lapangan", "amount" => 350_000}
+      ]
+    }
+  end
+
   test "a host creates a recurring event and gets no session", ctx do
-    created = create(ctx.conn, ctx.host, ctx.group, @recurring)
+    created =
+      create(
+        ctx.conn,
+        ctx.host,
+        ctx.group,
+        Map.put(@recurring, "cost_template", subset_template(ctx))
+      )
+
     body = json_response(created, 201)
     Contract.check!("event.recurring", created)
 
@@ -47,7 +78,7 @@ defmodule PetepeteWeb.EventControllerTest do
     params = %{
       "type" => "one_off",
       "starts_at" => "2026-10-08T19:00:00+07:00",
-      "cost_template" => @recurring["cost_template"]
+      "cost_template" => subset_template(ctx)
     }
 
     created = create(ctx.conn, ctx.host, ctx.group, params)

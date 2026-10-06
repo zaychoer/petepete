@@ -45,6 +45,18 @@ defmodule PetepeteWeb.Labels do
 
   @role %{"host" => "Host", "member" => "Anggota", "guest" => "Tamu"}
 
+  # The eight ledger money events (`Petepete.Ledger.Txn.kind`).
+  @txn_kind %{
+    "session_billed" => "Tagihan sesi",
+    "gateway_payment_received" => "Bayar online",
+    "cash_received" => "Bayar tunai",
+    "settlement" => "Pelunasan",
+    "kas_spend" => "Belanja kas",
+    "session_bills_cancelled" => "Tagihan dibatalkan",
+    "cash_payment_cancelled" => "Tunai dibatalkan",
+    "correction" => "Koreksi"
+  }
+
   @doc "Label for how a bill was paid (`cash | gateway | credit`); `nil` (unpaid) has none."
   @spec paid_via(String.t() | nil) :: String.t() | nil
   def paid_via(nil), do: nil
@@ -77,4 +89,8 @@ defmodule PetepeteWeb.Labels do
   @doc "Label for a roster role."
   @spec role(String.t()) :: String.t()
   def role(role), do: Map.fetch!(@role, role)
+
+  @doc "Label for a ledger txn kind; an unknown kind raises."
+  @spec txn_kind(String.t()) :: String.t()
+  def txn_kind(kind), do: Map.fetch!(@txn_kind, kind)
 end

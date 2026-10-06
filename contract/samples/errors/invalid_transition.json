@@ -1,7 +1,7 @@
 {
-  "entity": "bill",
+  "entity": "session",
   "error": "invalid_transition",
-  "message": "Status tagihan ini tidak bisa diubah dengan aksi itu.",
-  "status": "paid",
-  "status_label": "Lunas"
+  "message": "Status sesi ini tidak memungkinkan aksi itu. Muat ulang dulu ya.",
+  "status": "issued",
+  "status_label": "Ditagih"
 }

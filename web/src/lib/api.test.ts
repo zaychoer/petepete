@@ -26,11 +26,8 @@ describe("apiFetch errors", () => {
   });
 
   it("keeps the first message of each flagged field", async () => {
-    answer(
-      422,
-      JSON.stringify({ error: "invalid", message: "Cek lagi ya.", fields: { phone: ["a", "b"] } }),
-    );
-    expect((await failure()).fields).toEqual({ phone: "a" });
+    answer(422, loadError("invalid").with({ "fields.name": ["a", "b"] }).encode());
+    expect((await failure()).fields).toEqual({ name: "a" });
   });
 
   it("falls back to a generic Indonesian text when the body has no message", async () => {
