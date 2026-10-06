@@ -62,6 +62,25 @@ if config_env() == :prod do
 
   host = System.get_env("PHX_HOST") || "example.com"
 
+  # No default on purpose: money must never flow through a gateway nobody chose.
+  # "fake" is for staging, where no real money moves. See docs/deploy.md, "Gateway adapter".
+  gateway =
+    case System.get_env("PAYMENT_GATEWAY") do
+      "fake" ->
+        Petepete.Payments.Gateway.Fake
+
+      nil ->
+        raise """
+        environment variable PAYMENT_GATEWAY is missing.
+        Set it to the payment gateway adapter to use ("fake" while no real adapter exists).
+        """
+
+      other ->
+        raise "environment variable PAYMENT_GATEWAY=#{inspect(other)} is not a known adapter"
+    end
+
+  config :petepete, :gateway, gateway
+
   config :petepete, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
 
   config :petepete, PetepeteWeb.Endpoint,

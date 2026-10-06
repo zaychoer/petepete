@@ -67,6 +67,19 @@ gh secret list -R zaychoer/petepete --env staging                          # FLY
 
 Then push to `main` or re-run the latest CI run from the Actions tab. For production, run "Deploy production" from the Actions tab.
 
+## Gateway adapter
+
+Everything provider-shaped (create a payment, verify and normalize webhooks, per-method fees, sub-account registration, withdrawals) sits behind the `Petepete.Payments.Gateway` behaviour. The adapter comes from `config :petepete, :gateway`: dev and test set `Petepete.Payments.Gateway.Fake` in `config/dev.exs` and `config/test.exs`.
+
+In prod the app reads `PAYMENT_GATEWAY` in `api/config/runtime.exs` and **refuses to boot (and so does the release command `/app/bin/migrate`) when it is missing or unknown**. This is deliberate: money must never flow through a gateway nobody chose. The only adapter that exists today is `fake`, which moves no money. `fly.staging.toml` sets `PAYMENT_GATEWAY = "fake"`; `fly.production.toml` leaves it unset, so production cannot deploy until a real adapter exists. Choosing Xendit or Midtrans, obtaining sandbox credentials and completing KYC for a real sub-account are human steps that come first.
+
+To add a real adapter (say `Petepete.Payments.Gateway.Xendit`):
+
+1. Create `api/lib/petepete/payments/gateway/xendit.ex` with `@behaviour Petepete.Payments.Gateway` and implement every callback; the module doc of the behaviour lists the types. Return `{:error, :unsupported}` from `cancel_payment/1` and `{:managed, dashboard_url}` from `withdraw/2` if the provider has no such API. Adapters do no database writes.
+2. Put the provider's per-method fee table in config (`config :petepete, Petepete.Payments.Gateway.Xendit, fees: %{...}`) and implement `fee_for/2` with `Petepete.Payments.Gateway.FeeTable`, so net to the host equals `amount_due`. Figures include PPN.
+3. Add its name to the `case` on `PAYMENT_GATEWAY` in `api/config/runtime.exs`, map it to the module, and put credentials in `fly secrets set` plus matching `System.get_env` lines in the same file. Add each new variable to `.env.example`.
+4. Set `PAYMENT_GATEWAY=<name>` in the matching `fly.*.toml`, then write adapter tests like `api/test/petepete/payments/gateway/fake_test.exs` (signed and forged webhooks, normalization, fees netting exactly `amount_due`) before deploying.
+
 ## Rotating a deploy token
 
 Tokens created above expire after a year. To replace one:
