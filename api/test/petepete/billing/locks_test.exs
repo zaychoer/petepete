@@ -108,23 +108,32 @@ defmodule Petepete.Billing.LocksTest do
       ids = Enum.map(bills, & &1.id)
 
       # issue/void_issue-like: session then every bill; webhook/cash-like: bills only, in
-      # arbitrary request order; both pause while holding locks to force overlap.
+      # arbitrary request order. Every worker signals once it holds its locks and keeps them
+      # until released, so the rest queue behind it on real locks; the test process releases
+      # the holders one by one as they report in.
+      parent = self()
+
       tasks =
         for i <- 1..24 do
-          if rem(i, 3) == 0 do
-            in_tx(fn ->
-              {:ok, _, _} = Billing.lock_session_and_bills(session.id)
-              Process.sleep(20)
-            end)
-          else
-            order = if rem(i, 2) == 0, do: ids, else: Enum.reverse(ids)
+          acquire =
+            if rem(i, 3) == 0 do
+              fn -> {:ok, _, _} = Billing.lock_session_and_bills(session.id) end
+            else
+              order = if rem(i, 2) == 0, do: ids, else: Enum.reverse(ids)
+              fn -> Billing.lock_bills(order) end
+            end
 
-            in_tx(fn ->
-              Billing.lock_bills(order)
-              Process.sleep(20)
-            end)
-          end
+          in_tx(fn ->
+            acquire.()
+            send(parent, {:holding, self()})
+            receive do: (:release -> :ok)
+          end)
         end
+
+      for _ <- 1..24 do
+        assert_receive {:holding, pid}, 15_000
+        send(pid, :release)
+      end
 
       assert Enum.all?(await_all(tasks), &(&1 == {:ok, :ok}))
     end

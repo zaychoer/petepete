@@ -33,6 +33,29 @@ defmodule Petepete.Sessions.SessionSchedulerTest do
              Repo.all(from s in Session, where: s.event_id == ^event.id)
   end
 
+  test "a template item without a payer is paid by the host, so the scheduled draft bills" do
+    group = group_fixture()
+    host = member_fixture(group, role: "host")
+    guest = member_fixture(group, role: "member")
+
+    {:ok, %{event: event}} =
+      Sessions.create_event(host, %{
+        "type" => "recurring",
+        "rrule" => "FREQ=WEEKLY;BYDAY=TH",
+        "time" => "19:00",
+        "cost_template" => %{
+          "items" => [%{"category" => "lapangan", "amount" => 100_000, "scope" => "all"}]
+        }
+      })
+
+    assert :ok = perform_job(SessionScheduler, %{})
+    session = Repo.one!(from s in Session, where: s.event_id == ^event.id)
+    for m <- [host, guest], do: Petepete.Fixtures.attendance_fixture(session, m)
+
+    assert {:ok, %{total_cost: 100_000, total_billed: 100_000}} =
+             Petepete.Billing.preview(session.id)
+  end
+
   test "reports an error when a session could not be created, so Oban retries", %{event: event} do
     Repo.update_all(from(e in Event, where: e.id == ^event.id), set: [rrule: "garbage"])
 

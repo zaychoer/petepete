@@ -59,6 +59,9 @@ defmodule Petepete.Payments.Gateway.Spy do
   end
 
   defp hook(call, arg) do
-    :petepete |> Application.fetch_env!(__MODULE__) |> Keyword.fetch!(:on_call) |> then(& &1.(call, arg))
+    :petepete
+    |> Application.fetch_env!(__MODULE__)
+    |> Keyword.fetch!(:on_call)
+    |> then(& &1.(call, arg))
   end
 end

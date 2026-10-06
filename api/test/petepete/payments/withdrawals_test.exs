@@ -2,7 +2,7 @@ defmodule Petepete.Payments.WithdrawalsTest do
   # Not async: the fake gateway's behaviour is application config.
   use Petepete.DataCase, async: false
 
-  import Ecto.Query, only: [from: 2, like: 2]
+  import Ecto.Query, only: [from: 2]
 
   alias Petepete.{BillingScenario, FakeGateway, Payments}
   alias Petepete.Ledger.AuditLog

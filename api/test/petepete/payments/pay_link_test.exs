@@ -26,9 +26,12 @@ defmodule Petepete.Payments.PayLinkTest do
       send(test, {:seen_at_call, Repo.get_by(PaymentAttempt, external_id: request.external_id)})
     end)
 
-    assert {:ok, %{attempt: attempt, reused: false}} = Payments.start_payment(bill.pay_token, "qris")
+    assert {:ok, %{attempt: attempt, reused: false}} =
+             Payments.start_payment(bill.pay_token, "qris")
 
-    assert_received {:seen_at_call, %PaymentAttempt{status: "pending", provider_ref: nil, action: nil}}
+    assert_received {:seen_at_call,
+                     %PaymentAttempt{status: "pending", provider_ref: nil, action: nil}}
+
     assert attempt.provider_ref == "fake-#{bill.id}-1"
     assert %{"type" => "qr_string"} = attempt.action
   end
@@ -40,7 +43,9 @@ defmodule Petepete.Payments.PayLinkTest do
     assert [%{seq: 1, status: "failed", provider_ref: nil, action: nil}] = attempts(bill)
 
     FakeGateway.configure(create_payment: :api)
-    assert {:ok, %{attempt: retry, reused: false}} = Payments.start_payment(bill.pay_token, "qris")
+
+    assert {:ok, %{attempt: retry, reused: false}} =
+             Payments.start_payment(bill.pay_token, "qris")
 
     assert retry.seq == 2 and retry.external_id == "#{bill.id}-2" and retry.status == "pending"
     assert [%{seq: 1, status: "failed"}, %{seq: 2, status: "pending"}] = attempts(bill)
@@ -65,7 +70,9 @@ defmodule Petepete.Payments.PayLinkTest do
     assert_received {:fake_gateway, :create_payment, ^external_id}
 
     # Now that the provider data is stored, the same method is a plain reuse.
-    assert {:ok, %{attempt: %{id: ^id}, reused: true}} = Payments.start_payment(bill.pay_token, "qris")
+    assert {:ok, %{attempt: %{id: ^id}, reused: true}} =
+             Payments.start_payment(bill.pay_token, "qris")
+
     refute_received {:fake_gateway, :create_payment, _}
   end
 

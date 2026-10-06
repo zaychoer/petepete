@@ -226,6 +226,20 @@ defmodule Petepete.Billing.InvoicingTest do
       assert length(result.bills) == 10
     end
 
+    test "writes one session.issue audit row for the host, none on a replay" do
+      ctx = example1()
+      result = issue!(ctx)
+      issue!(ctx)
+
+      assert [row] =
+               Repo.all(from a in Petepete.Ledger.AuditLog, where: a.action == "session.issue")
+
+      assert row.subject_type == "session" and row.subject_id == ctx.session.id
+      assert row.group_id == ctx.group.id and row.actor_user_id == ctx.user.id
+      assert row.metadata["txn_id"] == result.txn.id
+      assert length(row.metadata["bill_ids"]) == 10
+    end
+
     test "rounding remainder goes to the kas" do
       ctx = rounding_example()
       issue!(ctx, actor: {:host, ctx.user.id}, idempotency_key: "k1")
