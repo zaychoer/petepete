@@ -10,14 +10,20 @@ defmodule Petepete.Groups do
   `:not_found` (existence is never leaked); a member acting beyond their role
   gets `:forbidden`. Everything that writes sessions, costs, bills or the
   ledger is host-only.
+
+  Accounts meet rosters here: `link_members_by_phone/1` attaches entries added by
+  phone number to a login, `hosts_active_group?/1` and `anonymize_roster/1` serve
+  account deletion.
   """
   import Ecto.Query
 
-  alias Petepete.Accounts.Scope
+  alias Petepete.Accounts.{Scope, User}
   alias Petepete.Billing.{Bill, Session}
   alias Petepete.Groups.Member
   alias Petepete.Ledger.Txn
   alias Petepete.Repo
+
+  @former_member_label "Mantan anggota"
 
   @type role :: :member | :host
   @type resource :: :session | :bill | :txn | :member
@@ -83,5 +89,99 @@ defmodule Petepete.Groups do
       join: s in Session,
       on: s.id == b.session_id,
       where: s.group_id == ^group_id
+  end
+
+  @doc "The display name that replaces a deleted account's name on rosters, ledger and history."
+  @spec former_member_label() :: String.t()
+  def former_member_label, do: @former_member_label
+
+  @doc """
+  Links roster entries added by phone number to the account owning that number.
+
+  Every `group_members` row without an account whose `phone` normalises to the user's
+  phone gets `user_id` set, at most one row per group and never in a group where the
+  user already has a row (unique `(group_id, user_id)`). A row another account has
+  claimed (`claim_user_id` set to someone else) is never taken. Idempotent. Returns
+  the number of rows linked.
+
+  Must run inside the caller's transaction (it locks the rows it links), so a login
+  commits its tokens and its links together.
+  """
+  @spec link_members_by_phone(User.t()) :: non_neg_integer()
+  def link_members_by_phone(%User{id: user_id, phone: "62" <> national}) do
+    taken = from(m in Member, where: m.user_id == ^user_id, select: m.group_id)
+    suffix = "%" <> national
+
+    # The SQL filter is only a cheap digits-suffix prefilter; normalize_phone/1 decides.
+    candidates =
+      Repo.all(
+        from m in Member,
+          where: is_nil(m.user_id) and not is_nil(m.phone),
+          where: is_nil(m.claim_user_id) or m.claim_user_id == ^user_id,
+          where: like(fragment("regexp_replace(?, '[^0-9]', '', 'g')", m.phone), ^suffix),
+          where: m.group_id not in subquery(taken),
+          order_by: [asc: m.group_id, asc: m.id],
+          lock: "FOR UPDATE"
+      )
+
+    candidates
+    |> Enum.filter(&(Petepete.Accounts.normalize_phone(&1.phone) == {:ok, "62" <> national}))
+    |> Enum.uniq_by(& &1.group_id)
+    |> Enum.map(& &1.id)
+    |> case do
+      [] ->
+        0
+
+      ids ->
+        {count, _} =
+          Repo.update_all(from(m in Member, where: m.id in ^ids), set: [user_id: user_id])
+
+        count
+    end
+  end
+
+  @doc """
+  Whether the user hosts a group that is still active.
+
+  A group is active when it has any session that is not cancelled, or any roster
+  entry besides the host's own. A group with only its host and no live sessions is
+  empty and may be left behind.
+  """
+  @spec hosts_active_group?(integer()) :: boolean()
+  def hosts_active_group?(user_id) do
+    Repo.exists?(
+      from h in Member,
+        as: :h,
+        where: h.user_id == ^user_id and h.role == "host",
+        where:
+          exists(
+            from s in Session,
+              where: s.group_id == parent_as(:h).group_id and s.status != "cancelled"
+          ) or
+            exists(
+              from m in Member,
+                where: m.group_id == parent_as(:h).group_id and m.id != parent_as(:h).id
+            )
+    )
+  end
+
+  @doc """
+  Anonymises every roster entry of the user: name becomes `former_member_label/0`,
+  phone is dropped, and claims by the user are withdrawn. The rows stay (ledger
+  entries point at them), and so does their `user_id` link to the anonymised account.
+  """
+  @spec anonymize_roster(integer()) :: :ok
+  def anonymize_roster(user_id) do
+    now = Petepete.Clock.now()
+
+    Repo.update_all(from(m in Member, where: m.user_id == ^user_id),
+      set: [display_name: @former_member_label, phone: nil, updated_at: now]
+    )
+
+    Repo.update_all(from(m in Member, where: m.claim_user_id == ^user_id),
+      set: [claim_user_id: nil, updated_at: now]
+    )
+
+    :ok
   end
 end
