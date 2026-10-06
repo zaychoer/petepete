@@ -108,6 +108,24 @@ defmodule PetepeteWeb.InviteControllerTest do
     end
   end
 
+  describe "looking up an invite" do
+    test "shows only the group name, with no login", %{conn: conn, group: group} do
+      assert json_response(get(conn, ~p"/api/invites/#{group.invite_token}"), 200) ==
+               %{"group_name" => "Futsal Kamis"}
+    end
+
+    test "an unknown or reset token is 404", %{conn: conn, group: group} do
+      assert json_response(get(conn, ~p"/api/invites/nope"), 404) == %{"error" => "not_found"}
+
+      {host_conn, host_user} = bearer_login(build_conn())
+      member_fixture(group, "host", host_user)
+      post(host_conn, ~p"/api/groups/#{group.id}/invite/reset") |> json_response(200)
+
+      assert json_response(get(conn, ~p"/api/invites/#{group.invite_token}"), 404) ==
+               %{"error" => "not_found"}
+    end
+  end
+
   describe "invite tokens" do
     test "an unknown token is 404 and creates nothing", %{conn: conn} do
       before = Repo.aggregate(Member, :count)

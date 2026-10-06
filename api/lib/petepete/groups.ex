@@ -107,6 +107,18 @@ defmodule Petepete.Groups do
   end
 
   @doc """
+  The name of the group behind invite `token`, for the web join page to show before the
+  person fills in the form. An unknown or reset token is `{:error, :not_found}`.
+  """
+  @spec invite_group_name(String.t()) :: {:ok, String.t()} | {:error, :not_found}
+  def invite_group_name(token) when is_binary(token) do
+    case Repo.one(from g in Group, where: g.invite_token == ^token, select: g.name) do
+      nil -> {:error, :not_found}
+      name -> {:ok, name}
+    end
+  end
+
+  @doc """
   Joins the group behind `token` as a member. `attrs` has `"display_name"` and optional `"phone"`.
 
   Without `scope` (web join) the new entry has no account; with it, the entry is linked
