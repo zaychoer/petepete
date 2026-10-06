@@ -36,7 +36,7 @@ class GroupListScreen extends StatelessWidget {
                   subtitle: Text(
                     [
                       if (g.template != null) g.template!,
-                      _roleLabel(g.role),
+                      g.roleLabel,
                     ].join(' · '),
                   ),
                   trailing: const Icon(Icons.chevron_right),
@@ -55,9 +55,3 @@ class GroupListScreen extends StatelessWidget {
     );
   }
 }
-
-String _roleLabel(String role) => switch (role) {
-  'host' => 'Host',
-  'guest' => 'Tamu',
-  _ => 'Anggota',
-};

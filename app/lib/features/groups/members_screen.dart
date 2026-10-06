@@ -53,7 +53,7 @@ class _RosterState extends State<_Roster> {
           : widget.api.rejectClaim(member.id));
       await widget.reload();
     } on ApiError catch (e) {
-      if (mounted) setState(() => _error = groupErrorMessage(e));
+      if (mounted) setState(() => _error = e.message);
     }
   }
 
@@ -98,7 +98,7 @@ class _RosterState extends State<_Roster> {
         ),
       );
     } on ApiError catch (e) {
-      if (mounted) setState(() => _error = groupErrorMessage(e));
+      if (mounted) setState(() => _error = e.message);
     }
   }
 
@@ -204,7 +204,7 @@ class _RosterState extends State<_Roster> {
               title: Text(m.name),
               subtitle: Text(
                 [
-                  _roleLabel(m),
+                  m.roleLabel,
                   if (!m.hasAccount && !m.isGuest) 'belum punya akun',
                 ].join(' · '),
               ),
@@ -214,12 +214,6 @@ class _RosterState extends State<_Roster> {
     );
   }
 }
-
-String _roleLabel(RosterMember m) => switch (m.role) {
-  'host' => 'Host',
-  'guest' => 'Tamu',
-  _ => 'Anggota',
-};
 
 /// Name (required) and WhatsApp number (optional) of a guest to add to the roster.
 class AddGuestDialog extends StatefulWidget {
@@ -276,7 +270,7 @@ class _AddGuestDialogState extends State<AddGuestDialog> {
       if (mounted) {
         setState(() {
           _busy = false;
-          _error = groupErrorMessage(e);
+          _error = e.message;
         });
       }
     }

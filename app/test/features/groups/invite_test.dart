@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/fake_groups_api.dart';
+import '../../support/sample.dart';
 
 FakeGroupsApi _hostOfFutsal() {
   final fake = FakeGroupsApi();
@@ -171,7 +172,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.textContaining('Sudah ada yang mengajukan klaim'),
+        find.text(Sample.error('claim_pending').json['message'] as String),
         findsOneWidget,
       );
       expect(find.text('Permintaan terkirim'), findsNothing);

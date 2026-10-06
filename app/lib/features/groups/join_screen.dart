@@ -54,7 +54,7 @@ class _JoinScreenState extends State<JoinScreen> {
         setState(
           () => _error = e.code == 'not_found'
               ? 'Link undangan ini sudah tidak berlaku. Minta link baru ke host.'
-              : groupErrorMessage(e),
+              : e.message,
         );
       }
     } finally {

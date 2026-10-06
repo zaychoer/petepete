@@ -4,8 +4,13 @@ import 'package:petepete/app/app.dart';
 import 'package:petepete/auth/token_store.dart';
 
 import '../../support/fake_api.dart';
+import '../../support/sample.dart';
 
 const _phone = '6281234567890';
+
+/// The text the server sends with error [code].
+String _serverMessage(String code) =>
+    Sample.error(code).json['message'] as String;
 // A user with no group lands on the onboarding screen.
 const _homeText = 'Bikin grup pertamamu';
 
@@ -122,10 +127,7 @@ void main() {
 
       await _enterCode(tester, '000000');
 
-      expect(
-        find.textContaining('Kode salah atau sudah kedaluwarsa'),
-        findsOneWidget,
-      );
+      expect(find.text(_serverMessage('invalid_code')), findsOneWidget);
       expect(find.text('Masukkan kode'), findsOneWidget);
 
       await _enterCode(tester, '123456');
@@ -140,7 +142,7 @@ void main() {
 
       await _requestCode(tester);
 
-      expect(find.textContaining('terlalu sering minta kode'), findsOneWidget);
+      expect(find.text(_serverMessage('rate_limited')), findsOneWidget);
       expect(find.text('Masuk ke Petepete'), findsOneWidget);
     });
 
@@ -174,10 +176,7 @@ void main() {
         await tester.pump();
         await tester.pump();
 
-        expect(
-          find.textContaining('terlalu sering minta kode'),
-          findsOneWidget,
-        );
+        expect(find.text(_serverMessage('rate_limited')), findsOneWidget);
         expect(find.text('Kode baru sudah dikirim.'), findsNothing);
       },
     );

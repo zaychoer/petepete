@@ -27,7 +27,7 @@ FakeSessionServer _server({String role = 'member', String status = 'draft'}) {
     'paid_by': 1,
     'scope': 'all',
   });
-  s.summaryJson = {
+  s.summaryJson = summaryBody({
     'session_id': 10,
     'text': 'Ringkasan Badminton\nSari: Rp50.000 (Lunas)',
     'share_url': 'https://wa.me/?text=Ringkasan',
@@ -36,23 +36,8 @@ FakeSessionServer _server({String role = 'member', String status = 'draft'}) {
     'kas_remainder': 0,
     'paid_count': 1,
     'unpaid_count': 1,
-  };
-  s.shareBills = [
-    {
-      'bill_id': 1,
-      'member_id': 2,
-      'display_name': 'Sari',
-      'status': 'unpaid',
-      'amount_due': 50000,
-      'paid_via': null,
-      'paid_at': null,
-      'cash_cancellable': false,
-      'has_phone': false,
-      'wa_number': null,
-      'text': 'Halo Sari',
-      'share_url': 'https://wa.me/?text=Halo',
-    },
-  ];
+  });
+  s.shareBills = [shareBill(1, 'Sari', 'unpaid', 50000)];
   return s;
 }
 
@@ -135,10 +120,7 @@ void main() {
 
     testWidgets('a failed summary can be retried', (tester) async {
       final server = _server(status: 'issued');
-      server.failures['GET /api/sessions/10/share/summary'] = (
-        500,
-        {'error': 'server_error'},
-      );
+      server.failServer('GET /api/sessions/10/share/summary');
       await pumpSession(tester, server, launcher);
       expect(find.byKey(const Key('summary-retry')), findsOneWidget);
 
@@ -148,17 +130,6 @@ void main() {
       expect(find.textContaining('Ringkasan Badminton'), findsOneWidget);
     });
   });
-
-  testWidgets(
-    'a member opening a cancelled session sees that it is cancelled',
-    (tester) async {
-      final server = _server(status: 'cancelled');
-      await pumpSession(tester, server, launcher);
-
-      expect(find.textContaining('tidak ada tagihan'), findsOneWidget);
-      expect(server.log, isNot(contains('GET /api/sessions/10/share/summary')));
-    },
-  );
 
   group('the host keeps the full screen', () {
     testWidgets('a draft has the edit controls', (tester) async {

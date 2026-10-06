@@ -175,10 +175,7 @@ class _NextSessionCard extends StatelessWidget {
                       style: textTheme.titleMedium,
                     ),
                   ),
-                  StatusChip.session(
-                    next.status,
-                    settled: next.progress == 'settled',
-                  ),
+                  StatusChip.session(next.progress, label: next.progressLabel),
                 ],
               ),
               const SizedBox(height: 8),
@@ -276,7 +273,7 @@ class _BillSection extends StatelessWidget {
                       style: textTheme.titleSmall,
                     ),
                     const SizedBox(height: 4),
-                    StatusChip.bill(bill.status),
+                    StatusChip.bill(bill.status, label: bill.statusLabel),
                   ],
                 ),
                 onTap: () => context.push(

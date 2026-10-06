@@ -10,6 +10,7 @@ class GroupSummary {
     required this.name,
     required this.template,
     required this.role,
+    required this.roleLabel,
   });
 
   factory GroupSummary.fromJson(Json json) => GroupSummary(
@@ -17,12 +18,16 @@ class GroupSummary {
     name: json['name'] as String,
     template: json['template'] as String?,
     role: json['role'] as String,
+    roleLabel: json['role_label'] as String,
   );
 
   final int id;
   final String name;
   final String? template;
   final String role;
+
+  /// The server's text for [role] ("Host", "Anggota").
+  final String roleLabel;
 }
 
 /// A roster entry: host, member or guest. Phone numbers are never read.
@@ -31,6 +36,7 @@ class RosterMember {
     required this.id,
     required this.name,
     required this.role,
+    required this.roleLabel,
     required this.hasAccount,
     this.pendingClaimName,
   });
@@ -41,6 +47,7 @@ class RosterMember {
       id: _int(json['id']),
       name: json['display_name'] as String,
       role: json['role'] as String,
+      roleLabel: json['role_label'] as String,
       hasAccount: json['has_account'] == true,
       pendingClaimName: claim is Map ? claim['display_name'] as String? : null,
     );
@@ -51,6 +58,9 @@ class RosterMember {
 
   /// `host`, `member` or `guest`.
   final String role;
+
+  /// The server's text for [role] ("Host", "Anggota", "Tamu").
+  final String roleLabel;
   final bool hasAccount;
 
   /// Name of the account asking to take over this entry, for the host to decide on.
@@ -107,6 +117,7 @@ class OpenBill {
   const OpenBill({
     required this.id,
     required this.status,
+    required this.statusLabel,
     required this.amountDue,
     required this.memberName,
     required this.sessionId,
@@ -117,6 +128,7 @@ class OpenBill {
   factory OpenBill.fromJson(Json json) => OpenBill(
     id: _int(json['id']),
     status: json['status'] as String,
+    statusLabel: json['status_label'] as String,
     amountDue: _int(json['amount_due']),
     memberName: json['member_name'] as String,
     sessionId: _int(json['session_id']),
@@ -126,6 +138,9 @@ class OpenBill {
 
   final int id;
   final String status;
+
+  /// The server's text for [status] ("Belum bayar").
+  final String statusLabel;
   final int amountDue;
   final String memberName;
   final int sessionId;
@@ -141,6 +156,7 @@ class NextSession {
     required this.startsAt,
     required this.status,
     required this.progress,
+    required this.progressLabel,
     required this.costTotal,
     required this.attendedCount,
   });
@@ -151,6 +167,7 @@ class NextSession {
     startsAt: json['starts_at'] as String,
     status: json['status'] as String,
     progress: json['progress'] as String,
+    progressLabel: json['status_label'] as String,
     costTotal: _int(json['cost_total']),
     attendedCount: _int(json['attended_count']),
   );
@@ -162,6 +179,9 @@ class NextSession {
 
   /// `draft`, `issued`, `settled` or `cancelled`; `settled` is the derived "Selesai".
   final String progress;
+
+  /// The server's text for [progress] (home sends it as `status_label`).
+  final String progressLabel;
   final int costTotal;
   final int attendedCount;
 }
@@ -215,24 +235,29 @@ class JoinResult {
 class PayoutAccountInfo {
   const PayoutAccountInfo({
     required this.status,
+    required this.statusLabel,
     this.bankName,
     this.accountLast4,
   });
 
   factory PayoutAccountInfo.fromJson(Json json) => PayoutAccountInfo(
     status: json['status'] as String,
+    statusLabel: json['status_label'] as String,
     bankName: json['bank_name'] as String?,
     accountLast4: json['account_last4'] as String?,
   );
 
   /// `pending_kyc` or `active`.
   final String status;
+
+  /// The server's text for [status] ("Aktif").
+  final String statusLabel;
   final String? bankName;
   final String? accountLast4;
 }
 
 /// Calls for groups, roster, events and the payout account. Every failure is an
-/// [ApiError]; screens show `error.message` (or [groupErrorMessage]).
+/// [ApiError]; screens show `error.message`.
 class GroupsApi {
   const GroupsApi(this._api);
 
@@ -310,9 +335,10 @@ class GroupsApi {
     }
   }
 
-  /// Registers the host's bank account; answers the account's first status. Retries
-  /// of the same registration pass the same [idempotencyKey].
-  Future<String> registerPayoutAccount(
+  /// Registers the host's bank account; answers the account as first registered
+  /// (status and its label). Retries of the same registration pass the same
+  /// [idempotencyKey].
+  Future<PayoutAccountInfo> registerPayoutAccount(
     int groupId, {
     required String idempotencyKey,
     required String bankName,
@@ -328,24 +354,14 @@ class GroupsApi {
       },
       idempotencyKey: idempotencyKey,
     );
-    return json['status'] as String;
+    return PayoutAccountInfo(
+      status: json['status'] as String,
+      statusLabel: json['status_label'] as String,
+      bankName: bankName,
+      accountLast4: accountNumber.substring(accountNumber.length - 4),
+    );
   }
 
   /// Deletes the caller's account (`DELETE /api/me`).
   Future<void> deleteAccount() => _api.delete('/api/me');
 }
-
-const _groupMessages = <String, String>{
-  'claim_pending':
-      'Sudah ada yang mengajukan klaim untuk nama ini. Tunggu host memutuskan dulu.',
-  'not_claimable': 'Nama ini sudah dipakai oleh akun lain.',
-  'already_member': 'Kamu sudah jadi anggota grup ini.',
-  'no_claim': 'Klaim ini sudah diputuskan. Muat ulang daftarnya.',
-  'invalid_event': 'Data event belum benar. Cek lagi ya.',
-  'no_payout_account': 'Grup belum punya rekening pencairan.',
-};
-
-/// Indonesian text for [error], with the group-specific codes the shell's table does
-/// not know. `invalid` errors on a field explain themselves in [ApiError.details].
-String groupErrorMessage(ApiError error) =>
-    _groupMessages[error.code] ?? error.message;
