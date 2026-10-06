@@ -338,6 +338,89 @@ defmodule Petepete.Billing do
   """
   defdelegate issue(session_id, opts), to: Petepete.Billing.Invoicing
 
+  ## Batalkan tagihan, cash and gateway payments
+
+  @doc """
+  Batalkan tagihan: takes an issued or settled session back to draft, in one transaction
+  (locks: session, its bills by id, then the Ledger). Posts `SessionBillsCancelled` against
+  the session's issue txn, makes every non-void bill `void` (money already paid stays in
+  the ledger as the member's credit), marks the bills' pending payment attempts
+  `cancelled`, reverts the session and writes the `session.void_issue` audit row.
+
+  Options (all required): `actor: {:host, user_id}`, `idempotency_key: String.t()` and
+  `reason: String.t()` (non-blank). The same key again returns the original txn with
+  `replayed: true` and changes nothing. Issuing again takes a new key and consumes the
+  credit like any other. See `Petepete.Billing.Voiding`.
+
+  Returns `{:ok, %{session: session, txn: txn, voided_bill_ids: [id], cancelled_attempt_ids:
+  [id], replayed: boolean}}`. The ids of the cancelled attempts are for the payment side to
+  drop at the gateway (`Petepete.Payments.CancelAttemptsJob` does not exist yet).
+  Errors: `:idempotency_key_required`, `:not_found`, `%TransitionError{}` (session is not
+  issued), `:reason_required`, `:idempotency_key_conflict`; any error rolls everything back.
+  """
+  @spec void_issue(pos_integer(), keyword()) ::
+          {:ok,
+           %{
+             session: %Session{},
+             txn: struct(),
+             voided_bill_ids: [pos_integer()],
+             cancelled_attempt_ids: [pos_integer()],
+             replayed: boolean()
+           }}
+          | {:error, term()}
+  defdelegate void_issue(session_id, opts), to: Petepete.Billing.Voiding
+
+  @doc """
+  Tandai lunas: the host takes an `unpaid` or `needs_review` bill's `amount_due` in cash.
+  Posts `CashReceived` (recipient: the acting host; `at` shared with `bills.paid_at`), moves
+  the bill to `paid` with `paid_via` cash and writes the `bill.mark_paid_cash` audit row,
+  all in one transaction that locks only the bill. The session's Selesai follows from the
+  bills.
+
+  Options (required): `actor: {:host, user_id}`, `idempotency_key: String.t()`. A repeated
+  key returns the original txn with `replayed: true`.
+
+  Returns `{:ok, %{bill: bill, txn: txn, replayed: boolean}}` or `{:error, reason}`:
+  `:idempotency_key_required`, `:not_found`, `%TransitionError{}` (bill is paid or void),
+  the Ledger's errors.
+  """
+  @spec mark_paid_cash(pos_integer(), keyword()) ::
+          {:ok, %{bill: %Bill{}, txn: struct(), replayed: boolean()}} | {:error, term()}
+  defdelegate mark_paid_cash(bill_id, opts), to: Petepete.Billing.CashPayments
+
+  @doc """
+  Batal cash: undoes `mark_paid_cash/2` within 24 hours of its time. Posts
+  `CashPaymentCancelled` (`at` = now; the Ledger rejects it with `:undo_window_expired`
+  after 24 hours), returns the bill from `paid` to `unpaid` with its paid fields cleared and
+  writes the `bill.cancel_cash` audit row.
+
+  Options (required): `actor: {:host, user_id}`, `idempotency_key: String.t()`,
+  `reason: String.t()`. A repeated key returns the original txn with `replayed: true`.
+
+  Returns `{:ok, %{bill: bill, txn: txn, replayed: boolean}}` or `{:error, reason}`:
+  `:idempotency_key_required`, `:not_found`, `%TransitionError{}` (bill is not paid),
+  `:not_cash_payment` (paid by gateway or credit), `:reason_required`, `:undo_window_expired`.
+  """
+  @spec cancel_cash(pos_integer(), keyword()) ::
+          {:ok, %{bill: %Bill{}, txn: struct(), replayed: boolean()}} | {:error, term()}
+  defdelegate cancel_cash(bill_id, opts), to: Petepete.Billing.CashPayments
+
+  @doc """
+  Webhook hand-off (spec "Alur webhook" step 6): decides what a paid gateway notification
+  means for the bill and posts to the Ledger. Call it inside the webhook transaction with
+  the bill locked.
+
+  `params`: `paid_amount` (integer), `matches_expected` (whether it equals the attempt's
+  `gross_amount`), `idempotency_key` (goes to the Ledger) and `attempt_id` (whose
+  `paid_amount` is stored). Returns `{:ok, :paid}` (unpaid bill, amount matches: ledger post,
+  bill paid via gateway), `{:ok, :needs_review}` (amount differs: bill needs_review, nothing
+  posted) or `{:ok, :overpaid}` (bill already paid or void: the payment is posted as credit).
+  See `Petepete.Billing.GatewayPayments` for the edge rules and replays.
+  """
+  @spec apply_gateway_payment(pos_integer(), Petepete.Billing.GatewayPayments.params()) ::
+          {:ok, :paid | :needs_review | :overpaid} | {:error, term()}
+  defdelegate apply_gateway_payment(bill_id, params), to: Petepete.Billing.GatewayPayments
+
   ## Reads for the group home
 
   @doc """

@@ -6,14 +6,18 @@ defmodule PetepeteWeb.SessionBillingController do
   total billed vs total cost, credit used and the kas remainder ("Masuk kas").
   `POST /api/sessions/:id/issue` needs an `Idempotency-Key` header and returns the bills
   and `txn_id`; a repeated key returns the same bills with `replayed: true`.
+  `POST /api/sessions/:id/void` (Batalkan tagihan, body `reason`, `Idempotency-Key` header)
+  calls `Billing.void_issue/2` and returns the reversing `txn_id` (201, or 200 with
+  `replayed: true` for a repeat), the `voided_bill_ids` and `cancelled_attempt_ids`.
   """
   use PetepeteWeb, :controller
 
   alias Petepete.Billing
   alias Petepete.Billing.TransitionError
-  alias PetepeteWeb.FallbackController
+  alias PetepeteWeb.{BillingError, FallbackController, LedgerError}
 
   plug PetepeteWeb.Plugs.SessionAccess, role: :host
+  plug PetepeteWeb.Plugs.IdempotencyKey when action == :void
 
   def preview(conn, _params) do
     case Billing.preview(conn.assigns.session_id) do
@@ -41,6 +45,32 @@ defmodule PetepeteWeb.SessionBillingController do
         error(conn, reason)
     end
   end
+
+  def void(conn, %{"reason" => reason}) when is_binary(reason) do
+    opts = [
+      actor: {:host, conn.assigns.current_scope.user.id},
+      idempotency_key: conn.assigns.idempotency_key,
+      reason: reason
+    ]
+
+    case Billing.void_issue(conn.assigns.session_id, opts) do
+      {:ok, result} ->
+        conn
+        |> put_status(if result.replayed, do: 200, else: 201)
+        |> json(%{
+          txn_id: result.txn.id,
+          replayed: result.replayed,
+          session_id: result.session.id,
+          voided_bill_ids: result.voided_bill_ids,
+          cancelled_attempt_ids: result.cancelled_attempt_ids
+        })
+
+      {:error, reason} ->
+        BillingError.render(conn, reason)
+    end
+  end
+
+  def void(conn, _params), do: LedgerError.render(conn, :reason_required)
 
   defp encodable(preview) do
     Map.update!(preview, :fronted, fn fronted ->

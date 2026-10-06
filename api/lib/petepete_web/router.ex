@@ -58,6 +58,10 @@ defmodule PetepeteWeb.Router do
     put "/sessions/:id/attendance", SessionController, :put_attendance
     get "/sessions/:id/preview", SessionBillingController, :preview
     post "/sessions/:id/issue", SessionBillingController, :issue
+    post "/sessions/:id/void", SessionBillingController, :void
+
+    post "/bills/:id/cash", BillController, :cash
+    post "/bills/:id/cash/cancel", BillController, :cancel_cash
 
     get "/me", MeController, :show
     patch "/me", MeController, :update
