@@ -9,14 +9,14 @@ import 'async_body.dart';
 import 'groups_api.dart';
 
 /// The status of a payout account as a chip with text (never colour alone).
-StatusChip payoutStatusChip(String status) => switch (status) {
-  'active' => const StatusChip(label: 'Aktif', tone: StatusTone.success),
-  'pending_kyc' => const StatusChip(
-    label: 'Menunggu verifikasi (KYC)',
-    tone: StatusTone.warning,
-  ),
-  _ => StatusChip(label: status, tone: StatusTone.neutral),
-};
+StatusChip payoutStatusChip(PayoutAccountInfo info) => StatusChip(
+  label: info.statusLabel,
+  tone: switch (info.status) {
+    'active' => StatusTone.success,
+    'pending_kyc' => StatusTone.warning,
+    _ => StatusTone.neutral,
+  },
+);
 
 String _statusHint(String status) => switch (status) {
   'active' => 'Rekeningmu sudah aktif. Uang patungan bisa dicairkan ke sini.',
@@ -82,7 +82,7 @@ class _StatusView extends StatelessWidget {
               children: [
                 Text('Status', style: textTheme.titleMedium),
                 const SizedBox(height: 8),
-                payoutStatusChip(info.status),
+                payoutStatusChip(info),
                 const SizedBox(height: 12),
                 if (info.bankName != null)
                   Text(
@@ -153,22 +153,16 @@ class _RegisterFormState extends State<_RegisterForm> {
     setState(() => _busy = true);
     final key = _key ??= newIdempotencyKey();
     try {
-      final status = await widget.api.registerPayoutAccount(
+      final registered = await widget.api.registerPayoutAccount(
         widget.groupId,
         idempotencyKey: key,
         bankName: _bank.text.trim(),
         accountNumber: _digits,
         accountHolderName: _holder.text.trim(),
       );
-      widget.onRegistered(
-        PayoutAccountInfo(
-          status: status,
-          bankName: _bank.text.trim(),
-          accountLast4: _digits.substring(_digits.length - 4),
-        ),
-      );
+      widget.onRegistered(registered);
     } on ApiError catch (e) {
-      if (mounted) setState(() => _apiError = groupErrorMessage(e));
+      if (mounted) setState(() => _apiError = e.message);
     } finally {
       if (mounted) setState(() => _busy = false);
     }

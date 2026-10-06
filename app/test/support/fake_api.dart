@@ -6,11 +6,14 @@ import 'package:petepete/api/api_client.dart';
 import 'package:petepete/auth/auth_controller.dart';
 import 'package:petepete/auth/token_store.dart';
 
+import 'sample.dart';
+
 /// An in-memory stand-in for the Petepete API's auth and `/api/me` endpoints, run
 /// behind a `MockClient` so the real [ApiClient] and screens are exercised.
 ///
-/// Mirrors the real contract: `{"error": code}` bodies, 401 `unauthenticated` on a
-/// bad bearer token, rotating refresh tokens.
+/// Every body is a recorded contract sample (ADR-0004) with this fake's state patched
+/// in; the fake keeps only the behavior: 401 `unauthenticated` on a bad bearer token,
+/// rotating refresh tokens, accounts by phone.
 class FakeApi {
   FakeApi() {
     client = MockClient(_handle);
@@ -89,18 +92,16 @@ class FakeApi {
           return _error(422, 'invalid_phone');
         }
         otpRequests.add(phone);
-        return _json({'ok': true});
+        return _sample('auth_otp.ok');
       case 'POST /api/auth/verify':
         final phone = body['phone'] as String;
         if (body['code'] != validCode) return _error(401, 'invalid_code');
         final newUser = !accounts.containsKey(phone);
         accounts.putIfAbsent(phone, () => {'id': ++_seq, 'display_name': ''});
         final tokens = _issue(phone);
-        return _json({
+        return _sample('auth_verify.ok', {
           'access_token': tokens.accessToken,
           'refresh_token': tokens.refreshToken,
-          'token_type': 'Bearer',
-          'expires_in': 900,
           'new_user': newUser,
           'user': _user(phone),
         });
@@ -109,34 +110,34 @@ class FakeApi {
         final phone = _refresh.remove(body['refresh_token']);
         if (phone == null) return _error(401, 'invalid_token');
         final tokens = _issue(phone);
-        return _json({
+        return _sample('auth_refresh.ok', {
           'access_token': tokens.accessToken,
           'refresh_token': tokens.refreshToken,
-          'token_type': 'Bearer',
-          'expires_in': 900,
         });
       case 'POST /api/auth/logout':
         _refresh.remove(body['refresh_token']);
-        return _json({'ok': true});
+        return _sample('auth_logout.ok');
     }
 
     final phone = _access[_bearer(request)];
     if (phone == null) return _error(401, 'unauthenticated');
     switch (route) {
       case 'GET /api/me':
-        return _json({..._user(phone), 'phone': phone});
+        return _sample('me.show', {..._user(phone), 'phone': phone});
       case 'PATCH /api/me':
         final name = (body['display_name'] as String? ?? '').trim();
         if (name.isEmpty || name.length > 50) {
           return _error(422, 'invalid_display_name');
         }
         accounts[phone]!['display_name'] = name;
-        return _json({..._user(phone), 'phone': phone});
+        return _sample('me.updated', {..._user(phone), 'phone': phone});
       case 'GET /api/groups':
-        return _json({'groups': <Object>[]});
+        return _json(
+          Sample.load('group_list.groups').withItems('groups', []).body!,
+        );
       case 'POST /api/groups/1/kas-spends':
         moneyKeys.add(request.headers['idempotency-key']);
-        return _json({'ok': true});
+        return _sample('kas_spend.recorded');
     }
     return _error(404, 'not_found');
   }
@@ -159,8 +160,13 @@ class FakeApi {
     headers: {'content-type': 'application/json'},
   );
 
+  /// The recorded sample [name] with [overrides] applied (type-checked).
+  http.Response _sample(String name, [Map<String, dynamic>? overrides]) =>
+      _json(Sample.load(name).patch(overrides ?? {}).body!);
+
+  /// The recorded error body for [code], with the server's own `message`.
   http.Response _error(int status, String code) =>
-      _json({'error': code}, status);
+      _json(Sample.error(code).body!, status);
 }
 
 /// Wires the real client and controller to [fake] and [tokens].
