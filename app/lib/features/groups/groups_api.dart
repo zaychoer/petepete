@@ -310,9 +310,11 @@ class GroupsApi {
     }
   }
 
-  /// Registers the host's bank account; answers the account's first status.
+  /// Registers the host's bank account; answers the account's first status. Retries
+  /// of the same registration pass the same [idempotencyKey].
   Future<String> registerPayoutAccount(
     int groupId, {
+    required String idempotencyKey,
     required String bankName,
     required String accountNumber,
     required String accountHolderName,
@@ -324,6 +326,7 @@ class GroupsApi {
         'account_number': accountNumber,
         'account_holder_name': accountHolderName,
       },
+      idempotencyKey: idempotencyKey,
     );
     return json['status'] as String;
   }

@@ -53,6 +53,27 @@ void main() {
     expect(find.textContaining('1234'), findsNothing);
   });
 
+  testWidgets('a retry after a failure reuses the Idempotency-Key', (
+    tester,
+  ) async {
+    final fake = _fake()..registerFailsOnce = true;
+    final app = AppHarness(fake);
+    await app.pump(tester, app.screenRouter(_route));
+
+    await _fill(tester);
+    await tester.tap(find.text('Daftarkan rekening'));
+    await tester.pumpAndSettle();
+    expect(find.text('Menunggu verifikasi (KYC)'), findsNothing);
+
+    await tester.tap(find.text('Daftarkan rekening'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Menunggu verifikasi (KYC)'), findsOneWidget);
+    expect(fake.payoutKeys, hasLength(2));
+    expect(fake.payoutKeys.first, isNotNull);
+    expect(fake.payoutKeys.last, fake.payoutKeys.first);
+  });
+
   testWidgets('an active status reads Aktif', (tester) async {
     final fake = _fake()..registeredStatus = 'active';
     final app = AppHarness(fake);

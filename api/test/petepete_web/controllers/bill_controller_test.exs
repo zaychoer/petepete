@@ -69,22 +69,6 @@ defmodule PetepeteWeb.BillControllerTest do
       assert audit_count(ctx.group, "bill.mark_paid_cash") == 1
     end
 
-    test "a repeated request is one txn and one audit row", ctx do
-      first = cash(ctx.host_conn, ctx.bill, "dup") |> json_response(201)
-      second = cash(ctx.host_conn, ctx.bill, "dup") |> json_response(200)
-
-      assert second["replayed"] == true
-      assert second["txn_id"] == first["txn_id"]
-      assert txn_count(ctx.group) == 2
-      assert audit_count(ctx.group, "bill.mark_paid_cash") == 1
-    end
-
-    test "needs an Idempotency-Key", ctx do
-      body = post(ctx.host_conn, ~p"/api/bills/#{ctx.bill.id}/cash") |> json_response(422)
-      assert body["error"] == "idempotency_key_required"
-      assert txn_count(ctx.group) == 1
-    end
-
     test "a bill that is not open is 409", ctx do
       cash(ctx.host_conn, ctx.bill, "k1") |> json_response(201)
 

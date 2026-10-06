@@ -10,6 +10,7 @@ defmodule Petepete.Groups.PayoutAccount do
     field :status, :string, default: "pending_kyc"
     field :bank_name, :string
     field :account_last4, :string
+    field :idempotency_key, :string
 
     timestamps(type: :utc_datetime)
   end

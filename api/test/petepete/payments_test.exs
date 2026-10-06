@@ -51,7 +51,7 @@ defmodule Petepete.PaymentsTest do
     end
   end
 
-  describe "register_payout_account/3" do
+  describe "register_payout_account/4" do
     setup do
       group = group_fixture()
       {_user, host} = host_fixture(group)
@@ -63,8 +63,8 @@ defmodule Petepete.PaymentsTest do
       host: h,
       actor: actor
     } do
-      assert {:ok, %PayoutAccount{} = account} =
-               Payments.register_payout_account(actor, g.id, @bank)
+      assert {:ok, %{payout_account: %PayoutAccount{} = account, replayed: false}} =
+               Payments.register_payout_account(actor, g.id, "k1", @bank)
 
       assert account.group_id == g.id
       assert account.owner_member_id == h.id
@@ -81,8 +81,29 @@ defmodule Petepete.PaymentsTest do
       assert id == account.id and user_id == actor.user_id
     end
 
+    test "a repeated key returns the first account without a gateway call or audit row", %{
+      group: g,
+      actor: actor
+    } do
+      put_fake!(:notify, self())
+
+      {:ok, %{payout_account: first, replayed: false}} =
+        Payments.register_payout_account(actor, g.id, "same", @bank)
+
+      assert_received {:fake_gateway, :register_payout_account, _}
+
+      assert {:ok, %{payout_account: again, replayed: true}} =
+               Payments.register_payout_account(actor, g.id, "same", @bank)
+
+      assert again.id == first.id
+      refute_received {:fake_gateway, :register_payout_account, _}
+      assert Repo.aggregate(PayoutAccount, :count) == 1
+      assert Repo.aggregate(AuditLog, :count) == 1
+    end
+
     test "becomes active once the gateway reports KYC done", %{group: g, actor: actor} do
-      {:ok, account} = Payments.register_payout_account(actor, g.id, @bank)
+      {:ok, %{payout_account: account}} =
+        Payments.register_payout_account(actor, g.id, "k1", @bank)
 
       assert {:ok, %{status: "active"}} = Payments.refresh_payout_account(account)
       assert Repo.get!(PayoutAccount, account.id).status == "active"
@@ -90,7 +111,9 @@ defmodule Petepete.PaymentsTest do
 
     test "stays pending_kyc while the gateway says so", %{group: g, actor: actor} do
       put_fake!(:kyc_status, :pending_kyc)
-      {:ok, account} = Payments.register_payout_account(actor, g.id, @bank)
+
+      {:ok, %{payout_account: account}} =
+        Payments.register_payout_account(actor, g.id, "k1", @bank)
 
       assert {:ok, %{status: "pending_kyc"}} = Payments.refresh_payout_account(account)
     end
@@ -98,7 +121,8 @@ defmodule Petepete.PaymentsTest do
     test "is active immediately when the gateway needs no KYC", %{group: g, actor: actor} do
       put_fake!(:register_status, :active)
 
-      assert {:ok, %{status: "active"}} = Payments.register_payout_account(actor, g.id, @bank)
+      assert {:ok, %{payout_account: %{status: "active"}}} =
+               Payments.register_payout_account(actor, g.id, "k1", @bank)
     end
 
     test "rejects incomplete or malformed bank details and creates nothing", %{
@@ -106,7 +130,7 @@ defmodule Petepete.PaymentsTest do
       actor: actor
     } do
       assert {:error, changeset} =
-               Payments.register_payout_account(actor, g.id, %{
+               Payments.register_payout_account(actor, g.id, "k1", %{
                  bank_name: "BCA",
                  account_number: "12ab"
                })
@@ -154,7 +178,9 @@ defmodule Petepete.PaymentsTest do
       assert {:ok, 450} = Payments.fee_for("qris", 45_000)
       assert {:error, :unsupported_method} = Payments.fee_for("va", 45_000)
 
-      assert {:ok, account} = Payments.register_payout_account(actor, group.id, @bank)
+      assert {:ok, %{payout_account: account}} =
+               Payments.register_payout_account(actor, group.id, "k1", @bank)
+
       assert %{provider: "other", provider_account_id: id, status: "active"} = account
       assert id == "other-#{host.id}"
     end
@@ -166,7 +192,7 @@ defmodule Petepete.PaymentsTest do
       {_user, host} = host_fixture(group)
 
       assert {:error, :provider_down} =
-               Payments.register_payout_account(host_actor(group, host), group.id, @bank)
+               Payments.register_payout_account(host_actor(group, host), group.id, "k1", @bank)
 
       assert Repo.aggregate(PayoutAccount, :count) == 0
       assert Repo.aggregate(AuditLog, :count) == 0
