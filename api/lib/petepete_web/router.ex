@@ -24,6 +24,14 @@ defmodule PetepeteWeb.Router do
     post "/auth/logout", AuthController, :logout
   end
 
+  # The pay link: the bill's `pay_token` is the credential, no login.
+  scope "/api", PetepeteWeb do
+    pipe_through :api
+
+    get "/pay/:token", PayController, :show
+    post "/pay/:token/payment", PayController, :create_payment
+  end
+
   scope "/api", PetepeteWeb do
     pipe_through [:api, :optionally_authenticated]
 
@@ -46,6 +54,9 @@ defmodule PetepeteWeb.Router do
     post "/members/:id/claim/reject", MemberController, :reject
 
     post "/groups/:group_id/payout-account", PayoutAccountController, :create
+    get "/groups/:group_id/payout-account/balance", WithdrawalController, :balance
+    get "/groups/:group_id/withdrawals", WithdrawalController, :index
+    post "/groups/:group_id/withdrawals", WithdrawalController, :create
     post "/groups/:group_id/settlements", LedgerController, :settlement
     post "/groups/:group_id/kas-spends", LedgerController, :kas_spend
     get "/groups/:group_id/balances", LedgerController, :balances

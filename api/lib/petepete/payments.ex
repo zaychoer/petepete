@@ -5,6 +5,9 @@ defmodule Petepete.Payments do
   Schemas: `Petepete.Payments.PaymentAttempt` (`payment_attempts`),
   `Petepete.Payments.GatewayNotification` (`gateway_notifications`). The group's
   `Petepete.Groups.PayoutAccount` is written here because creating it is a gateway call.
+  `Petepete.Payments.Withdrawal` (`withdrawals`) records PAY-07 withdrawals; the unauthenticated
+  pay link is `Petepete.Payments.PayLink`; `Petepete.Payments.CancelAttemptsJob` cancels
+  voided attempts at the gateway.
 
   Everything provider-shaped goes through the adapter behind
   `Petepete.Payments.Gateway`, chosen by `config :petepete, :gateway`.
@@ -89,4 +92,18 @@ defmodule Petepete.Payments do
       account |> change(status: Atom.to_string(status)) |> Repo.update()
     end
   end
+
+  ## Pay link (unauthenticated, addressed by `bills.pay_token`); see `Petepete.Payments.PayLink`
+
+  defdelegate pay_page(token), to: Petepete.Payments.PayLink, as: :show
+  defdelegate start_payment(token, method), to: Petepete.Payments.PayLink
+
+  ## Withdrawals (PAY-07); see `Petepete.Payments.Withdrawals`
+
+  defdelegate payout_account_balance(group_id), to: Petepete.Payments.Withdrawals, as: :balance
+
+  defdelegate withdraw(group_id, member, actor_user_id, idempotency_key, amount),
+    to: Petepete.Payments.Withdrawals
+
+  defdelegate list_withdrawals(group_id), to: Petepete.Payments.Withdrawals, as: :list
 end

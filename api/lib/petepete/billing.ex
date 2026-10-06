@@ -416,6 +416,20 @@ defmodule Petepete.Billing do
     )
   end
 
+  ## Pay link (unauthenticated; the `pay_token` is the credential)
+
+  @doc "The bill addressed by `pay_token`, or `nil` (unknown token). Reads only, no lock."
+  @spec bill_by_token(term()) :: Bill.t() | nil
+  defdelegate bill_by_token(pay_token), to: Petepete.Billing.PayPage
+
+  @doc """
+  The pay page content of `bill`: `:group_name`, `:event_name`, `:session_starts_at`, the
+  per-item `:lines` of its share and the `:rounding` that completes them to `bill.share`.
+  Lines are recomputed from the session's stored inputs; see `Petepete.Billing.PayPage`.
+  """
+  @spec pay_page(Bill.t()) :: Petepete.Billing.PayPage.t()
+  defdelegate pay_page(bill), to: Petepete.Billing.PayPage, as: :for_bill
+
   ## Locks (call inside the caller's transaction, session first)
 
   defdelegate lock_session(session_id), to: Locks
