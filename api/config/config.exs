@@ -11,6 +11,11 @@ config :petepete,
   ecto_repos: [Petepete.Repo],
   generators: [timestamp_type: :utc_datetime]
 
+config :petepete, Oban,
+  engine: Oban.Engines.Basic,
+  repo: Petepete.Repo,
+  queues: [default: 10, payments: 10, notifications: 10]
+
 # Configure the endpoint
 config :petepete, PetepeteWeb.Endpoint,
   url: [host: "localhost"],
@@ -19,8 +24,7 @@ config :petepete, PetepeteWeb.Endpoint,
     formats: [json: PetepeteWeb.ErrorJSON],
     layout: false
   ],
-  pubsub_server: Petepete.PubSub,
-  live_view: [signing_salt: "ZQyN0U8m"]
+  pubsub_server: Petepete.PubSub
 
 # Configure Elixir's Logger
 config :logger, :default_formatter,

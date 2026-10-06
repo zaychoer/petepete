@@ -6,7 +6,6 @@ defmodule PetepeteWeb do
   This can be used in your application as:
 
       use PetepeteWeb, :controller
-      use PetepeteWeb, :html
 
   The definitions below will be executed for every controller,
   component, etc, so keep them short and clean, focused
@@ -16,8 +15,6 @@ defmodule PetepeteWeb do
   below. Instead, define additional modules and import
   those modules here.
   """
-
-  def static_paths, do: ~w(assets fonts images favicon.ico robots.txt)
 
   def router do
     quote do
@@ -37,7 +34,7 @@ defmodule PetepeteWeb do
 
   def controller do
     quote do
-      use Phoenix.Controller, formats: [:html, :json]
+      use Phoenix.Controller, formats: [:json]
 
       import Plug.Conn
 
@@ -49,13 +46,12 @@ defmodule PetepeteWeb do
     quote do
       use Phoenix.VerifiedRoutes,
         endpoint: PetepeteWeb.Endpoint,
-        router: PetepeteWeb.Router,
-        statics: PetepeteWeb.static_paths()
+        router: PetepeteWeb.Router
     end
   end
 
   @doc """
-  When used, dispatch to the appropriate controller/live_view/etc.
+  When used, dispatch to the appropriate controller/etc.
   """
   defmacro __using__(which) when is_atom(which) do
     apply(__MODULE__, which, [])
