@@ -14,6 +14,8 @@ defmodule PetepeteWeb.LedgerError do
     invalid_params: "Data yang dikirim belum lengkap atau salah format.",
     invalid_actor: "Pelaku tidak diizinkan untuk aksi ini.",
     amount_not_positive: "Nominal harus lebih dari Rp0.",
+    insufficient_balance: "Saldo sub-account tidak cukup untuk penarikan ini.",
+    payout_account_not_active: "Rekening pencairan belum aktif. Selesaikan verifikasi dulu.",
     group_not_found: "Grup tidak ditemukan.",
     member_not_in_group: "Anggota itu bukan bagian dari grup ini.",
     same_member: "Pembayar dan penerima tidak boleh orang yang sama.",

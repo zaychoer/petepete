@@ -158,8 +158,12 @@ defmodule Petepete.Billing.Invoicing do
     end
   end
 
-  # Attendance, weights and cost items of `session`, in the shape `Calculation` takes.
-  defp load_input(%Session{id: session_id, group_id: group_id}) do
+  @doc """
+  Attendance, weights and cost items of `session` in the shape `Calculation.shares/1`
+  takes. Also used by `Petepete.Billing.PayPage` to rebuild a bill's lines.
+  """
+  @spec load_input(%Session{}) :: map()
+  def load_input(%Session{id: session_id, group_id: group_id}) do
     participants =
       Repo.all(
         from p in Participant,
