@@ -1,10 +1,51 @@
 {
-  "errors": [],
+  "errors": [
+    "invalid_session",
+    "invalid_transition",
+    "not_cash_payment",
+    "session_not_editable",
+    "session_not_issued"
+  ],
   "routes": {
     "GET /api/pay/:token": [
       "pay_page.paid",
       "pay_page.unpaid",
       "pay_page.void"
+    ],
+    "GET /api/sessions/:id": [
+      "session.draft",
+      "session.issued",
+      "session.settled"
+    ],
+    "GET /api/sessions/:id/preview": [
+      "preview.ok"
+    ],
+    "GET /api/sessions/:id/share/bills": [
+      "share_bills.issued"
+    ],
+    "GET /api/sessions/:id/share/reminder": [
+      "share_reminder.owing"
+    ],
+    "GET /api/sessions/:id/share/summary": [
+      "share_summary.issued"
+    ],
+    "POST /api/bills/:id/cash": [
+      "bill_cash.paid"
+    ],
+    "POST /api/bills/:id/cash/cancel": [
+      "bill_cash.cancelled"
+    ],
+    "POST /api/sessions/:id/issue": [
+      "issue.issued"
+    ],
+    "POST /api/sessions/:id/void": [
+      "void.voided"
+    ],
+    "PUT /api/sessions/:id/attendance": [
+      "participant.saved"
+    ],
+    "PUT /api/sessions/:id/costs/:cid": [
+      "cost_item.saved"
     ]
   }
 }

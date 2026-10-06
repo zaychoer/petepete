@@ -1,0 +1,12 @@
+{
+  "cancelled_attempt_ids": [
+    1
+  ],
+  "replayed": false,
+  "session_id": 2,
+  "txn_id": 4,
+  "voided_bill_ids": [
+    3,
+    4
+  ]
+}

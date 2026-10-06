@@ -1,0 +1,4 @@
+{
+  "error": "not_cash_payment",
+  "message": "Tagihan ini tidak dibayar cash, jadi tidak bisa dibatalkan di sini."
+}

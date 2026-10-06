@@ -11,7 +11,7 @@ defmodule PetepeteWeb.BillController do
   use PetepeteWeb, :controller
 
   alias Petepete.Billing
-  alias PetepeteWeb.{BillingError, LedgerError}
+  alias PetepeteWeb.{BillingError, Labels, LedgerError}
   alias PetepeteWeb.Plugs.{BillAccess, IdempotencyKey}
 
   plug BillAccess, role: :host
@@ -43,7 +43,9 @@ defmodule PetepeteWeb.BillController do
       bill: %{
         id: bill.id,
         status: bill.status,
+        status_label: Labels.bill(bill.status),
         paid_via: bill.paid_via,
+        paid_via_label: Labels.paid_via(bill.paid_via),
         paid_at: bill.paid_at,
         amount_due: bill.amount_due
       }

@@ -1,0 +1,38 @@
+{
+  "cost_items": [
+    {
+      "amount": 50000,
+      "bearer_ids": [
+        27
+      ],
+      "category": "lapangan",
+      "id": 14,
+      "label": null,
+      "members": [],
+      "paid_by": 26,
+      "paid_by_name": "Member 8582",
+      "scope": "all",
+      "session_id": 9
+    }
+  ],
+  "participants": [
+    {
+      "attended": true,
+      "display_name": "Member 8646",
+      "member_id": 27,
+      "role": "member",
+      "role_label": "Anggota",
+      "weight": 1000
+    }
+  ],
+  "session": {
+    "event_id": 9,
+    "group_id": 13,
+    "id": 9,
+    "progress": "issued",
+    "progress_label": "Ditagih",
+    "starts_at": "2026-10-08T12:00:00Z",
+    "status": "issued",
+    "status_label": "Ditagih"
+  }
+}

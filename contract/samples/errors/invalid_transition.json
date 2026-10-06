@@ -1,0 +1,7 @@
+{
+  "entity": "bill",
+  "error": "invalid_transition",
+  "message": "Status tagihan ini tidak bisa diubah dengan aksi itu.",
+  "status": "paid",
+  "status_label": "Lunas"
+}

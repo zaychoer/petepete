@@ -1,0 +1,117 @@
+{
+  "credit_used": 34000,
+  "fronted": [
+    {
+      "amount": 100000,
+      "member_id": 12
+    }
+  ],
+  "items": [
+    {
+      "amount": 100000,
+      "bearer_ids": [
+        12,
+        14,
+        15
+      ],
+      "category": "lapangan",
+      "id": 4,
+      "label": null,
+      "paid_by_member_id": 12,
+      "scope": "all",
+      "total_weight": 3000
+    }
+  ],
+  "kas_remainder": 2000,
+  "members": [
+    {
+      "amount_due": 0,
+      "credit_applied": 34000,
+      "credit_available": 100000,
+      "credit_balance": 0,
+      "display_name": "Member 6631",
+      "fronted": 100000,
+      "lines": [
+        {
+          "amount": 33333,
+          "category": "lapangan",
+          "cost_item_id": 4,
+          "fraction": {
+            "denominator": 3,
+            "numerator": 100000
+          },
+          "label": null
+        }
+      ],
+      "member_id": 12,
+      "raw_share": {
+        "denominator": 3,
+        "numerator": 100000
+      },
+      "rounding": 667,
+      "share": 34000,
+      "weight": 1000
+    },
+    {
+      "amount_due": 34000,
+      "credit_applied": 0,
+      "credit_available": 0,
+      "credit_balance": 0,
+      "display_name": "Member 6695",
+      "fronted": 0,
+      "lines": [
+        {
+          "amount": 33333,
+          "category": "lapangan",
+          "cost_item_id": 4,
+          "fraction": {
+            "denominator": 3,
+            "numerator": 100000
+          },
+          "label": null
+        }
+      ],
+      "member_id": 14,
+      "raw_share": {
+        "denominator": 3,
+        "numerator": 100000
+      },
+      "rounding": 667,
+      "share": 34000,
+      "weight": 1000
+    },
+    {
+      "amount_due": 34000,
+      "credit_applied": 0,
+      "credit_available": 0,
+      "credit_balance": 0,
+      "display_name": "Member 6791",
+      "fronted": 0,
+      "lines": [
+        {
+          "amount": 33333,
+          "category": "lapangan",
+          "cost_item_id": 4,
+          "fraction": {
+            "denominator": 3,
+            "numerator": 100000
+          },
+          "label": null
+        }
+      ],
+      "member_id": 15,
+      "raw_share": {
+        "denominator": 3,
+        "numerator": 100000
+      },
+      "rounding": 667,
+      "share": 34000,
+      "weight": 1000
+    }
+  ],
+  "rounding_unit": 1000,
+  "session_id": 5,
+  "total_billed": 102000,
+  "total_cost": 100000,
+  "total_due": 68000
+}

@@ -1,0 +1,10 @@
+{
+  "error": "invalid_session",
+  "message": "Sesi ini belum bisa ditagih. Cek lagi data sesinya.",
+  "problems": [
+    {
+      "code": "item_without_bearers",
+      "id": 25
+    }
+  ]
+}

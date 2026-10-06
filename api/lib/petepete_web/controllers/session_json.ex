@@ -8,6 +8,7 @@ defmodule PetepeteWeb.SessionJSON do
   """
 
   alias Petepete.Billing.{CostItem, Participant}
+  alias PetepeteWeb.Labels
 
   def show(%{
         detail: %{session: session, progress: progress, cost_items: items, participants: parts}
@@ -19,7 +20,9 @@ defmodule PetepeteWeb.SessionJSON do
         group_id: session.group_id,
         starts_at: session.starts_at,
         status: session.status,
-        progress: progress
+        status_label: Labels.session(session.status),
+        progress: progress,
+        progress_label: Labels.session(progress)
       },
       cost_items: Enum.map(items, &cost_item_data/1),
       participants: Enum.map(parts, &participant_data/1)
@@ -50,6 +53,7 @@ defmodule PetepeteWeb.SessionJSON do
       member_id: participant.member_id,
       display_name: participant.member.display_name,
       role: participant.member.role,
+      role_label: Labels.role(participant.member.role),
       attended: participant.attended,
       weight: participant.weight
     }

@@ -1,0 +1,6 @@
+{
+  "error": "session_not_editable",
+  "message": "Sesi ini sudah ditagih, jadi nggak bisa diubah lagi. Muat ulang dulu ya.",
+  "status": "issued",
+  "status_label": "Ditagih"
+}

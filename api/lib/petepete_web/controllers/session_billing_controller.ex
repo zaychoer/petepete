@@ -15,7 +15,7 @@ defmodule PetepeteWeb.SessionBillingController do
   use PetepeteWeb, :controller
 
   alias Petepete.{Billing, Payments}
-  alias PetepeteWeb.{BillingError, LedgerError}
+  alias PetepeteWeb.{BillingError, Labels, LedgerError}
 
   plug PetepeteWeb.Plugs.SessionAccess, role: :host
   plug PetepeteWeb.Plugs.IdempotencyKey when action in [:issue, :void]
@@ -85,7 +85,9 @@ defmodule PetepeteWeb.SessionBillingController do
       credit_applied: bill.credit_applied,
       amount_due: bill.amount_due,
       status: bill.status,
+      status_label: Labels.bill(bill.status),
       paid_via: bill.paid_via,
+      paid_via_label: Labels.paid_via(bill.paid_via),
       pay_token: bill.pay_token,
       token_expires_at: bill.token_expires_at
     }
@@ -94,11 +96,15 @@ defmodule PetepeteWeb.SessionBillingController do
   defp error(conn, {:invalid, errors}) do
     conn
     |> put_status(422)
-    |> json(%{error: "invalid_session", problems: Enum.map(errors, &problem/1)})
+    |> json(%{
+      error: "invalid_session",
+      message: "Sesi ini belum bisa ditagih. Cek lagi data sesinya.",
+      problems: Enum.map(errors, &problem/1)
+    })
   end
 
   defp error(conn, reason), do: BillingError.render(conn, reason)
 
   defp problem({code, id}), do: %{code: code, id: id}
-  defp problem(code), do: %{code: code}
+  defp problem(code), do: %{code: code, id: nil}
 end

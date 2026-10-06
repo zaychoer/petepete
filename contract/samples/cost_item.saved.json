@@ -1,0 +1,14 @@
+{
+  "cost_item": {
+    "amount": 350000,
+    "bearer_ids": [],
+    "category": "lapangan",
+    "id": 33,
+    "label": null,
+    "members": [],
+    "paid_by": 114,
+    "paid_by_name": "Member 7461",
+    "scope": "all",
+    "session_id": 34
+  }
+}

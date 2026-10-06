@@ -4,7 +4,7 @@ defmodule PetepeteWeb.SessionBillingControllerTest do
   import Ecto.Query, only: [from: 2]
   import Petepete.Fixtures
 
-  alias Petepete.{Clock, Ledger, Repo}
+  alias Petepete.{Clock, Contract, Ledger, Repo}
 
   setup do
     Clock.freeze(~U[2026-10-06 03:00:00Z])
@@ -31,7 +31,9 @@ defmodule PetepeteWeb.SessionBillingControllerTest do
     test "returns the breakdown the preview screen needs", %{conn: conn, user: user} do
       ctx = group_with_session(user)
 
-      body = conn |> get(~p"/api/sessions/#{ctx.session.id}/preview") |> json_response(200)
+      conn = get(conn, ~p"/api/sessions/#{ctx.session.id}/preview")
+      body = json_response(conn, 200)
+      Contract.check!("preview.ok", conn)
 
       assert %{
                "total_cost" => 100_000,
@@ -83,8 +85,12 @@ defmodule PetepeteWeb.SessionBillingControllerTest do
       ctx = group_with_session(user)
       Repo.update_all(Petepete.Billing.Participant, set: [attended: false])
 
+      response = get(conn, ~p"/api/sessions/#{ctx.session.id}/preview")
+
       assert %{"error" => "invalid_session", "problems" => [%{"code" => "item_without_bearers"}]} =
-               conn |> get(~p"/api/sessions/#{ctx.session.id}/preview") |> json_response(422)
+               json_response(response, 422)
+
+      Contract.check!("errors/invalid_session", response)
     end
   end
 
@@ -98,7 +104,9 @@ defmodule PetepeteWeb.SessionBillingControllerTest do
     test "issues bills and returns them with the txn id", %{conn: conn, user: user} do
       ctx = group_with_session(user)
 
-      body = issue(conn, ctx.session.id, "key-1") |> json_response(200)
+      conn = issue(conn, ctx.session.id, "key-1")
+      body = json_response(conn, 200)
+      Contract.check!("issue.issued", conn)
 
       assert %{"replayed" => false, "txn_id" => txn_id, "bills" => bills} = body
       assert [%{id: ^txn_id}] = Ledger.txns(ctx.group.id)
@@ -135,8 +143,16 @@ defmodule PetepeteWeb.SessionBillingControllerTest do
       ctx = group_with_session(user)
       issue(conn, ctx.session.id, "one") |> json_response(200)
 
-      assert %{"error" => "invalid_transition", "entity" => "session", "status" => "issued"} =
-               issue(conn, ctx.session.id, "two") |> json_response(409)
+      conflict = issue(conn, ctx.session.id, "two")
+
+      assert %{
+               "error" => "invalid_transition",
+               "entity" => "session",
+               "status" => "issued",
+               "status_label" => "Ditagih"
+             } = json_response(conflict, 409)
+
+      Contract.check!("errors/invalid_transition", conflict)
 
       assert %{"error" => "idempotency_key_required"} =
                post(conn, ~p"/api/sessions/#{ctx.session.id}/issue") |> json_response(422)

@@ -22,6 +22,7 @@ defmodule PetepeteWeb.BillingError do
       error: "invalid_transition",
       entity: Atom.to_string(entity),
       status: from,
+      status_label: status_label(entity, from),
       message: transition_message(entity)
     })
   end
@@ -36,6 +37,9 @@ defmodule PetepeteWeb.BillingError do
   end
 
   def render(conn, reason) when is_atom(reason), do: LedgerError.render(conn, reason)
+
+  defp status_label(:session, status), do: PetepeteWeb.Labels.session(status)
+  defp status_label(:bill, status), do: PetepeteWeb.Labels.bill(status)
 
   defp transition_message(:session),
     do: "Status sesi ini tidak memungkinkan aksi itu. Muat ulang dulu ya."
