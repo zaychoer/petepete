@@ -10,6 +10,11 @@ defmodule PetepeteWeb.Router do
     plug PetepeteWeb.Plugs.Authenticate
   end
 
+  # Routes that work with or without a login (`current_scope` is nil when anonymous).
+  pipeline :optionally_authenticated do
+    plug PetepeteWeb.Plugs.OptionalAuthenticate
+  end
+
   scope "/api", PetepeteWeb do
     pipe_through :api
 
@@ -20,7 +25,23 @@ defmodule PetepeteWeb.Router do
   end
 
   scope "/api", PetepeteWeb do
+    pipe_through [:api, :optionally_authenticated]
+
+    post "/invites/:token/join", InviteController, :join
+  end
+
+  scope "/api", PetepeteWeb do
     pipe_through [:api, :authenticated]
+
+    get "/groups", GroupController, :index
+    post "/groups", GroupController, :create
+    get "/groups/:group_id", GroupController, :show
+    post "/groups/:group_id/invite/reset", GroupController, :reset_invite
+    post "/groups/:group_id/guests", GroupController, :add_guest
+
+    post "/members/:id/claim", MemberController, :claim
+    post "/members/:id/claim/approve", MemberController, :approve
+    post "/members/:id/claim/reject", MemberController, :reject
 
     post "/groups/:group_id/payout-account", PayoutAccountController, :create
     post "/groups/:group_id/settlements", LedgerController, :settlement

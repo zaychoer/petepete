@@ -53,6 +53,14 @@ fly secrets set -a petepete-staging --stage OTP_SENDER=Elixir.Petepete.Accounts.
 
 `OTP_HMAC_KEY` keys the hashes of OTP codes and phones (at least 32 bytes). `OTP_SENDER` names the module that delivers OTP codes over WhatsApp. **The app refuses to boot in production without both**, and refuses `OtpSender.Fake` as the sender, so that no login code is ever dropped silently. The provider adapter is not written yet (the choice of WhatsApp provider is an open question in the spec); until it exists a production release does not start.
 
+### 4c. Set the web origin for invite links
+
+```sh
+fly secrets set -a petepete-staging --stage WEB_BASE_URL=https://<web-app-host>
+```
+
+`WEB_BASE_URL` is the public origin of the web app. Group invite links are `<WEB_BASE_URL>/join/<token>`. **The app refuses to boot in production without it.**
+
 ### 5. Give GitHub a deploy token
 
 The workflow reads `FLY_API_TOKEN` from the GitHub environment named exactly like the `environment:` key in the workflow (`staging` or `production`). Create the environment first: `gh secret set --env` fails if it doesn't exist. Creating an environment that already exists is harmless.

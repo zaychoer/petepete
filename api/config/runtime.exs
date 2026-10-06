@@ -119,6 +119,17 @@ if config_env() == :prod do
 
   config :petepete, :gateway, gateway
 
+  # Public origin of the web app, where invite links point (https://host, no path).
+  web_base_url =
+    System.get_env("WEB_BASE_URL") ||
+      raise """
+      environment variable WEB_BASE_URL is missing.
+      It is the public origin of the web app that group invite links point to,
+      for example https://petepete.vercel.app
+      """
+
+  config :petepete, :web_base_url, web_base_url
+
   config :petepete, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
 
   config :petepete, PetepeteWeb.Endpoint,
