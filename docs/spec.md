@@ -173,6 +173,8 @@ Penarikan dana dari sub-account ke rekening bank host (PAY-07) tidak menyentuh l
 - **Batas 24 jam.** `cash_payment_cancelled` ditolak bila lebih dari 24 jam sejak waktu txn `cash_received`; waktu dikirim sebagai argumen, `bills.paid_at` diisi dari waktu yang sama.
 - **Saldo kas.** `kas_spend` ditolak bila jumlah > saldo kas, sehingga tidak ada belanja kas saat saldo kas nol atau negatif. `session_bills_cancelled` tidak diperiksa terhadap saldo kas: pembatalan boleh membuat kas negatif.
 
+**Aksi host (ADR-0003).** Setiap aksi host yang mengubah uang (`issue`, `void_issue`, `mark_paid_cash`, `cancel_cash`, `settlement`, `kas_spend`, `correction`, permintaan penarikan, pendaftaran rekening pencairan) berjalan lewat satu pembungkus `Petepete.HostAction.run/4`: ia memegang transaksi DB, rollback bila galat, dan menulis baris `audit_log` kecuali balasan idempotensi. Otorisasi diputuskan di tepi HTTP: plug memanggil `Groups.authorize_actor/3` dan menyerahkan `%Petepete.Actor{type: :host | :gateway, user_id, member_id}` ke konteks; konteks tidak memeriksa peran lagi. Kunci idempotensi wajib lewat plug `IdempotencyKey` (422 `idempotency_key_required` untuk semua endpoint uang) dan diteruskan eksplisit ke pembungkus.
+
 **Aturan hitung (`Billing.preview/1`)**
 
 1. Ambil peserta dengan attended = true dan bobotnya.

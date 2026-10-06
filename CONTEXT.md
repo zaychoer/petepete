@@ -74,6 +74,10 @@ _Avoid_: Talangan (UI only), advance, reimbursement
 Who caused a money event: a host or the payment gateway.
 _Avoid_: User, initiator
 
+**Host action**:
+A change to a group's money made by its host, recorded in the audit log.
+_Avoid_: Admin action, host operation
+
 ### Undoing
 
 **Correction**:
