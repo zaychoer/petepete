@@ -7,6 +7,9 @@ defmodule Petepete.Application do
 
   @impl true
   def start(_type, _args) do
+    # Fail the boot, not the first login, when no OTP sender is configured.
+    Petepete.Accounts.OtpSender.fetch!()
+
     children = [
       PetepeteWeb.Telemetry,
       Petepete.Repo,

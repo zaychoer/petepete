@@ -60,6 +60,38 @@ if config_env() == :prod do
       You can generate one by calling: mix phx.gen.secret
       """
 
+  # Production has no default OTP sender: OTP_SENDER must name an adapter module
+  # implementing Petepete.Accounts.OtpSender, otherwise the app fails to boot
+  # (Petepete.Accounts.OtpSender.fetch!/0). The dev/test fake is refused.
+  otp_sender =
+    case System.get_env("OTP_SENDER") do
+      nil ->
+        nil
+
+      "" ->
+        nil
+
+      name ->
+        module = Module.concat([name])
+
+        if module == Petepete.Accounts.OtpSender.Fake do
+          raise "OTP_SENDER must not be the fake sender in production"
+        end
+
+        module
+    end
+
+  otp_hmac_key =
+    System.get_env("OTP_HMAC_KEY") ||
+      raise """
+      environment variable OTP_HMAC_KEY is missing.
+      It keys the OTP hashes. Generate one with: openssl rand -base64 48
+      """
+
+  if byte_size(otp_hmac_key) < 32, do: raise("OTP_HMAC_KEY must be at least 32 bytes")
+
+  config :petepete, Petepete.Accounts, otp_sender: otp_sender, otp_hmac_key: otp_hmac_key
+
   host = System.get_env("PHX_HOST") || "example.com"
 
   config :petepete, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
