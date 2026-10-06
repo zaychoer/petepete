@@ -44,3 +44,25 @@ manifest does not list.
 
 Fakes and tests load `samples/` and `manifest.json` instead of typing payloads. An override may
 change values but not a value's JSON type.
+
+## App tests
+
+`app/test/support/sample.dart` loads samples for Flutter tests (found by walking up from the
+working directory, so it works under `flutter test` from `app/`):
+
+```dart
+final page = Sample.load('pay_page.unpaid')              // contract/samples/pay_page.unpaid.json
+    .patch({'amount_due': 50000, 'attempt': {'status': 'pending'}})
+    .withItems('lines', [{'label': 'Konsumsi'}, {}]);
+page.json;      // Map<String, dynamic>, a fresh deep copy
+page.encode();  // JSON string for a fake HTTP response
+
+Sample.error('idempotency_key_required').json   // contract/samples/errors/<code>.json
+```
+
+`patch` takes field names or dotted paths (`'lines.0.amount'`); a nested map merges into the
+object. It throws `SampleOverrideError` when a value changes the sample's JSON type (int, double,
+string, bool, list, map), adds or drops an object key, or names a path the sample does not have;
+`null` on either side is free. `withItems(path, [...])` builds a list from the sample's first
+element, one element per entry with its own overrides. `contract/rupiah.json` runs in
+`app/test/contract/rupiah_contract_test.dart`.
