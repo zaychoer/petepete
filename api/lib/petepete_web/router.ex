@@ -18,4 +18,11 @@ defmodule PetepeteWeb.Router do
     post "/auth/refresh", AuthController, :refresh
     post "/auth/logout", AuthController, :logout
   end
+
+  scope "/api", PetepeteWeb do
+    pipe_through [:api, :authenticated]
+
+    get "/sessions/:id/preview", SessionBillingController, :preview
+    post "/sessions/:id/issue", SessionBillingController, :issue
+  end
 end

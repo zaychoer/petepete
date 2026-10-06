@@ -170,4 +170,44 @@ defmodule Petepete.Fixtures do
       )
     )
   end
+
+  @doc "Marks `member` as attended (default) or absent at `session`, with `weight` per mil (default 1000)."
+  def attendance_fixture(session, member, attrs \\ []) do
+    Repo.insert!(
+      struct(
+        %Petepete.Billing.Participant{
+          session_id: session.id,
+          member_id: member.id,
+          attended: true,
+          weight: 1000
+        },
+        attrs
+      )
+    )
+  end
+
+  @doc """
+  A cost item of `session`. `attrs`: `:amount` (required), `:paid_by` (member, required),
+  `:category`, `:label`; `:members` (list of members) makes it a subset item.
+  """
+  def cost_item_fixture(session, attrs) do
+    attrs = Map.new(attrs)
+    members = Map.get(attrs, :members)
+
+    item =
+      Repo.insert!(%Petepete.Billing.CostItem{
+        session_id: session.id,
+        category: Map.get(attrs, :category, "lapangan"),
+        label: Map.get(attrs, :label),
+        amount: Map.fetch!(attrs, :amount),
+        paid_by_member_id: Map.fetch!(attrs, :paid_by).id,
+        scope: if(members, do: "subset", else: "all")
+      })
+
+    for member <- members || [] do
+      Repo.insert!(%Petepete.Billing.CostItemMember{cost_item_id: item.id, member_id: member.id})
+    end
+
+    item
+  end
 end

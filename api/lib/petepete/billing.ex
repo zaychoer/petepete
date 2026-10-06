@@ -81,6 +81,43 @@ defmodule Petepete.Billing do
     end)
   end
 
+  ## Preview and issue (one computation path, `Petepete.Billing.Calculation`)
+
+  @doc """
+  The per-person, per-item breakdown of a draft session, from its stored attendance and
+  cost items (spec "Aturan hitung"). Reads credit from `Ledger.balances/1` without a lock.
+
+  Returns `{:ok, preview}` with `:session_id`, `:rounding_unit`, `:total_cost`,
+  `:total_billed`, `:kas_remainder` ("Masuk kas"), `:credit_used`, `:total_due`, `:items`,
+  `:fronted` and `:members`; each member has `:member_id`, `:display_name`, `:weight`,
+  `:lines` (per cost item, with the exact `:fraction`), `:raw_share`, `:share`, `:rounding`,
+  `:fronted`, `:credit_balance`, `:credit_available`, `:credit_applied` and `:amount_due`.
+  See `Petepete.Billing.Calculation` for the exact meaning.
+
+  Errors: `{:error, :not_found}`; `{:error, %TransitionError{}}` when the session is not a
+  draft; `{:error, {:invalid, errors}}` when step 7 fails, so the bills cannot be sent.
+  """
+  defdelegate preview(session_id), to: Petepete.Billing.Invoicing
+
+  @doc """
+  Issues a draft session: posts one `session_billed` txn, creates a bill per participant
+  with a positive share, and moves the session draft -> issued, all in one transaction.
+
+  Options (both required): `actor: {:host, user_id}` and `idempotency_key: String.t()`
+  (passed to the Ledger as the txn's `idempotency_key`). The same key again on the issued
+  session returns the same txn and bills with `replayed: true`. `credit_applied` and
+  `amount_due` come from the balances the Ledger saw just before posting; a bill with
+  `amount_due` 0 is created `paid` with `paid_via` credit and no extra txn. Each bill gets
+  a url-safe 192-bit `pay_token` expiring 30 days after issue.
+
+  Returns `{:ok, %{session: session, txn: txn, bills: [bill], replayed: boolean}}` (bills
+  have `:member` preloaded) or `{:error, reason}`: everything `preview/1` returns, a
+  `%TransitionError{}` for a session that is not draft (or issued by another key), and the
+  Ledger's typed errors; `:idempotency_key_required` for a blank key. Any error rolls
+  everything back.
+  """
+  defdelegate issue(session_id, opts), to: Petepete.Billing.Invoicing
+
   ## Locks (call inside the caller's transaction, session first)
 
   defdelegate lock_session(session_id), to: Locks
