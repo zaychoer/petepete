@@ -4,7 +4,7 @@ defmodule PetepeteWeb.PayControllerTest do
   import Ecto.Query
   import Petepete.Fixtures
 
-  alias Petepete.{Billing, Clock, Repo}
+  alias Petepete.{Billing, Clock, Contract, Repo}
   alias Petepete.Billing.Bill
   alias Petepete.Groups.Member
   alias Petepete.Payments.PaymentAttempt
@@ -41,7 +41,9 @@ defmodule PetepeteWeb.PayControllerTest do
 
   describe "GET /api/pay/:token" do
     test "shows the bill without any phone number", %{conn: conn, bill: bill} do
-      body = conn |> get(~p"/api/pay/#{bill.pay_token}") |> json_response(200)
+      conn = get(conn, ~p"/api/pay/#{bill.pay_token}")
+      body = json_response(conn, 200)
+      Contract.check!("pay_page.unpaid", conn)
 
       assert %{
                "group_name" => "Futsal Kamis",
@@ -79,7 +81,9 @@ defmodule PetepeteWeb.PayControllerTest do
     test "a void bill shows only the cancelled message", %{conn: conn, bill: bill} do
       bill |> Ecto.Changeset.change(status: "void") |> Repo.update!()
 
-      body = conn |> get(~p"/api/pay/#{bill.pay_token}") |> json_response(200)
+      conn = get(conn, ~p"/api/pay/#{bill.pay_token}")
+      body = json_response(conn, 200)
+      Contract.check!("pay_page.void", conn)
 
       assert %{"status" => "void", "message" => "Tagihan dibatalkan", "can_pay" => false} = body
       refute Map.has_key?(body, "amount_due")
@@ -90,8 +94,11 @@ defmodule PetepeteWeb.PayControllerTest do
       bill |> Ecto.Changeset.change(status: "paid", paid_via: "cash") |> Repo.update!()
       Clock.advance(40 * 86_400)
 
+      conn = get(conn, ~p"/api/pay/#{bill.pay_token}")
+      Contract.check!("pay_page.paid", conn)
+
       assert %{"status" => "paid", "status_label" => "Lunas", "token_expired" => false} =
-               conn |> get(~p"/api/pay/#{bill.pay_token}") |> json_response(200)
+               json_response(conn, 200)
     end
 
     test "an expired link on an unpaid bill cannot be paid", %{conn: conn, bill: bill} do

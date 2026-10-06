@@ -1,0 +1,11 @@
+{
+  "can_pay": false,
+  "event_name": "Event 7298",
+  "group_name": "Futsal Kamis",
+  "message": "Tagihan dibatalkan",
+  "session_date": "2026-10-06",
+  "session_starts_at": "2026-10-06T03:00:00Z",
+  "status": "void",
+  "status_label": "Dibatalkan",
+  "token_expired": false
+}

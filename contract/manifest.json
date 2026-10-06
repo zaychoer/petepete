@@ -1,0 +1,10 @@
+{
+  "errors": [],
+  "routes": {
+    "GET /api/pay/:token": [
+      "pay_page.paid",
+      "pay_page.unpaid",
+      "pay_page.void"
+    ]
+  }
+}
