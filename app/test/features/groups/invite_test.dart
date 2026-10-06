@@ -131,7 +131,7 @@ void main() {
       },
     );
 
-    testWidgets('a reset link says it no longer works', (tester) async {
+    testWidgets('a reset link shows the server message', (tester) async {
       final fake = _hostOfFutsal()..inviteExpired = true;
       final app = AppHarness(fake);
       await app.pump(tester, app.screenRouter('/join/token-5'));
@@ -139,7 +139,10 @@ void main() {
       await tester.tap(find.text('Gabung'));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('sudah tidak berlaku'), findsOneWidget);
+      expect(
+        find.text(Sample.errorMessage('invite_not_found')),
+        findsOneWidget,
+      );
       expect(find.text('Beranda'), findsNothing);
     });
 

@@ -29,6 +29,7 @@ class KasTxn {
   const KasTxn({
     required this.id,
     required this.kind,
+    required this.kindLabel,
     required this.description,
     required this.reason,
     required this.reversesTxnId,
@@ -39,6 +40,7 @@ class KasTxn {
   factory KasTxn.fromJson(Json json) => KasTxn(
     id: json['id'] as int,
     kind: json['kind'] as String,
+    kindLabel: json['kind_label'] as String,
     description: json['description'] as String,
     reason: json['reason'] as String?,
     reversesTxnId: json['reverses_txn_id'] as int?,
@@ -53,6 +55,9 @@ class KasTxn {
 
   /// One of the eight ledger kinds, e.g. `settlement`, `kas_spend`, `correction`.
   final String kind;
+
+  /// The server's text for [kind] ("Pelunasan"); show it as is.
+  final String kindLabel;
   final String description;
   final String? reason;
 

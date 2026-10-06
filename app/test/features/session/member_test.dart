@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/fake_session_server.dart';
+import '../../support/sample.dart';
 
 const _hostOnlyRoutes = [
   'GET /api/sessions/10/share/bills',
@@ -40,6 +41,12 @@ FakeSessionServer _server({String role = 'member', String status = 'draft'}) {
   s.shareBills = [shareBill(1, 'Sari', 'unpaid', 50000)];
   return s;
 }
+
+/// The server's `progress_label` of the recorded cancelled session.
+String _cancelledLabel() =>
+    (Sample.load('session.cancelled').json['session']
+            as Map<String, dynamic>)['progress_label']
+        as String;
 
 void main() {
   late FakeLauncher launcher;
@@ -120,7 +127,7 @@ void main() {
 
     testWidgets('a failed summary can be retried', (tester) async {
       final server = _server(status: 'issued');
-      server.failServer('GET /api/sessions/10/share/summary');
+      server.fail('GET /api/sessions/10/share/summary', 500, 'server_error');
       await pumpSession(tester, server, launcher);
       expect(find.byKey(const Key('summary-retry')), findsOneWidget);
 
@@ -128,6 +135,37 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.textContaining('Ringkasan Badminton'), findsOneWidget);
+    });
+  });
+
+  group('a cancelled session', () {
+    testWidgets('a member sees the server label and that nothing is billed', (
+      tester,
+    ) async {
+      final server = _server(status: 'cancelled');
+      await pumpSession(tester, server, launcher);
+
+      expect(find.text(_cancelledLabel()), findsOneWidget);
+      expect(find.textContaining('tidak ada tagihan'), findsOneWidget);
+      expect(server.log, isNot(contains('GET /api/sessions/10/share/summary')));
+      for (final route in _hostOnlyRoutes) {
+        expect(server.log, isNot(contains(route)));
+      }
+    });
+
+    testWidgets('the host sees the server label, no bills and no actions', (
+      tester,
+    ) async {
+      final server = _server(role: 'host', status: 'cancelled');
+      await pumpSession(tester, server, launcher);
+
+      expect(find.text(_cancelledLabel()), findsOneWidget);
+      expect(find.textContaining('tidak ada tagihan'), findsOneWidget);
+      expect(server.log, isNot(contains('GET /api/sessions/10/share/bills')));
+      expect(find.byKey(const Key('share-bills')), findsNothing);
+      expect(find.byKey(const Key('void-issue')), findsNothing);
+      expect(find.byKey(const Key('open-preview')), findsNothing);
+      expect(find.byKey(const Key('add-guest')), findsNothing);
     });
   });
 

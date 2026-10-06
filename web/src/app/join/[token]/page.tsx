@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
 import { ApiError, apiFetch } from "@/lib/api";
 import { JoinForm } from "./join-form";
 
@@ -19,7 +18,15 @@ export default async function JoinRoute({ params }: PageProps<"/join/[token]">) 
       `/api/invites/${encodeURIComponent(token)}`,
     ));
   } catch (error) {
-    if (error instanceof ApiError && error.status === 404) notFound();
+    if (error instanceof ApiError && error.code === "invite_not_found") {
+      return (
+        <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-2 p-6">
+          <p role="alert" className="text-lg font-semibold">
+            {error.message}
+          </p>
+        </main>
+      );
+    }
     throw error;
   }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/fake_session_server.dart';
+import '../../support/sample.dart';
 
 FakeSessionServer _server() {
   final s = FakeSessionServer();
@@ -154,11 +155,11 @@ void main() {
     await pumpSession(tester, server, launcher);
     await _openPreview(tester);
 
-    server.failServer('POST /api/sessions/10/issue');
+    server.fail('POST /api/sessions/10/issue', 500, 'server_error');
     await tester.ensureVisible(find.byKey(const Key('issue-button')));
     await tester.tap(find.byKey(const Key('issue-button')));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Server lagi bermasalah'), findsOneWidget);
+    expect(find.text(Sample.errorMessage('server_error')), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('issue-button')));
     await tester.pumpAndSettle();

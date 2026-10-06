@@ -62,7 +62,7 @@ class FakeGroupsApi {
   /// Set to make `POST /api/members/:id/claim` answer 409 with this code.
   String? claimError;
 
-  /// Set to make `POST /api/invites/:token/join` answer 404.
+  /// Set to make `POST /api/invites/:token/join` answer 404 `invite_not_found`.
   bool inviteExpired = false;
 
   /// What the invite link of group `id` is.
@@ -199,10 +199,7 @@ class FakeGroupsApi {
     }
     if (m(r'GET /api/groups/(\d+)/home') case final match?) {
       final home = homes[int.parse(match[1]!)];
-      // The real API never sends `server_error`; a crash is a bare 500 page.
-      return home == null
-          ? http.Response('Internal Server Error', 500)
-          : _json(home.body!);
+      return home == null ? _error(500, 'server_error') : _json(home.body!);
     }
     if (m(r'POST /api/groups/(\d+)/invite/reset') case final match?) {
       return _sample('invite_reset.ok', {
@@ -263,7 +260,7 @@ class FakeGroupsApi {
       }, 201);
     }
     if (m(r'POST /api/invites/([^/]+)/join') case final match?) {
-      if (inviteExpired) return _error(404, 'not_found');
+      if (inviteExpired) return _error(404, 'invite_not_found');
       final token = match[1]!;
       final id = int.parse(token.split('-').last);
       return _sample('invite_join.account', {

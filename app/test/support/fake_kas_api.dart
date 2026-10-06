@@ -103,19 +103,22 @@ class FakeKasApi {
     withdrawals.add(rows.single as Map<String, dynamic>);
   }
 
-  /// Seeds a txn as if it already happened.
+  /// Seeds a txn as if it already happened. [kindLabel] overrides the recorded
+  /// `kind_label` of [kind] (needed for a kind no sample records).
   int seed(
     String kind,
     String description,
     List<(int?, int)> entries, {
     String? reason,
     int? reverses,
+    String? kindLabel,
   }) {
     final id = _nextTxn++;
     _clock = _clock.add(const Duration(minutes: 5));
     txns.add({
       'id': id,
       'kind': kind,
+      'kind_label': kindLabel ?? WireLabels.txnKind(kind),
       'description': description,
       'reason': reason,
       'reverses_txn_id': reverses,

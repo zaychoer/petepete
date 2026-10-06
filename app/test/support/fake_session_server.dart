@@ -66,16 +66,20 @@ Map<String, dynamic> shareBill(
 
 /// One line of a preview member, recorded shape.
 Map<String, dynamic> previewLine(int costItemId, String label, int amount) =>
-    ((Sample.load('preview.ok').json['members'] as List).first['lines'] as List)
+    ((Sample.load('preview.ok').patch({
+                      'members.0.lines.0': {
+                        'cost_item_id': costItemId,
+                        'category': label,
+                        'label': label,
+                        'amount': amount,
+                        'fraction': {'numerator': amount, 'denominator': 1},
+                      },
+                    }).json['members']
+                    as List)
+                .first['lines']
+            as List)
         .first
-        .cast<String, dynamic>()
-      ..addAll({
-        'cost_item_id': costItemId,
-        'category': label,
-        'label': label,
-        'amount': amount,
-        'fraction': {'numerator': amount, 'denominator': 1},
-      });
+        .cast<String, dynamic>();
 
 /// A preview body: the recorded preview with [totals] patched in and one
 /// element per [items] / [members] entry, built from the recorded first element.
@@ -133,8 +137,8 @@ class FakeSessionServer {
 
   final categories = ['Lapangan', 'Shuttlecock', 'Minum'];
 
-  /// Stored session status (`draft | issued`) and derived progress
-  /// (`draft | issued | settled`).
+  /// Stored session status (`draft | issued | cancelled`) and derived progress
+  /// (`draft | issued | settled | cancelled`).
   String status = 'draft';
   String progress = 'draft';
 
@@ -153,18 +157,17 @@ class FakeSessionServer {
   Map<String, dynamic>? summaryJson;
 
   /// Set to make the next call of that route answer an error:
-  /// key `METHOD /path`, value `(status, body)`. Prefer [fail] and [failServer].
-  final failures = <String, (int, Object)>{};
+  /// key `METHOD /path`, value `(status, body)`. Use [fail].
+  final failures = <String, (int, Map<String, dynamic>)>{};
 
   /// The next call of [route] (`METHOD /path`) answers the recorded error sample
   /// of [code] with [status].
   void fail(String route, int status, String code) =>
       failures[route] = (status, Sample.error(code).json);
 
-  /// The next call of [route] dies with a plain 500 (the server crashed: no
-  /// contract body).
-  void failServer(String route) =>
-      failures[route] = (500, 'Internal Server Error');
+  /// Code of the problems `GET preview` lists for an item nobody bears
+  /// (`invalid_session` problems).
+  String problemCode = 'item_without_bearers';
 
   final log = <String>[];
   final bodies = <String, List<Map<String, dynamic>>>{};
@@ -213,6 +216,7 @@ class FakeSessionServer {
   /// The recorded session sample that matches the current [status]/[progress].
   Sample _sessionSample() => Sample.load(switch (progress) {
     'settled' => 'session.settled',
+    'cancelled' => 'session.cancelled',
     _ when status == 'issued' => 'session.issued',
     _ => 'session.draft',
   });
@@ -238,9 +242,7 @@ class FakeSessionServer {
     final failure = failures.remove(route);
     if (failure != null) {
       final (code, payload) = failure;
-      return payload is String
-          ? http.Response(payload, code)
-          : _json(payload, code);
+      return _json(payload, code);
     }
     if (youRole != 'host' && _hostOnly.hasMatch(route)) {
       return _error(403, 'forbidden');
@@ -304,12 +306,16 @@ class FakeSessionServer {
         final weight = body['weight'];
         if (weight is! int || weight <= 0) {
           if (body.containsKey('weight')) {
-            final invalid = Sample.error('invalid').json;
-            invalid['errors'] = {
-              'weight': ['must be greater than 0'],
-            };
-            invalid['fields'] = invalid['errors'];
-            return _json(invalid, 422);
+            // The recorded `invalid` sample names one field (`name`); the key
+            // stands for the field here, the app only reads the message.
+            const text = ['harus lebih dari 0'];
+            return _json(
+              Sample.error('invalid').patch({
+                'errors': {'name': text},
+                'fields': {'name': text},
+              }).json,
+              422,
+            );
           }
         }
         participants[id] = {
@@ -324,12 +330,14 @@ class FakeSessionServer {
       case 'GET /api/sessions/10/preview':
         final problems = [
           for (final c in costs)
-            if (bearersOf(c).isEmpty)
-              {'code': 'item_without_bearers', 'id': c['id']},
+            if (bearersOf(c).isEmpty) {'code': problemCode, 'id': c['id']},
         ];
         if (problems.isNotEmpty) {
+          // The server's own `message` of each problem stays as recorded.
           return _json(
-            Sample.error('invalid_session').patch({'problems': problems}).json,
+            Sample.error(
+              'invalid_session',
+            ).withItems('problems', problems).json,
             422,
           );
         }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/fake_session_server.dart';
+import '../../support/sample.dart';
 
 FakeSessionServer _issued() {
   final s = FakeSessionServer();
@@ -107,10 +108,10 @@ void main() {
       find.byKey(const Key('reason-input')),
       'Salah tandai',
     );
-    server.failServer('POST /api/bills/2/cash/cancel');
+    server.fail('POST /api/bills/2/cash/cancel', 500, 'server_error');
     await tester.tap(find.byKey(const Key('action-confirm')));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Server lagi bermasalah'), findsOneWidget);
+    expect(find.text(Sample.errorMessage('server_error')), findsOneWidget);
     await tester.tap(find.byKey(const Key('action-confirm')));
     await tester.pumpAndSettle();
 

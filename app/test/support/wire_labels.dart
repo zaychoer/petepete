@@ -1,8 +1,9 @@
 import 'sample.dart';
 
 /// Status text the server sends next to a status code (`status_label`,
-/// `role_label`, `paid_via_label`, `progress_label`), read from the recorded
-/// samples so fakes never type Indonesian status text themselves (ADR-0004).
+/// `role_label`, `paid_via_label`, `progress_label`, `kind_label`), read from
+/// the recorded samples so fakes never type Indonesian status text themselves
+/// (ADR-0004).
 ///
 /// Every lookup throws when no recorded sample carries a label for the code:
 /// record one on the server first.
@@ -18,8 +19,11 @@ class WireLabels {
   /// `cash | gateway | credit`.
   static String paidVia(String code) => _find(_paidVia, code, 'paid_via');
 
-  /// A session's `status` or `progress`: `draft | issued | settled`.
+  /// A session's `status` or `progress`: `draft | issued | settled | cancelled`.
   static String session(String code) => _find(_sessions, code, 'session');
+
+  /// A ledger txn `kind` (`settlement`, `kas_spend`, ...) from `txns.history`.
+  static String txnKind(String code) => _find(_txnKinds, code, 'txn kind');
 
   /// `pending | submitted | managed | failed`.
   static String withdrawal(String code) =>
@@ -59,13 +63,22 @@ class WireLabels {
 
   static final _sessions = () {
     final table = <String, String>{};
-    for (final name in ['session.draft', 'session.issued', 'session.settled']) {
+    for (final name in [
+      'session.draft',
+      'session.issued',
+      'session.settled',
+      'session.cancelled',
+    ]) {
       final session = Sample.load(name).json['session'] as Map<String, dynamic>;
       table[session['progress'] as String] =
           session['progress_label'] as String;
     }
     return table;
   }();
+
+  static final _txnKinds = _pairs([
+    (Sample.load('txns.history').json['txns'], 'kind', 'kind_label'),
+  ]);
 
   static final _withdrawals = _pairs([
     (
