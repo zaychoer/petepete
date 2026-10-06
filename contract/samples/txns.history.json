@@ -8,41 +8,43 @@
           "account_type": "member",
           "amount": 1245000,
           "display_name": "Andi",
-          "member_id": 278
+          "member_id": 1608
         },
         {
           "account_type": "member",
           "amount": -1245000,
           "display_name": "Budi",
-          "member_id": 279
+          "member_id": 1609
         }
       ],
-      "id": 60,
-      "inserted_at": "2026-10-06T14:43:35Z",
+      "id": 404,
+      "inserted_at": "2026-10-06T15:44:27Z",
       "kind": "settlement",
+      "kind_label": "Pelunasan",
       "reason": "talangan",
       "reverses_txn_id": null
     },
     {
       "actor_type": "host",
-      "description": "Member 5700 bayar Rp45.000 ke Budi",
+      "description": "Member 8710 bayar Rp45.000 ke Budi",
       "entries": [
         {
           "account_type": "member",
           "amount": 45000,
-          "display_name": "Member 5700",
-          "member_id": 275
+          "display_name": "Member 8710",
+          "member_id": 1605
         },
         {
           "account_type": "member",
           "amount": -45000,
           "display_name": "Budi",
-          "member_id": 279
+          "member_id": 1609
         }
       ],
-      "id": 61,
-      "inserted_at": "2026-10-06T14:43:35Z",
+      "id": 405,
+      "inserted_at": "2026-10-06T15:44:27Z",
       "kind": "settlement",
+      "kind_label": "Pelunasan",
       "reason": null,
       "reverses_txn_id": null
     }

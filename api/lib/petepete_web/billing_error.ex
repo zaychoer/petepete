@@ -11,6 +11,10 @@ defmodule PetepeteWeb.BillingError do
   alias Petepete.Billing.TransitionError
   alias PetepeteWeb.{FallbackController, LedgerError}
 
+  @doc "Codes rendered here itself; the rest come from `LedgerError` and `FallbackController`."
+  @spec codes() :: [String.t()]
+  def codes, do: ["invalid_transition", "not_cash_payment"]
+
   @doc "Sends the error response and returns the conn."
   @spec render(Plug.Conn.t(), term()) :: Plug.Conn.t()
   def render(conn, :not_found), do: FallbackController.call(conn, {:error, :not_found})

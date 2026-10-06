@@ -1,6 +1,6 @@
 defmodule PetepeteWeb.FallbackController do
   @moduledoc """
-  Renders command errors as JSON: 404 `not_found`, 403 `forbidden`, 409 with the code of a
+  Renders command errors as JSON: 404 `not_found` (`invite_not_found` for a dead invite link), 403 `forbidden`, 409 with the code of a
   `{:conflict, code}`, 409 `session_not_editable` (with the session `status`) and 422
   `invalid` with per-field messages under both `errors` and `fields`. Every error carries
   an Indonesian `message` from the one table below (ADR-0004: the server owns text); an
@@ -12,6 +12,7 @@ defmodule PetepeteWeb.FallbackController do
 
   @messages %{
     "not_found" => "Data nggak ditemukan.",
+    "invite_not_found" => "Link undangan ini sudah tidak berlaku. Minta link baru ke host.",
     "forbidden" => "Kamu nggak punya akses untuk aksi ini.",
     "not_claimable" => "Nama ini nggak bisa diklaim.",
     "already_member" => "Kamu sudah jadi anggota grup ini.",
@@ -35,6 +36,14 @@ defmodule PetepeteWeb.FallbackController do
     "processing_failed" => "Webhook gagal diproses."
   }
 
+  @doc "Every error code this controller can render (the keys of the message table)."
+  @spec codes() :: [String.t()]
+  def codes, do: @messages |> Map.keys() |> Enum.sort()
+
+  @doc "The Indonesian text of error `code`; an unknown code raises."
+  @spec message(String.t()) :: String.t()
+  def message(code), do: Map.fetch!(@messages, code)
+
   def call(conn, {:error, :not_found}), do: respond(conn, 404, "not_found")
   def call(conn, {:error, :forbidden}), do: respond(conn, 403, "forbidden")
 
@@ -56,7 +65,7 @@ defmodule PetepeteWeb.FallbackController do
   Sends `{error, message, ...extra}` with `status`; the message comes from the table.
   """
   def respond(conn, status, error, extra \\ %{}) do
-    body = Map.merge(extra, %{error: error, message: Map.fetch!(@messages, error)})
+    body = Map.merge(extra, %{error: error, message: message(error)})
     conn |> put_status(status) |> json(body)
   end
 end

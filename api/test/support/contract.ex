@@ -22,6 +22,21 @@ defmodule Petepete.Contract do
     * Arrays: every response element must match the shape of the sample's first element; an
       empty sample array places no constraint, so record samples with non-empty arrays.
 
+  ## Vacuous samples
+
+  `audit/4` rejects a committed sample with an empty array anywhere in its shape-relevant
+  tree (object values and the first element of arrays), because an empty sample array
+  constrains nothing. A legitimately always-empty array is listed in `@allowed_empty` below
+  with the reason.
+
+  ## Every sample is exercised
+
+  `check!/3` records the names it compared (`exercised/0`). When the whole suite runs
+  (`mix test` without file, line or tag filters, and so `mix precommit`; the `test` alias in
+  `mix.exs` sets `PETEPETE_FULL_SUITE=1`) `install_exercise_check/0`'s `ExUnit.after_suite`
+  hook fails the run, listing every manifest sample no test checked. It skips when any test
+  was filtered, failed or skipped.
+
   ## Recording
 
   With `CONTRACT_RECORD=1` (or `record: true`), `check!/3` rewrites the sample (sorted keys,
@@ -31,6 +46,19 @@ defmodule Petepete.Contract do
   """
 
   @default_dir Path.expand("../../../contract", __DIR__)
+
+  @exercised :petepete_contract_exercised
+
+  # Arrays that are legitimately always empty in their variant. Keys are sample names, values
+  # the `$.path` of the array (`[]` stands for the first element of an array). Every entry
+  # needs the reason that the array's element shape is recorded by another sample.
+  @allowed_empty %{
+    # `can_pay` is false, so `methods` is empty; `pay_page.unpaid` records the element shape.
+    "pay_page.needs_review" => ["$.methods"],
+    "pay_page.paid" => ["$.methods"],
+    # A group with nothing open; `group_home.with_session` records both bill lists.
+    "group_home.quiet" => ["$.needs_review_bills", "$.unpaid_bills"]
+  }
 
   @route_name ~r/\A[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\z/
   @error_name ~r{\Aerrors/[a-z][a-z0-9_]*\z}
@@ -69,6 +97,73 @@ defmodule Petepete.Contract do
     else
       compare!(name, body)
     end
+
+    track(name)
+    :ok
+  end
+
+  @doc """
+  Creates the table that remembers which samples `check!/3` compared and, when
+  `PETEPETE_FULL_SUITE=1` (set by the `test` alias for a run without file/line/tag filters),
+  installs the `ExUnit.after_suite` hook that fails the run on unexercised samples. Call it
+  once from `test_helper.exs`.
+  """
+  @spec install_exercise_check() :: :ok
+  def install_exercise_check do
+    :ets.new(@exercised, [:named_table, :public, :set])
+
+    if System.get_env("PETEPETE_FULL_SUITE") == "1" do
+      ExUnit.after_suite(fn results -> verify_exercised(results) end)
+    end
+
+    :ok
+  end
+
+  @doc "The sample names `check!/3` compared so far in this run (default contract dir only)."
+  @spec exercised() :: [String.t()]
+  def exercised do
+    if :ets.whereis(@exercised) == :undefined, do: [], else: :ets.select(@exercised, [{{:"$1"}, [], [:"$1"]}])
+  end
+
+  @doc "The manifest sample names (`\"pay_page.unpaid\"`, `\"errors/not_found\"`) not in `exercised`."
+  @spec unexercised(%{String.t() => term()}, [String.t()]) :: [String.t()]
+  def unexercised(%{"routes" => routes, "errors" => errors}, exercised) do
+    declared =
+      Enum.flat_map(routes, fn {_route, names} -> names end) ++
+        Enum.map(errors, &("errors/" <> &1))
+
+    declared |> Enum.reject(&(&1 in exercised)) |> Enum.sort()
+  end
+
+  defp track(name) do
+    if dir() == @default_dir and :ets.whereis(@exercised) != :undefined,
+      do: :ets.insert(@exercised, {name})
+  end
+
+  defp verify_exercised(%{total: total, failures: failures, skipped: skipped, excluded: excluded}) do
+    cond do
+      failures > 0 or skipped > 0 or excluded > 0 or total == 0 ->
+        :ok
+
+      true ->
+        case unexercised(manifest(), exercised()) do
+          [] ->
+            :ok
+
+          names ->
+            IO.puts(:stderr, """
+
+            #{length(names)} contract sample(s) were never checked by a test in this full run:
+
+            #{Enum.map_join(names, "\n", &("  " <> &1))}
+
+            Every sample in contract/manifest.json must be compared by a controller test
+            (Contract.check!/3). Add the test, or delete the sample and its manifest entry.
+            """)
+
+            System.at_exit(fn _ -> exit({:shutdown, 1}) end)
+        end
+    end
   end
 
   @doc """
@@ -91,13 +186,14 @@ defmodule Petepete.Contract do
   samples, `pending` those still allowed not to. Checks that every required route is recorded
   or pending, nothing pending is recorded or unknown, the manifest lists only required routes
   with existing files, no sample file is missing from the manifest, and every error sample has
-  a `message`.
+  a `message`, and no sample has an empty array outside `allowed_empty` (default: the table
+  in this module).
   """
-  @spec audit([String.t()], [String.t()], Path.t()) :: [problem()]
-  def audit(required, pending, dir \\ dir()) do
+  @spec audit([String.t()], [String.t()], Path.t(), %{String.t() => [String.t()]}) :: [problem()]
+  def audit(required, pending, dir \\ dir(), allowed_empty \\ @allowed_empty) do
     case read_manifest_checked(dir) do
       {:ok, %{"routes" => routes, "errors" => errors}} ->
-        audit_manifest(required, pending, routes, errors, dir)
+        audit_manifest(required, pending, routes, errors, dir, allowed_empty)
 
       {:error, problem} ->
         [problem]
@@ -344,7 +440,7 @@ defmodule Petepete.Contract do
     end
   end
 
-  defp audit_manifest(required, pending, routes, errors, dir) do
+  defp audit_manifest(required, pending, routes, errors, dir, allowed_empty) do
     recorded = for {route, names} <- routes, names != [], do: route
 
     declared =
@@ -386,10 +482,52 @@ defmodule Petepete.Contract do
       |> Enum.filter(&File.regular?(sample_path(&1, dir)))
       |> Enum.flat_map(&sample_problems(&1, dir))
 
+    vacuous = vacuous_problems(declared, dir, allowed_empty)
+
     unrecorded ++
       Enum.reject(stale_pending, &is_nil/1) ++
-      not_client ++ missing_files ++ orphans ++ unreadable_or_no_message
+      not_client ++ missing_files ++ orphans ++ unreadable_or_no_message ++ vacuous
   end
+
+  defp vacuous_problems(declared, dir, allowed_empty) do
+    samples =
+      for name <- declared,
+          File.regular?(sample_path(name, dir)),
+          {:ok, body} <- [sample_path(name, dir) |> File.read!() |> Jason.decode()],
+          do: {name, body}
+
+    unlisted =
+      for {name, body} <- samples,
+          path <- empty_arrays(body, "$") -- Map.get(allowed_empty, name, []) do
+        "#{shown(sample_path(name, dir), dir)}: #{path} is an empty array, so its element " <>
+          "shape is not recorded. Record the sample with elements, or list the path in " <>
+          "@allowed_empty of #{inspect(__MODULE__)} with the reason"
+      end
+
+    stale =
+      for {name, paths} <- allowed_empty, path <- paths do
+        case List.keyfind(samples, name, 0) do
+          nil ->
+            "@allowed_empty lists #{name}, which is not a recorded sample"
+
+          {_, body} ->
+            if path in empty_arrays(body, "$"),
+              do: nil,
+              else: "@allowed_empty lists #{path} of #{name}, which is not an empty array: remove it"
+        end
+      end
+
+    unlisted ++ Enum.reject(stale, &is_nil/1)
+  end
+
+  # Paths of the empty arrays that matter for the shape: object values and the first element
+  # of each array (`[]` in the path).
+  defp empty_arrays(map, path) when is_map(map),
+    do: map |> Enum.sort() |> Enum.flat_map(fn {k, v} -> empty_arrays(v, "#{path}.#{k}") end)
+
+  defp empty_arrays([], path), do: [path]
+  defp empty_arrays([first | _], path), do: empty_arrays(first, path <> "[]")
+  defp empty_arrays(_scalar, _path), do: []
 
   defp sample_files(dir) do
     root = Path.join(dir, "samples")

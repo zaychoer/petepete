@@ -112,6 +112,23 @@ defmodule PetepeteWeb.LedgerControllerTest do
       assert audit_rows(ctx.g.id, "settlement.record") == []
     end
 
+    test "a member of another group is rejected as member_not_in_group", ctx do
+      {_, other_member} = login_member(group_fixture(), "member")
+
+      conn =
+        ctx.host_conn
+        |> keyed(key())
+        |> post(~p"/api/groups/#{ctx.g.id}/settlements", %{
+          from_member_id: other_member.id,
+          to_member_id: ctx.andi.id,
+          amount: 1000
+        })
+
+      Contract.check!("errors/member_not_in_group", conn)
+      assert %{"error" => "member_not_in_group"} = json_response(conn, 422)
+      assert audit_rows(ctx.g.id, "settlement.record") == []
+    end
+
     test "malformed bodies are 422 invalid_params", ctx do
       conn =
         ctx.host_conn
