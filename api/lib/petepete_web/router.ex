@@ -38,6 +38,8 @@ defmodule PetepeteWeb.Router do
     get "/groups/:group_id", GroupController, :show
     post "/groups/:group_id/invite/reset", GroupController, :reset_invite
     post "/groups/:group_id/guests", GroupController, :add_guest
+    post "/groups/:group_id/events", EventController, :create
+    get "/groups/:group_id/home", HomeController, :show
 
     post "/members/:id/claim", MemberController, :claim
     post "/members/:id/claim/approve", MemberController, :approve

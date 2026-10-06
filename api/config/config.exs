@@ -14,7 +14,11 @@ config :petepete,
 config :petepete, Oban,
   engine: Oban.Engines.Basic,
   repo: Petepete.Repo,
-  queues: [default: 10, payments: 10, notifications: 10]
+  queues: [default: 10, payments: 10, notifications: 10],
+  plugins: [
+    # Cron expressions are UTC: 17:05 UTC is 00:05 WIB (UTC+7), daily.
+    {Oban.Plugins.Cron, crontab: [{"5 17 * * *", Petepete.Sessions.SessionScheduler}]}
+  ]
 
 # Payment gateway adapters. The adapter in use is set per environment
 # (`config :petepete, :gateway`: dev.exs, test.exs, runtime.exs for prod).
