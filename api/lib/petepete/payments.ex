@@ -38,6 +38,10 @@ defmodule Petepete.Payments do
   gateway for a sub-account, then records it in `payout_accounts` with the status the
   gateway returns (`pending_kyc` until KYC finishes, see `refresh_payout_account/1`).
 
+  `key` is the request's `Idempotency-Key`, unique per group. A repeat of a key that
+  already registered an account returns that account (`replayed: true`) without asking the
+  gateway again and without a second audit row.
+
   The gateway is asked first, outside any transaction; the `payout_accounts` row and its
   `payout_account.register` audit row then commit together through `Petepete.HostAction`,
   so a gateway failure or invalid bank data leaves no audit row.
@@ -45,9 +49,18 @@ defmodule Petepete.Payments do
   `bank_details` takes `bank_name`, `account_number` and `account_holder_name`. Only the
   last four digits of the account number are kept.
   """
-  @spec register_payout_account(Actor.t(), pos_integer(), map()) ::
-          {:ok, PayoutAccount.t()} | {:error, Ecto.Changeset.t() | term()}
-  def register_payout_account(%Actor{} = actor, group_id, bank_details) do
+  @spec register_payout_account(Actor.t(), pos_integer(), String.t(), map()) ::
+          {:ok, %{payout_account: PayoutAccount.t(), replayed: boolean()}}
+          | {:error, Ecto.Changeset.t() | term()}
+  def register_payout_account(%Actor{} = actor, group_id, key, bank_details)
+      when is_binary(key) do
+    case Repo.get_by(PayoutAccount, group_id: group_id, idempotency_key: key) do
+      %PayoutAccount{} = account -> {:ok, %{payout_account: account, replayed: true}}
+      nil -> register_new(actor, group_id, key, bank_details)
+    end
+  end
+
+  defp register_new(actor, group_id, key, bank_details) do
     with {:ok, bank} <- validate_bank(bank_details),
          group = Repo.get!(Group, group_id),
          owner = Repo.get!(Member, actor.member_id),
@@ -59,31 +72,34 @@ defmodule Petepete.Payments do
              owner_member_id: owner.id,
              owner_name: owner.display_name,
              bank: bank
-           }) do
-      HostAction.run(actor, group.id, "payout_account.register", fn ->
-        with {:ok, payout_account} <-
-               Repo.insert(%PayoutAccount{
-                 group_id: group.id,
-                 owner_member_id: owner.id,
-                 provider: gateway.provider(),
-                 provider_account_id: account.provider_account_id,
-                 status: Atom.to_string(account.status),
-                 bank_name: bank.bank_name,
-                 account_last4: String.slice(bank.account_number, -4, 4)
-               }) do
-          {:ok, payout_account,
-           %{
-             subject: {"payout_account", payout_account.id},
-             metadata: %{
-               "owner_member_id" => owner.id,
-               "provider" => payout_account.provider,
-               "bank_name" => payout_account.bank_name,
-               "account_last4" => payout_account.account_last4
-             },
-             replayed: false
-           }}
-        end
-      end)
+           }),
+         {:ok, payout_account} <-
+           HostAction.run(actor, group.id, "payout_account.register", fn ->
+             with {:ok, payout_account} <-
+                    Repo.insert(%PayoutAccount{
+                      group_id: group.id,
+                      owner_member_id: owner.id,
+                      provider: gateway.provider(),
+                      provider_account_id: account.provider_account_id,
+                      status: Atom.to_string(account.status),
+                      bank_name: bank.bank_name,
+                      account_last4: String.slice(bank.account_number, -4, 4),
+                      idempotency_key: key
+                    }) do
+               {:ok, payout_account,
+                %{
+                  subject: {"payout_account", payout_account.id},
+                  metadata: %{
+                    "owner_member_id" => owner.id,
+                    "provider" => payout_account.provider,
+                    "bank_name" => payout_account.bank_name,
+                    "account_last4" => payout_account.account_last4
+                  },
+                  replayed: false
+                }}
+             end
+           end) do
+      {:ok, %{payout_account: payout_account, replayed: false}}
     end
   end
 

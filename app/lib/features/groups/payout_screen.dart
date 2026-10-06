@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../api/api_error.dart';
+import '../../api/idempotency_key.dart';
 import '../../app/app_scope.dart';
 import '../../ui/inline_error.dart';
 import '../../ui/status_chip.dart';
@@ -121,6 +122,8 @@ class _RegisterFormState extends State<_RegisterForm> {
   bool _busy = false;
   List<String> _errors = const [];
   String? _apiError;
+  // Created when the registration starts and kept for retries after a failure.
+  String? _key;
 
   @override
   void dispose() {
@@ -148,9 +151,11 @@ class _RegisterFormState extends State<_RegisterForm> {
     });
     if (errors.isNotEmpty) return;
     setState(() => _busy = true);
+    final key = _key ??= newIdempotencyKey();
     try {
       final status = await widget.api.registerPayoutAccount(
         widget.groupId,
+        idempotencyKey: key,
         bankName: _bank.text.trim(),
         accountNumber: _digits,
         accountHolderName: _holder.text.trim(),

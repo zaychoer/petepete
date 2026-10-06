@@ -13,9 +13,9 @@ defmodule Petepete.Payments.Gateway.Fake do
     * `:balance` - what `balance/1` returns, default `0`.
     * `:withdraw` - `:api` (default), `{:managed, dashboard_url}` or `{:error, reason}`.
     * `:create_payment` - `:api` (default) or `{:error, reason}`.
-    * `:notify` - a pid that gets `{:fake_gateway, :create_payment | :withdraw, key}` for every
+    * `:notify` - a pid that gets `{:fake_gateway, :create_payment | :withdraw | :register_payout_account, key}` for every
       call that reaches the provider (`key` is the `external_id` or the withdrawal
-      `reference`), so tests can count them. Default none.
+      `reference`, or the `group_id` of a registration), so tests can count them. Default none.
 
   Tests build signed webhooks with `webhook/2`.
   """
@@ -114,6 +114,8 @@ defmodule Petepete.Payments.Gateway.Fake do
 
   @impl true
   def register_payout_account(%{group_id: group_id, owner_member_id: member_id}) do
+    notify(:register_payout_account, group_id)
+
     {:ok,
      %{
        provider_account_id: "fake-acct-g#{group_id}-m#{member_id}",

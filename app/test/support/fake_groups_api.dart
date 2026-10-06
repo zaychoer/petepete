@@ -65,6 +65,12 @@ class FakeGroupsApi {
   String inviteUrl(int id) => 'https://petepete.test/join/token-$id';
 
   final seen = <Seen>[];
+
+  /// `Idempotency-Key` header of every payout registration, in order.
+  final payoutKeys = <String?>[];
+
+  /// Set to make the next payout registration answer 502 `gateway_error` once.
+  bool registerFailsOnce = false;
   int _nextId = 100;
 
   List<Seen> calls(String route) => [
@@ -179,6 +185,13 @@ class FakeGroupsApi {
           : _json({...account, 'balance': 0, 'owner': true});
     }
     if (m(r'POST /api/groups/(\d+)/payout-account') != null) {
+      final key = request.headers['idempotency-key'];
+      payoutKeys.add(key);
+      if (key == null) return _error(422, 'idempotency_key_required');
+      if (registerFailsOnce) {
+        registerFailsOnce = false;
+        return _error(502, 'gateway_error');
+      }
       payout = {
         'status': registeredStatus,
         'bank_name': body['bank_name'],

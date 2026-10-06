@@ -141,6 +141,7 @@ defmodule Petepete.Fixtures do
           owner_member_id: owner.id,
           provider: "fake",
           provider_account_id: "acc#{uniq()}",
+          idempotency_key: "pa-#{uniq()}",
           status: "active"
         },
         attrs
