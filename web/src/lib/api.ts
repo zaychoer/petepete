@@ -33,7 +33,16 @@ export function apiBaseUrl(): string {
   throw new Error("NEXT_PUBLIC_API_BASE_URL is not set");
 }
 
+/** Only for requests that got no answer at all (offline, DNS, CORS). */
 const NETWORK_MESSAGE = "Koneksi lagi bermasalah. Coba lagi ya.";
+
+/** Only for an error answer that has no `message` (a proxy page, Phoenix's default error body). */
+export const FALLBACK_MESSAGE = "Ada yang salah. Coba lagi ya.";
+
+/** Text to show for a caught error: the server's `message` (or the fallback) of an `ApiError`. */
+export function errorMessage(error: unknown): string {
+  return error instanceof ApiError ? error.message : FALLBACK_MESSAGE;
+}
 
 /** `fields` of a 422 may hold a list of messages per field; keep the first. */
 function readFields(body: unknown): Record<string, string> {
@@ -88,9 +97,7 @@ export async function apiFetch<T>(
     throw new ApiError(
       response.status,
       typeof payload.error === "string" ? payload.error : "unknown",
-      typeof payload.message === "string"
-        ? payload.message
-        : "Ada yang salah. Coba lagi ya.",
+      typeof payload.message === "string" ? payload.message : FALLBACK_MESSAGE,
       readFields(body),
     );
   }

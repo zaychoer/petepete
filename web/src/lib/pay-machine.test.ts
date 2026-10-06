@@ -7,13 +7,10 @@ import {
   phaseOf,
   shouldPoll,
 } from "./pay-machine";
+import { loadSample } from "../test/sample";
 import type { BillPayPage, PayAttempt, PayPage, VoidPayPage } from "./pay-types";
 
-const methods = [
-  { method: "qris", label: "QRIS", fee: 700, gross_amount: 35_700 },
-  { method: "va", label: "Virtual Account", fee: 4_440, gross_amount: 39_440 },
-  { method: "ewallet", label: "E-wallet", fee: 700, gross_amount: 35_700 },
-] as const;
+const methods = loadSample<BillPayPage>("pay_page.unpaid").json.methods;
 
 const qrisAttempt: PayAttempt = {
   method: "qris",
@@ -24,40 +21,12 @@ const qrisAttempt: PayAttempt = {
   expires_at: "2026-10-08T13:30:00Z",
 };
 
-function bill(overrides: Partial<BillPayPage> = {}): BillPayPage {
-  return {
-    group_name: "Futsal Kamis",
-    event_name: "Futsal",
-    session_date: "2026-10-08",
-    session_starts_at: "2026-10-08T12:00:00Z",
-    message: null,
-    token_expired: false,
-    can_pay: true,
-    status: "unpaid",
-    share: 35_000,
-    credit_applied: 0,
-    amount_due: 35_000,
-    rounding: 0,
-    lines: [],
-    paid_at: null,
-    methods: [...methods],
-    attempt: null,
-    attempt_expired: false,
-    expired_method: null,
-    ...overrides,
-  };
+/** The recorded unpaid page (`contract/samples/pay_page.unpaid.json`) with overrides. */
+function bill(overrides: Record<string, unknown> = {}): BillPayPage {
+  return loadSample<BillPayPage>("pay_page.unpaid").with(overrides).json;
 }
 
-const voidPage: VoidPayPage = {
-  group_name: "Futsal Kamis",
-  event_name: "Futsal",
-  session_date: "2026-10-08",
-  session_starts_at: "2026-10-08T12:00:00Z",
-  message: "Tagihan dibatalkan",
-  token_expired: false,
-  can_pay: false,
-  status: "void",
-};
+const voidPage = loadSample<VoidPayPage>("pay_page.void").json;
 
 describe("phaseOf", () => {
   it("follows the bill status and the attempt", () => {

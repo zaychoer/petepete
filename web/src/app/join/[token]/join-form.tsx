@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { ApiError, apiFetch } from "@/lib/api";
+import { ApiError, apiFetch, errorMessage } from "@/lib/api";
 import { appInviteUrl } from "@/lib/invite-url";
 
 interface JoinResult {
@@ -9,20 +9,8 @@ interface JoinResult {
   group: { id: number; name: string };
 }
 
-/** The API's field messages are English changeset text; the page speaks Indonesian. */
-const FIELD_MESSAGES: Record<string, string> = {
-  display_name: "Isi namamu dulu ya.",
-  phone: "Nomor WhatsApp-nya kurang pas. Contoh: 0812 3456 7890, atau kosongkan saja.",
-};
-
-function localizeFields(fields: Record<string, string>): Record<string, string> {
-  return Object.fromEntries(
-    Object.entries(fields).map(([key, message]) => [
-      key,
-      FIELD_MESSAGES[key] ?? message,
-    ]),
-  );
-}
+/** Client-side check before any request; every answer from the server brings its own text. */
+const NAME_REQUIRED = "Isi namamu dulu ya.";
 
 export function JoinForm({
   token,
@@ -44,7 +32,7 @@ export function JoinForm({
 
     const name = displayName.trim();
     if (!name) {
-      setFieldErrors({ display_name: FIELD_MESSAGES.display_name });
+      setFieldErrors({ display_name: NAME_REQUIRED });
       return;
     }
 
@@ -63,19 +51,13 @@ export function JoinForm({
         }),
       );
     } catch (error) {
-      if (error instanceof ApiError && error.status === 422) {
-        setFieldErrors(localizeFields(error.fields));
-        if (Object.keys(error.fields).length === 0) setFormError(error.message);
-      } else if (error instanceof ApiError && error.status === 404) {
-        setFormError(
-          "Link undangan ini sudah nggak berlaku. Minta link baru ke host.",
+      if (error instanceof ApiError && Object.keys(error.fields).length > 0) {
+        // The server's text for the whole answer under each field it flagged.
+        setFieldErrors(
+          Object.fromEntries(Object.keys(error.fields).map((key) => [key, error.message])),
         );
       } else {
-        setFormError(
-          error instanceof ApiError
-            ? error.message
-            : "Ada yang salah. Coba lagi ya.",
-        );
+        setFormError(errorMessage(error));
       }
     } finally {
       setSubmitting(false);
