@@ -10,6 +10,8 @@ defmodule Petepete.Application do
     # Fail the boot, not the first login, when no OTP sender is configured.
     Petepete.Accounts.OtpSender.fetch!()
 
+    Petepete.ErrorReporting.install_logger_handlers()
+
     children = [
       PetepeteWeb.Telemetry,
       Petepete.Repo,

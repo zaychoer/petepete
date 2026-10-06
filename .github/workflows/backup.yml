@@ -1,0 +1,30 @@
+name: Backup database
+
+# Daily full backup of each Fly Managed Postgres cluster; see "Daily database backup" in docs/deploy.md.
+on:
+  schedule:
+    - cron: "0 19 * * *" # 02:00 WIB
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-26.04
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [staging, production]
+    environment: ${{ matrix.environment }}
+    concurrency: backup-${{ matrix.environment }}
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_BACKUP_TOKEN }}
+      MPG_CLUSTER_ID: ${{ vars.MPG_CLUSTER_ID }}
+    steps:
+      - name: Require backup token and cluster id
+        run: |
+          if [ -z "$FLY_API_TOKEN" ] || [ -z "$MPG_CLUSTER_ID" ]; then
+            echo "::error::FLY_BACKUP_TOKEN (secret) and MPG_CLUSTER_ID (variable) must be set in the ${{ matrix.environment }} environment; see docs/deploy.md"
+            exit 1
+          fi
+      - uses: superfly/flyctl-actions/setup-flyctl@1.5
+      - run: flyctl mpg backup create "$MPG_CLUSTER_ID" --type full
+      - run: flyctl mpg backup list "$MPG_CLUSTER_ID"

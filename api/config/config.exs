@@ -46,6 +46,12 @@ config :logger, :default_formatter,
 # Never log request parameters that identify or authenticate a person.
 config :phoenix, :filter_parameters, ["password", "phone", "code", "refresh_token"]
 
+# Sentry: DSN comes from SENTRY_DSN in config/runtime.exs; without it nothing is sent.
+# Every event carries the layer tag; Petepete.ErrorReporting masks phone numbers.
+config :sentry,
+  tags: %{layer: "api"},
+  before_send: {Petepete.ErrorReporting, :before_send}
+
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 

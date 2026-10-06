@@ -50,7 +50,9 @@ defmodule Petepete.MixProject do
       {:bandit, "~> 1.5"},
       {:req, "~> 0.7"},
       {:oban, "~> 2.24"},
-      {:mox, "~> 1.3", only: :test}
+      {:mox, "~> 1.3", only: :test},
+      {:sentry, "~> 13.5"},
+      {:finch, "~> 0.21"}
     ]
   end
 

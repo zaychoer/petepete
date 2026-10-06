@@ -14,6 +14,8 @@ defmodule PetepeteWeb.Endpoint do
     pass: ["application/json"],
     json_decoder: Phoenix.json_library()
 
+  plug Sentry.PlugContext, body_scrubber: {Petepete.ErrorReporting, :scrub_body}
+
   plug Plug.Head
   plug PetepeteWeb.Router
 end
