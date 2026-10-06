@@ -16,6 +16,18 @@ config :petepete, Oban,
   repo: Petepete.Repo,
   queues: [default: 10, payments: 10, notifications: 10]
 
+# Payment gateway adapters. The adapter in use is set per environment
+# (`config :petepete, :gateway`: dev.exs, test.exs, runtime.exs for prod).
+# Fee tables: `flat` rupiah + `bps` basis points of the gross amount, PPN included.
+# These are placeholder figures for the fake adapter, not a provider's price list.
+config :petepete, Petepete.Payments.Gateway.Fake,
+  webhook_secret: "fake-webhook-secret",
+  fees: %{
+    "qris" => %{flat: 0, bps: 78},
+    "va" => %{flat: 4_440, bps: 0},
+    "ewallet" => %{flat: 0, bps: 167}
+  }
+
 # Configure the endpoint
 config :petepete, PetepeteWeb.Endpoint,
   url: [host: "localhost"],
