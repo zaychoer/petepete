@@ -1,17 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { readContractFile } from "../test/sample";
 import { formatRupiah } from "./rupiah";
 
-describe("formatRupiah", () => {
-  it("groups thousands with dots", () => {
-    expect(formatRupiah(0)).toBe("Rp0");
-    expect(formatRupiah(999)).toBe("Rp999");
-    expect(formatRupiah(1000)).toBe("Rp1.000");
-    expect(formatRupiah(34_000)).toBe("Rp34.000");
-    expect(formatRupiah(1_234_567)).toBe("Rp1.234.567");
-  });
+const cases = readContractFile<{ amount: number; text: string }[]>("rupiah.json");
 
-  it("puts the minus sign before Rp", () => {
-    expect(formatRupiah(-1500)).toBe("-Rp1.500");
+describe("formatRupiah", () => {
+  it.each(cases)("formats $amount as $text (contract/rupiah.json)", ({ amount, text }) => {
+    expect(formatRupiah(amount)).toBe(text);
   });
 
   it("refuses fractions and unsafe numbers: money is integer rupiah", () => {

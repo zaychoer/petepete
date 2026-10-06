@@ -44,3 +44,26 @@ manifest does not list.
 
 Fakes and tests load `samples/` and `manifest.json` instead of typing payloads. An override may
 change values but not a value's JSON type.
+
+## Web tests
+
+`web/src/test/sample.ts` loads the files for vitest (import it relatively, there is no `@/` alias in the vitest run):
+
+```ts
+import { loadError, loadSample, readContractFile } from "../test/sample";
+
+const page = loadSample<BillPayPage>("pay_page.unpaid") // contract/samples/pay_page.unpaid.json
+  .with({ amount_due: 50_000, "lines.0.label": "Konsumsi", attempt: { /* ... */ } })
+  .withItems("methods", [{ fee: 1 }, {}])               // one element per entry, built from the first
+  .json;                                                // fresh deep copy; .encode() gives the JSON string
+const error = loadError("bill_void").json;              // contract/samples/errors/bill_void.json
+const cases = readContractFile("rupiah.json");          // any other file under contract/
+```
+
+`with` and `withItems` follow the server's comparer: an override may change values but throws
+`SampleOverrideError` when it changes a JSON type, adds or drops an object key, or names a path
+the sample lacks (`null` on either side is free; JSON numbers are one type here, so
+integer-vs-float is only enforced by the API and the app). `rupiah.test.ts` runs
+`rupiah.json`; `pay-types.test.ts` runs every recorded pay page through `parsePayPage`, so a
+shape change fails a web test with the JSON path. `api.test.ts` checks that each recorded error
+reaches the UI as the server's `message`.

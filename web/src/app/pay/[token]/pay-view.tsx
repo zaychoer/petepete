@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ApiError, apiFetch } from "@/lib/api";
+import { ApiError, apiFetch, errorMessage } from "@/lib/api";
 import { formatSessionDate, formatWibDateTime } from "@/lib/dates";
 import {
   POLL_INTERVAL_MS,
@@ -12,7 +12,7 @@ import {
   phaseOf,
   shouldPoll,
 } from "@/lib/pay-machine";
-import type { Method, PayAttempt, PayPage } from "@/lib/pay-types";
+import { parsePayAttempt, parsePayPage, type Method, type PayPage } from "@/lib/pay-types";
 import { formatRupiah } from "@/lib/rupiah";
 import { AttemptAction } from "./attempt-action";
 import { Breakdown } from "./breakdown";
@@ -44,7 +44,7 @@ export function PayView({
     async (signal?: AbortSignal) => {
       const startedAt = epoch.current;
       try {
-        const next = await apiFetch<PayPage>(path, { signal });
+        const next = parsePayPage(await apiFetch<unknown>(path, { signal }));
         if (epoch.current === startedAt) setPage(next);
         setOffline(false);
       } catch (error) {
@@ -63,19 +63,20 @@ export function PayView({
       setBusy(true);
       setActionError(null);
       try {
-        const attempt = await apiFetch<PayAttempt>(`${path}/payment`, {
-          method: "POST",
-          body: { method },
-        });
+        const attempt = parsePayAttempt(
+          await apiFetch<unknown>(`${path}/payment`, {
+            method: "POST",
+            body: { method },
+          }),
+          "payment",
+        );
         setPage((current) => applyAttempt(current, attempt));
       } catch (error) {
         if (error instanceof ApiError && STALE_BILL_ERRORS.has(error.code)) {
           // The bill moved on (paid, voided, needs review, link expired): show the truth.
           await refresh();
         } else {
-          setActionError(
-            error instanceof ApiError ? error.message : "Ada yang salah. Coba lagi ya.",
-          );
+          setActionError(errorMessage(error));
         }
       } finally {
         inFlight.current = false;
@@ -139,7 +140,7 @@ export function PayView({
         {formatSessionDate(page.session_date)}
       </p>
       <div aria-live="polite" className="pt-2">
-        <StatusChip phase={phase} />
+        <StatusChip phase={phase} label={page.status_label} />
       </div>
     </header>
   );
@@ -149,7 +150,7 @@ export function PayView({
       <>
         {header}
         <p role="alert" className="font-medium">
-          {page.message ?? "Tagihan dibatalkan"}
+          {page.message}
         </p>
         <p className="text-sm">
           Link ini nggak bisa dipakai buat bayar. Tanya host kalau ada tagihan
@@ -169,14 +170,14 @@ export function PayView({
 
       {page.status === "paid" && (
         <p className="font-medium">
-          Lunas{page.paid_at ? `, dibayar ${formatWibDateTime(page.paid_at)}` : ""}.{" "}
-          {page.message ?? "Makasih ya!"}
+          {page.paid_at && `Dibayar ${formatWibDateTime(page.paid_at)}. `}
+          {page.message}
         </p>
       )}
 
       {page.status === "needs_review" && (
         <p className="font-medium">
-          {page.message ?? "Pembayaranmu lagi dicek host. Tunggu sebentar ya."}
+          {page.message}
         </p>
       )}
 
