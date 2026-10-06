@@ -32,6 +32,13 @@ defmodule PetepeteWeb.Router do
     post "/pay/:token/payment", PayController, :create_payment
   end
 
+  # The gateway's callback: authentic only by its signature over the raw body (RawBody).
+  scope "/api", PetepeteWeb do
+    pipe_through :api
+
+    post "/webhooks/:provider", WebhookController, :create
+  end
+
   scope "/api", PetepeteWeb do
     pipe_through [:api, :optionally_authenticated]
 
