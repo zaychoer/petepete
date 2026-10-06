@@ -119,6 +119,7 @@ defmodule PetepeteWeb.InviteControllerTest do
 
     test "an unknown or reset token is 404", %{conn: conn, group: group} do
       unknown = get(conn, ~p"/api/invites/nope")
+
       assert %{"error" => "invite_not_found", "message" => "Link undangan" <> _} =
                json_response(unknown, 404)
 

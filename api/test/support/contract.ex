@@ -122,7 +122,9 @@ defmodule Petepete.Contract do
   @doc "The sample names `check!/3` compared so far in this run (default contract dir only)."
   @spec exercised() :: [String.t()]
   def exercised do
-    if :ets.whereis(@exercised) == :undefined, do: [], else: :ets.select(@exercised, [{{:"$1"}, [], [:"$1"]}])
+    if :ets.whereis(@exercised) == :undefined,
+      do: [],
+      else: :ets.select(@exercised, [{{:"$1"}, [], [:"$1"]}])
   end
 
   @doc "The manifest sample names (`\"pay_page.unpaid\"`, `\"errors/not_found\"`) not in `exercised`."
@@ -513,7 +515,8 @@ defmodule Petepete.Contract do
           {_, body} ->
             if path in empty_arrays(body, "$"),
               do: nil,
-              else: "@allowed_empty lists #{path} of #{name}, which is not an empty array: remove it"
+              else:
+                "@allowed_empty lists #{path} of #{name}, which is not an empty array: remove it"
         end
       end
 

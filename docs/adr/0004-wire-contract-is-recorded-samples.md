@@ -16,4 +16,5 @@ The API's own controller tests record one real response per client-facing route 
 
 - An API shape change fails the `api` job until the sample is re-recorded (`CONTRACT_RECORD=1`), and the `app` and `web` jobs then fail until clients follow, all in the same PR.
 - Coverage is only as wide as the recorded routes: the router classification test requires every client-facing route to have a sample and every error code a client can see to have one.
-- Samples can go stale only if a controller test stops exercising the route; the coverage test is the guard.
+- Samples can go stale only if a controller test stops exercising the route: a full `mix test` (also `mix precommit`) fails when a manifest sample was not compared by `Contract.check!`, and an inventory test fails when the API renders an error code without a sample (or a sample for a code nothing renders).
+- A sample with an empty array records no element shape, so the audit rejects it unless the path is listed (with its reason) as always empty in that variant.

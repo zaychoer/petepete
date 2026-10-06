@@ -5,7 +5,9 @@ What the API sends and what the app and web client rely on, as recorded real res
 schema: the samples are the contract.
 
 - `samples/<resource>.<variant>.json`: a real, pretty-printed response body of one client-facing
-  route, e.g. `pay_page.unpaid.json`. Use non-empty arrays so the element shape is recorded.
+  route, e.g. `pay_page.unpaid.json`. Use non-empty arrays so the element shape is recorded: the
+  audit rejects an empty array unless `@allowed_empty` in `api/test/support/contract.ex` lists its
+  path with the reason (e.g. `pay_page.paid` has no payment `methods`).
 - `samples/errors/<code>.json`: one per error `code` a client can see:
   `{"error": code, "message": "...", ...}`. `message` is required (the server owns user-facing text).
 - `manifest.json`: `{"routes": {"GET /api/pay/:token": ["pay_page.unpaid", ...]}, "errors": ["not_found", ...]}`
@@ -39,6 +41,23 @@ Recording rewrites the sample and adds it to `manifest.json`. A new route needs 
 classification in `api/test/petepete_web/router_classification_test.exs`; that test fails on
 an unrecorded `:client` route, a manifest entry without its file, and a sample file the
 manifest does not list.
+
+### Every sample is exercised, every error has one
+
+- A bare `mix test` (and so `mix precommit`) runs the whole suite and then fails the run, listing
+  them, when a sample in `manifest.json` was not compared by any `Contract.check!` call. A run with
+  arguments (a path, `file:line`, `--only`, ...) skips the check, because it may select fewer
+  tests. So a sample whose controller test is deleted or stops reaching its route cannot go stale.
+- `api/test/petepete_web/error_inventory_test.exs` lists the error codes the API renders from the
+  tables that render them (`FallbackController.codes/0`, `LedgerError.codes/0`,
+  `BillingError.codes/0`, `PayController.codes/0`, `SessionBillingController.codes/0`,
+  `ErrorJSON.codes/0`) and fails when a code a client can receive has no `errors/<code>` sample, when
+  a manifest error is no longer produced, or when a controller or plug renders a code literal that is
+  in none of the tables. A code no client can receive (e.g. webhook-only codes, Ledger checks on
+  server-built events) goes on the test's `@not_client` list with its reason.
+- Phoenix's own errors (unknown route, malformed JSON body, a crash) are rendered by
+  `PetepeteWeb.ErrorJSON` as `{"error": "not_found" | "bad_request" | "server_error", "message": ...}`,
+  not Phoenix's default `{"errors": {"detail": ...}}`, so clients treat them like every other error.
 
 A route whose success response has no body (`DELETE /api/sessions/:id/costs/:cid`, 204) is
 classified `:no_body` in the classification test: it needs no sample and is not in the
