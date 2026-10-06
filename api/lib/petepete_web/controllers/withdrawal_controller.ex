@@ -33,11 +33,11 @@ defmodule PetepeteWeb.WithdrawalController do
   }
 
   def balance(conn, _params) do
-    member = conn.assigns.member
+    actor = conn.assigns.actor
 
-    case Payments.payout_account_balance(member.group_id) do
+    case Payments.payout_account_balance(conn.assigns.group_id) do
       {:ok, %{balance: balance, payout_account: account}} ->
-        owner? = account.owner_member_id == member.id
+        owner? = account.owner_member_id == actor.member_id
 
         json(conn, %{
           balance: balance,
@@ -55,10 +55,9 @@ defmodule PetepeteWeb.WithdrawalController do
   end
 
   def create(conn, %{"amount" => amount}) when is_integer(amount) do
-    member = conn.assigns.member
-    user_id = conn.assigns.current_scope.user.id
+    actor = conn.assigns.actor
 
-    case Payments.withdraw(member.group_id, member, user_id, conn.assigns.idempotency_key, amount) do
+    case Payments.withdraw(actor, conn.assigns.group_id, conn.assigns.idempotency_key, amount) do
       {:ok, %{withdrawal: withdrawal, replayed: replayed}} ->
         conn
         |> put_status(if replayed, do: 200, else: 201)
@@ -80,7 +79,7 @@ defmodule PetepeteWeb.WithdrawalController do
   end
 
   def index(conn, _params) do
-    withdrawals = Payments.list_withdrawals(conn.assigns.member.group_id)
+    withdrawals = Payments.list_withdrawals(conn.assigns.group_id)
     json(conn, %{withdrawals: Enum.map(withdrawals, &withdrawal_data/1)})
   end
 

@@ -1,45 +1,17 @@
 defmodule PetepeteWeb.PayoutAccountController do
   @moduledoc """
   Rekening pencairan: the host registers themself as the group's payout account owner.
-  The `audit_log` row commits in the same transaction as the `payout_accounts` row.
+  The context (`Payments.register_payout_account/3`) writes the audit row with the account.
   """
   use PetepeteWeb, :controller
 
-  alias Petepete.{Payments, Repo}
-  alias Petepete.Groups.Group
-  alias Petepete.Ledger.Audit
+  alias Petepete.Payments
   alias PetepeteWeb.{LedgerError, Plugs.GroupAccess}
 
   plug GroupAccess, role: :host
 
   def create(conn, params) do
-    member = conn.assigns.member
-    group = Repo.get!(Group, member.group_id)
-    user_id = conn.assigns.current_scope.user.id
-
-    result =
-      Repo.transaction(fn ->
-        case Payments.register_payout_account(group, member, params) do
-          {:ok, account} ->
-            Audit.record(
-              group.id,
-              user_id,
-              "payout_account.register",
-              {"payout_account", account.id},
-              %{
-                "owner_member_id" => member.id,
-                "provider" => account.provider,
-                "bank_name" => account.bank_name,
-                "account_last4" => account.account_last4
-              }
-            )
-
-            account
-
-          {:error, reason} ->
-            Repo.rollback(reason)
-        end
-      end)
+    result = Payments.register_payout_account(conn.assigns.actor, conn.assigns.group_id, params)
 
     case result do
       {:ok, account} ->
