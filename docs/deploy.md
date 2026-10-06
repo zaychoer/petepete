@@ -44,6 +44,15 @@ fly secrets set -a petepete-staging --stage SECRET_KEY_BASE="$(openssl rand -bas
 
 `--stage` stores the secret without restarting machines; it takes effect on the next deploy.
 
+### 4b. Set the OTP secrets
+
+```sh
+fly secrets set -a petepete-staging --stage OTP_HMAC_KEY="$(openssl rand -base64 48 | tr -d '\n')"
+fly secrets set -a petepete-staging --stage OTP_SENDER=Elixir.Petepete.Accounts.OtpSender.<Provider>
+```
+
+`OTP_HMAC_KEY` keys the hashes of OTP codes and phones (at least 32 bytes). `OTP_SENDER` names the module that delivers OTP codes over WhatsApp. **The app refuses to boot in production without both**, and refuses `OtpSender.Fake` as the sender, so that no login code is ever dropped silently. The provider adapter is not written yet (the choice of WhatsApp provider is an open question in the spec); until it exists a production release does not start.
+
 ### 5. Give GitHub a deploy token
 
 The workflow reads `FLY_API_TOKEN` from the GitHub environment named exactly like the `environment:` key in the workflow (`staging` or `production`). Create the environment first: `gh secret set --env` fails if it doesn't exist. Creating an environment that already exists is harmless.
@@ -100,4 +109,4 @@ The GitHub environment `<name>` does not exist, often because of a typo when cre
 Step 5 has not been done for `staging`, or the secret was added as a repository secret instead of an environment secret.
 
 **Deploy fails after the token check**
-The app is missing its database (step 3) or `SECRET_KEY_BASE` (step 4). `fly secrets list -a petepete-staging` should show both `DATABASE_URL` and `SECRET_KEY_BASE`.
+The app is missing its database (step 3), `SECRET_KEY_BASE` (step 4) or the OTP secrets (step 4b). `fly secrets list -a petepete-staging` should show `DATABASE_URL`, `SECRET_KEY_BASE`, `OTP_HMAC_KEY` and `OTP_SENDER`.

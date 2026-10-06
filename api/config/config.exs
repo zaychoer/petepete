@@ -43,6 +43,9 @@ config :logger, :default_formatter,
   format: "$time $metadata[$level] $message\n",
   metadata: [:request_id]
 
+# Never log request parameters that identify or authenticate a person.
+config :phoenix, :filter_parameters, ["password", "phone", "code", "refresh_token"]
+
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 

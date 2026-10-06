@@ -12,6 +12,10 @@ config :petepete, PetepeteWeb.Endpoint,
     ]
   ]
 
+# Behind Fly's proxy the socket peer is the proxy, so per-IP OTP limits read the
+# client address from the header Fly sets.
+config :petepete, :client_ip_header, "fly-client-ip"
+
 # Do not print debug messages in production
 config :logger, level: :info
 

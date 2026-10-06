@@ -11,6 +11,11 @@ config :petepete, Petepete.Repo,
   show_sensitive_data_on_connection_error: true,
   pool_size: 10
 
+# OTP codes are logged (without the phone number), never sent.
+config :petepete, Petepete.Accounts,
+  otp_sender: Petepete.Accounts.OtpSender.Fake,
+  otp_hmac_key: "dev-only-otp-hmac-key-not-a-secret"
+
 # For development, we disable any cache and enable
 # debugging and code reloading.
 #

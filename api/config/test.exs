@@ -16,6 +16,10 @@ config :petepete, Petepete.Repo,
 
 config :petepete, Oban, testing: :manual
 
+config :petepete, Petepete.Accounts,
+  otp_sender: Petepete.Accounts.OtpSender.Fake,
+  otp_hmac_key: "test-only-otp-hmac-key-not-a-secret"
+
 # We don't run a server during test. If one is required,
 # you can enable the server option below.
 config :petepete, PetepeteWeb.Endpoint,
