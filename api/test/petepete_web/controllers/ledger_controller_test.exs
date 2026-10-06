@@ -329,6 +329,12 @@ defmodule PetepeteWeb.LedgerControllerTest do
       %{"txns" => txns} =
         host_conn |> get(~p"/api/groups/#{ctx.group.id}/txns") |> json_response(200)
 
+      # The recorded sample holds one real txn of each kind (the clients pick their fake's
+      # txns and `kind_label`s from it).
+      Contract.check!("txns.history", %{"txns" => Enum.uniq_by(txns, & &1["kind"])},
+        route: "GET /api/groups/:group_id/txns"
+      )
+
       kinds = txns |> Enum.map(&{&1["kind"], &1["kind_label"]}) |> Enum.uniq() |> Enum.sort()
 
       assert kinds == [
@@ -363,9 +369,7 @@ defmodule PetepeteWeb.LedgerControllerTest do
       })
 
       path = ~p"/api/groups/#{ctx.g.id}/txns"
-      conn = get(ctx.plain_conn, path)
-      Contract.check!("txns.history", conn)
-      all = json_response(conn, 200)
+      all = ctx.plain_conn |> get(path) |> json_response(200)
 
       assert [
                %{
