@@ -1,0 +1,220 @@
+defmodule PetepeteWeb.SessionControllerTest do
+  use PetepeteWeb.ConnCase, async: true
+
+  import Petepete.Fixtures
+
+  alias Petepete.Repo
+
+  setup %{conn: conn} do
+    a = group_fixture()
+    b = group_fixture()
+    {host_user, host} = host_fixture(a)
+    {plain_user, plain} = plain_member_fixture(a)
+    {other_user, _} = host_fixture(b)
+    session = session_fixture(a)
+
+    %{
+      a: a,
+      host: host,
+      plain: plain,
+      session: session,
+      conn: put_req_header(conn, "accept", "application/json"),
+      host_conn: log_in(conn, host_user),
+      plain_conn: log_in(conn, plain_user),
+      other_conn: log_in(conn, other_user)
+    }
+  end
+
+  # Real bearer token through the OTP endpoints, a fresh client IP per login.
+  defp log_in(conn, user) do
+    phone =
+      "628" <>
+        String.pad_leading("#{rem(System.unique_integer([:positive]), 1_000_000_000)}", 9, "0")
+
+    user = user |> Ecto.Changeset.change(phone: phone) |> Repo.update!()
+
+    ip =
+      {10, 7, rem(System.unique_integer([:positive]), 250),
+       rem(System.unique_integer([:positive]), 250)}
+
+    assert post(%{conn | remote_ip: ip}, ~p"/api/auth/otp", %{phone: user.phone}).status == 200
+    assert_received {:otp_sent, _, code}
+
+    %{"access_token" => token} =
+      post(conn, ~p"/api/auth/verify", %{phone: user.phone, code: code}) |> json_response(200)
+
+    put_req_header(conn, "authorization", "Bearer " <> token)
+  end
+
+  defp cost_path(session, cid), do: ~p"/api/sessions/#{session.id}/costs/#{cid}"
+
+  test "every route needs a bearer token", %{conn: conn, session: session} do
+    for conn <- [
+          get(conn, ~p"/api/sessions/#{session.id}"),
+          put(conn, cost_path(session, "new"), %{}),
+          delete(conn, cost_path(session, 1)),
+          put(conn, ~p"/api/sessions/#{session.id}/attendance", %{})
+        ] do
+      assert json_response(conn, 401) == %{"error" => "unauthenticated"}
+    end
+  end
+
+  test "spec example 'Pos subset': 10 attend, three costs, the drink is borne by its 6 only",
+       %{host_conn: conn, session: session, a: a, host: host} do
+    members = [host | for(_ <- 1..9, do: member_fixture(a, "member"))]
+    drinkers = members |> Enum.take(6) |> Enum.map(& &1.id)
+
+    for m <- members do
+      conn =
+        put(conn, ~p"/api/sessions/#{session.id}/attendance", %{member_id: m.id, attended: true})
+
+      assert %{"participant" => %{"attended" => true, "weight" => 1000}} =
+               json_response(conn, 200)
+    end
+
+    for {category, amount, extra} <- [
+          {"lapangan", 350_000, %{}},
+          {"wasit", 100_000, %{}},
+          {"minum", 60_000, %{scope: "subset", members: drinkers}}
+        ] do
+      conn =
+        put(
+          conn,
+          cost_path(session, "new"),
+          Map.merge(%{category: category, amount: amount}, extra)
+        )
+
+      assert %{"cost_item" => %{"id" => _}} = json_response(conn, 201)
+    end
+
+    assert %{"cost_items" => [lapangan, wasit, minum], "participants" => participants} =
+             get(conn, ~p"/api/sessions/#{session.id}") |> json_response(200)
+
+    all_ids = members |> Enum.map(& &1.id) |> Enum.sort()
+    assert length(participants) == 10
+    assert %{"amount" => 350_000, "scope" => "all", "bearer_ids" => ^all_ids} = lapangan
+    assert %{"amount" => 100_000, "bearer_ids" => ^all_ids} = wasit
+
+    assert %{"amount" => 60_000, "scope" => "subset", "members" => m, "bearer_ids" => b} = minum
+    assert Enum.sort(m) == Enum.sort(drinkers)
+    assert Enum.sort(b) == Enum.sort(drinkers)
+    assert length(b) == 6
+
+    # Two of the six drinkers leave: they still are in the subset but no longer bear the item.
+    for id <- Enum.take(drinkers, -2) do
+      put(conn, ~p"/api/sessions/#{session.id}/attendance", %{member_id: id, attended: false})
+    end
+
+    assert %{"cost_items" => [_, _, %{"members" => m2, "bearer_ids" => b2}]} =
+             get(conn, ~p"/api/sessions/#{session.id}") |> json_response(200)
+
+    assert length(m2) == 6
+    assert Enum.sort(b2) == Enum.sort(Enum.take(drinkers, 4))
+  end
+
+  test "cost item payload shows the payer; default host, changeable, 'new' vs existing id",
+       %{host_conn: conn, session: session, host: host, plain: plain} do
+    assert %{"cost_item" => %{"id" => id, "paid_by" => paid_by, "paid_by_name" => name}} =
+             put(conn, cost_path(session, "new"), %{category: "lapangan", amount: 350_000})
+             |> json_response(201)
+
+    assert paid_by == host.id
+    assert name == host.display_name
+
+    assert %{"cost_item" => %{"id" => ^id, "paid_by" => pid, "paid_by_name" => pname}} =
+             put(conn, cost_path(session, id), %{
+               category: "lapangan",
+               amount: 350_000,
+               paid_by: plain.id
+             })
+             |> json_response(200)
+
+    assert pid == plain.id
+    assert pname == plain.display_name
+
+    assert put(conn, cost_path(session, 0), %{category: "x", amount: 1}).status == 404
+    assert put(conn, cost_path(session, "abc"), %{category: "x", amount: 1}).status == 404
+    assert delete(conn, cost_path(session, id)).status == 204
+
+    assert %{"cost_items" => []} =
+             get(conn, ~p"/api/sessions/#{session.id}") |> json_response(200)
+  end
+
+  test "422 lists field errors; weight 0 is rejected", %{
+    host_conn: conn,
+    session: session,
+    plain: plain
+  } do
+    assert %{"error" => "invalid", "errors" => %{"amount" => [_]}} =
+             put(conn, cost_path(session, "new"), %{category: "lapangan", amount: 0})
+             |> json_response(422)
+
+    assert %{"error" => "invalid", "errors" => %{"amount" => ["is invalid"]}} =
+             put(conn, cost_path(session, "new"), %{category: "lapangan", amount: 1000.5})
+             |> json_response(422)
+
+    assert %{"errors" => %{"weight" => [_]}} =
+             put(conn, ~p"/api/sessions/#{session.id}/attendance", %{
+               member_id: plain.id,
+               attended: true,
+               weight: 0
+             })
+             |> json_response(422)
+  end
+
+  test "a plain member may read but never write; the other group's host sees nothing", ctx do
+    %{session: session, plain: plain} = ctx
+
+    assert get(ctx.plain_conn, ~p"/api/sessions/#{session.id}").status == 200
+
+    assert put(ctx.plain_conn, cost_path(session, "new"), %{category: "x", amount: 1}).status ==
+             403
+
+    assert delete(ctx.plain_conn, cost_path(session, 1)).status == 403
+
+    assert put(ctx.plain_conn, ~p"/api/sessions/#{session.id}/attendance", %{
+             member_id: plain.id,
+             attended: true
+           }).status ==
+             403
+
+    assert json_response(get(ctx.other_conn, ~p"/api/sessions/#{session.id}"), 404) == %{
+             "error" => "not_found"
+           }
+
+    assert put(ctx.other_conn, cost_path(session, "new"), %{category: "x", amount: 1}).status ==
+             404
+
+    assert delete(ctx.other_conn, cost_path(session, 1)).status == 404
+
+    assert put(ctx.other_conn, ~p"/api/sessions/#{session.id}/attendance", %{
+             member_id: plain.id,
+             attended: true
+           }).status ==
+             404
+  end
+
+  test "an issued session answers 409 with its status until it is a draft again",
+       %{host_conn: conn, session: session, plain: plain} do
+    session |> Ecto.Changeset.change(status: "issued") |> Repo.update!()
+
+    assert %{"error" => "session_not_editable", "status" => "issued"} =
+             put(conn, cost_path(session, "new"), %{category: "x", amount: 1})
+             |> json_response(409)
+
+    assert put(conn, ~p"/api/sessions/#{session.id}/attendance", %{
+             member_id: plain.id,
+             attended: true
+           }).status ==
+             409
+
+    assert %{"session" => %{"status" => "issued", "progress" => "issued"}} =
+             get(conn, ~p"/api/sessions/#{session.id}") |> json_response(200)
+
+    Repo.get!(Petepete.Billing.Session, session.id)
+    |> Ecto.Changeset.change(status: "draft")
+    |> Repo.update!()
+
+    assert put(conn, cost_path(session, "new"), %{category: "x", amount: 1}).status == 201
+  end
+end
