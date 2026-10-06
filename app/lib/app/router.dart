@@ -6,6 +6,7 @@ import '../features/auth/name_screen.dart';
 import '../features/auth/otp_screen.dart';
 import '../features/auth/restore_screen.dart';
 import '../features/home/placeholder_screen.dart';
+import '../features/kas/kas_routes.dart';
 
 /// Route names; navigate with `context.goNamed(AppRoutes.home)`. Later tickets add
 /// their names here, under [home] (e.g. a group is `/grup/:groupId`).
@@ -61,6 +62,7 @@ GoRouter createRouter(AuthController auth) {
         name: AppRoutes.name,
         builder: (context, state) => const NameScreen(),
       ),
+      ...kasRoutes(),
     ],
   );
 }
