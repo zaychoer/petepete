@@ -3,6 +3,7 @@ defmodule PetepeteWeb.HomeController do
   use PetepeteWeb, :controller
 
   alias Petepete.{Clock, Home}
+  alias PetepeteWeb.Labels
 
   plug PetepeteWeb.Plugs.GroupAccess, role: :member
 
@@ -13,12 +14,15 @@ defmodule PetepeteWeb.HomeController do
     json(conn, %{
       group: %{id: home.group.id, name: home.group.name},
       role: member.role,
+      role_label: Labels.role(member.role),
       next_session: next_session_json(home.next_session),
       kas_balance: home.kas_balance,
-      unpaid_bills: home.unpaid_bills,
-      needs_review_bills: home.needs_review_bills
+      unpaid_bills: Enum.map(home.unpaid_bills, &bill_json/1),
+      needs_review_bills: Enum.map(home.needs_review_bills, &bill_json/1)
     })
   end
+
+  defp bill_json(bill), do: Map.put(bill, :status_label, Labels.bill(bill.status))
 
   defp next_session_json(nil), do: nil
 
@@ -29,6 +33,7 @@ defmodule PetepeteWeb.HomeController do
       event_name: card.event_name,
       starts_at: card.session.starts_at,
       status: card.session.status,
+      status_label: Labels.session(card.progress),
       progress: card.progress,
       cost_total: card.cost_total,
       attended_count: card.attended_count

@@ -64,7 +64,7 @@ defmodule PetepeteWeb.AuthController do
         :invalid_token -> {401, "invalid_token"}
       end
 
-    conn |> put_status(status) |> json(%{error: code})
+    PetepeteWeb.FallbackController.respond(conn, status, code)
   end
 
   # Behind Fly's proxy the socket peer is the proxy; the real client is in the

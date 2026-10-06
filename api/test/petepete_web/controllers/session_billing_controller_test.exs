@@ -65,14 +65,17 @@ defmodule PetepeteWeb.SessionBillingControllerTest do
       member_fixture(ctx.group, role: "member", user: member_user)
       {stranger_conn, _} = bearer_login(build_conn())
 
-      assert get(member_conn, ~p"/api/sessions/#{ctx.session.id}/preview")
-             |> json_response(403) == %{"error" => "forbidden"}
+      assert %{"error" => "forbidden"} =
+               get(member_conn, ~p"/api/sessions/#{ctx.session.id}/preview")
+               |> json_response(403)
 
-      assert get(stranger_conn, ~p"/api/sessions/#{ctx.session.id}/preview")
-             |> json_response(404) == %{"error" => "not_found"}
+      assert %{"error" => "not_found"} =
+               get(stranger_conn, ~p"/api/sessions/#{ctx.session.id}/preview")
+               |> json_response(404)
 
-      assert get(conn, ~p"/api/sessions/#{other.session.id}/preview")
-             |> json_response(404) == %{"error" => "not_found"}
+      assert %{"error" => "not_found"} =
+               get(conn, ~p"/api/sessions/#{other.session.id}/preview")
+               |> json_response(404)
 
       assert get(conn, ~p"/api/sessions/0/preview") |> json_response(404)
     end

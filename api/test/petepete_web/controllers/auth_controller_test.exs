@@ -3,7 +3,7 @@ defmodule PetepeteWeb.AuthControllerTest do
 
   import Ecto.Query
 
-  alias Petepete.{Clock, Repo}
+  alias Petepete.{Clock, Contract, Repo}
   alias Petepete.Accounts.{OtpChallenge, RefreshToken, User}
 
   @t0 ~U[2026-10-06 03:00:00Z]
@@ -34,11 +34,12 @@ defmodule PetepeteWeb.AuthControllerTest do
     test "malformed numbers are rejected without sending", %{conn: conn} do
       for bad <- ["12345", "0212345678", "abc", "", "+1 202 555 0100"] do
         conn = post(conn, ~p"/api/auth/otp", %{phone: bad})
-        assert json_response(conn, 422) == %{"error" => "invalid_phone"}
+        assert %{"error" => "invalid_phone"} = json_response(conn, 422)
+        Contract.check!("errors/invalid_phone", conn)
       end
 
       conn = post(conn, ~p"/api/auth/otp", %{})
-      assert json_response(conn, 422) == %{"error" => "invalid_phone"}
+      assert %{"error" => "invalid_phone"} = json_response(conn, 422)
       refute_received {:otp_sent, _, _}
     end
   end
@@ -71,7 +72,9 @@ defmodule PetepeteWeb.AuthControllerTest do
 
       code = request_otp(conn, phone)
       Clock.advance(300)
-      assert verify(conn, phone, code) |> json_response(401) == %{"error" => "invalid_code"}
+      conn = verify(conn, phone, code)
+      assert %{"error" => "invalid_code"} = json_response(conn, 401)
+      Contract.check!("errors/invalid_code", conn)
     end
 
     test "a code works once", %{conn: conn} do
@@ -123,7 +126,7 @@ defmodule PetepeteWeb.AuthControllerTest do
       end
 
       conn = post(conn, ~p"/api/auth/verify", %{phone: phone})
-      assert json_response(conn, 401) == %{"error" => "invalid_code"}
+      assert %{"error" => "invalid_code"} = json_response(conn, 401)
     end
   end
 
@@ -134,8 +137,9 @@ defmodule PetepeteWeb.AuthControllerTest do
 
       conn = %{conn | remote_ip: {10, 1, 0, 6}}
 
-      assert post(conn, ~p"/api/auth/otp", %{phone: phone}) |> json_response(429) ==
-               %{"error" => "rate_limited"}
+      limited = post(conn, ~p"/api/auth/otp", %{phone: phone})
+      assert %{"error" => "rate_limited"} = json_response(limited, 429)
+      Contract.check!("errors/rate_limited", limited)
 
       refute_received {:otp_sent, _, _}
 
@@ -151,8 +155,8 @@ defmodule PetepeteWeb.AuthControllerTest do
 
       limited = %{conn | remote_ip: ip}
 
-      assert post(limited, ~p"/api/auth/otp", %{phone: unique_phone()}) |> json_response(429) ==
-               %{"error" => "rate_limited"}
+      assert %{"error" => "rate_limited"} =
+               post(limited, ~p"/api/auth/otp", %{phone: unique_phone()}) |> json_response(429)
 
       request_otp(conn, unique_phone(), {10, 2, 0, 2})
       Clock.advance(3601)
@@ -164,8 +168,12 @@ defmodule PetepeteWeb.AuthControllerTest do
     test "refresh rotates: the old token dies, the new one works", %{conn: conn} do
       %{"refresh_token" => first} = login(conn, unique_phone())
 
+      refreshed = refresh(conn, first)
+
       assert %{"access_token" => access, "refresh_token" => second} =
-               refresh(conn, first) |> json_response(200)
+               json_response(refreshed, 200)
+
+      Contract.check!("auth_refresh.ok", refreshed)
 
       assert second != first
       assert is_binary(access)
@@ -196,7 +204,9 @@ defmodule PetepeteWeb.AuthControllerTest do
     test "an expired refresh token is rejected", %{conn: conn} do
       %{"refresh_token" => token} = login(conn, unique_phone())
       Clock.advance(30 * 24 * 60 * 60)
-      assert refresh(conn, token) |> json_response(401) == %{"error" => "invalid_token"}
+      conn = refresh(conn, token)
+      assert %{"error" => "invalid_token"} = json_response(conn, 401)
+      Contract.check!("errors/invalid_token", conn)
     end
 
     test "refresh tokens are stored hashed", %{conn: conn} do
@@ -208,16 +218,17 @@ defmodule PetepeteWeb.AuthControllerTest do
     test "unknown tokens and missing params are rejected", %{conn: conn} do
       assert refresh(conn, "nope").status == 401
 
-      assert post(conn, ~p"/api/auth/refresh", %{}) |> json_response(401) ==
-               %{"error" => "invalid_token"}
+      assert %{"error" => "invalid_token"} =
+               post(conn, ~p"/api/auth/refresh", %{}) |> json_response(401)
     end
 
     test "logout revokes the refresh token and its family", %{conn: conn} do
       %{"refresh_token" => first} = login(conn, unique_phone())
       %{"refresh_token" => second} = refresh(conn, first) |> json_response(200)
 
-      assert post(conn, ~p"/api/auth/logout", %{refresh_token: second}) |> json_response(200) ==
-               %{"ok" => true}
+      conn = post(conn, ~p"/api/auth/logout", %{refresh_token: second})
+      assert json_response(conn, 200) == %{"ok" => true}
+      Contract.check!("auth_logout.ok", conn)
 
       assert refresh(conn, second).status == 401
     end
@@ -238,7 +249,9 @@ defmodule PetepeteWeb.AuthControllerTest do
 
   defp request_otp(conn, phone, ip \\ {10, 0, 0, 1}) do
     conn = %{conn | remote_ip: ip}
-    assert post(conn, ~p"/api/auth/otp", %{phone: phone}) |> json_response(200) == %{"ok" => true}
+    conn = post(conn, ~p"/api/auth/otp", %{phone: phone})
+    assert json_response(conn, 200) == %{"ok" => true}
+    Contract.check!("auth_otp.ok", conn)
     assert_received {:otp_sent, _normalized, code}
     code
   end
@@ -253,7 +266,9 @@ defmodule PetepeteWeb.AuthControllerTest do
        rem(System.unique_integer([:positive]), 250)}
 
     code = request_otp(conn, phone, ip)
-    verify(conn, phone, code) |> json_response(200)
+    conn = verify(conn, phone, code)
+    Contract.check!("auth_verify.ok", conn)
+    json_response(conn, 200)
   end
 
   defp refresh(conn, token), do: post(conn, ~p"/api/auth/refresh", %{refresh_token: token})

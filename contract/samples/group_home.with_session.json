@@ -1,0 +1,46 @@
+{
+  "group": {
+    "id": 1012,
+    "name": "Group 4454"
+  },
+  "kas_balance": 0,
+  "needs_review_bills": [
+    {
+      "amount_due": 25000,
+      "event_name": "Futsal Kamis",
+      "id": 889,
+      "member_id": 2354,
+      "member_name": "Member 4582",
+      "session_id": 477,
+      "session_starts_at": "2026-10-01T12:00:00Z",
+      "status": "needs_review",
+      "status_label": "Perlu dicek"
+    }
+  ],
+  "next_session": {
+    "attended_count": 0,
+    "cost_total": 0,
+    "event_id": 454,
+    "event_name": "Futsal Kamis",
+    "id": 476,
+    "progress": "draft",
+    "starts_at": "2026-10-08T12:00:00Z",
+    "status": "draft",
+    "status_label": "Draft"
+  },
+  "role": "member",
+  "role_label": "Anggota",
+  "unpaid_bills": [
+    {
+      "amount_due": 25000,
+      "event_name": "Futsal Kamis",
+      "id": 888,
+      "member_id": 2355,
+      "member_name": "Member 4678",
+      "session_id": 477,
+      "session_starts_at": "2026-10-01T12:00:00Z",
+      "status": "unpaid",
+      "status_label": "Belum bayar"
+    }
+  ]
+}

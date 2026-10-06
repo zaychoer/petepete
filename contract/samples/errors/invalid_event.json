@@ -1,0 +1,9 @@
+{
+  "details": {
+    "rrule": [
+      "INTERVAL is not supported; only FREQ=WEEKLY;BYDAY=<MO,TU,WE,TH,FR,SA,SU list> with a time of day is supported"
+    ]
+  },
+  "error": "invalid_event",
+  "message": "Ada isian acara yang belum benar. Cek lagi ya."
+}

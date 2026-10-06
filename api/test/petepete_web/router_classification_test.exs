@@ -118,27 +118,7 @@ defmodule PetepeteWeb.RouterClassificationTest do
   }
 
   # `:client` routes with no recorded sample yet (route keys as in contract/manifest.json).
-  @pending_samples [
-    "POST /api/auth/otp",
-    "POST /api/auth/verify",
-    "POST /api/auth/refresh",
-    "POST /api/auth/logout",
-    "GET /api/invites/:token",
-    "POST /api/invites/:token/join",
-    "GET /api/groups",
-    "POST /api/groups",
-    "GET /api/groups/:group_id",
-    "POST /api/groups/:group_id/invite/reset",
-    "POST /api/groups/:group_id/guests",
-    "POST /api/groups/:group_id/events",
-    "GET /api/groups/:group_id/home",
-    "POST /api/members/:id/claim",
-    "POST /api/members/:id/claim/approve",
-    "POST /api/members/:id/claim/reject",
-    "GET /api/me",
-    "PATCH /api/me",
-    "DELETE /api/me"
-  ]
+  @pending_samples []
 
   defp all_routes do
     for %{verb: verb, path: "/api" <> _ = path} <- PetepeteWeb.Router.__routes__(),

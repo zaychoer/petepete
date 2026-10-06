@@ -3,7 +3,7 @@ defmodule PetepeteWeb.HomeControllerTest do
 
   import Petepete.Fixtures
 
-  alias Petepete.Clock
+  alias Petepete.{Clock, Contract}
 
   setup %{conn: conn} do
     # Tuesday 2026-10-06 10:00 WIB.
@@ -43,10 +43,13 @@ defmodule PetepeteWeb.HomeControllerTest do
     do: conn |> bearer_conn(user) |> get(~p"/api/groups/#{group.id}/home")
 
   test "a plain member sees the next session card, kas and open bills of their group", ctx do
-    body = home(ctx.conn, ctx.plain, ctx.group) |> json_response(200)
+    shown = home(ctx.conn, ctx.plain, ctx.group)
+    body = json_response(shown, 200)
+    Contract.check!("group_home.with_session", shown)
 
     assert %{
              "role" => "member",
+             "role_label" => "Anggota",
              "group" => %{"name" => _},
              "kas_balance" => 0,
              "next_session" => %{
@@ -54,11 +57,17 @@ defmodule PetepeteWeb.HomeControllerTest do
                "event_name" => "Futsal Kamis",
                "starts_at" => "2026-10-08T12:00:00Z",
                "progress" => "draft",
+               "status_label" => "Draft",
                "cost_total" => 0,
                "attended_count" => 0
              },
-             "unpaid_bills" => [%{"amount_due" => 25_000, "status" => "unpaid"} = unpaid],
-             "needs_review_bills" => [%{"status" => "needs_review"}]
+             "unpaid_bills" => [
+               %{"amount_due" => 25_000, "status" => "unpaid", "status_label" => "Belum bayar"} =
+                 unpaid
+             ],
+             "needs_review_bills" => [
+               %{"status" => "needs_review", "status_label" => "Perlu dicek"}
+             ]
            } = body
 
     assert id == ctx.next.id
@@ -70,9 +79,23 @@ defmodule PetepeteWeb.HomeControllerTest do
              home(ctx.conn, ctx.host, ctx.group) |> json_response(200)
   end
 
+  test "a group with nothing planned or owed has no next session and no open bills", ctx do
+    quiet = group_fixture()
+    user = user_fixture(%{phone: valid_phone()})
+    member_fixture(quiet, role: "host", user: user)
+
+    shown = home(ctx.conn, user, quiet)
+
+    assert %{"next_session" => nil, "unpaid_bills" => [], "needs_review_bills" => []} =
+             json_response(shown, 200)
+
+    Contract.check!("group_home.quiet", shown)
+  end
+
   test "someone outside the group gets 404, and no token gets 401", ctx do
-    assert %{"error" => "not_found"} =
-             home(ctx.conn, ctx.outsider, ctx.group) |> json_response(404)
+    not_found = home(ctx.conn, ctx.outsider, ctx.group)
+    assert %{"error" => "not_found"} = json_response(not_found, 404)
+    Contract.check!("errors/not_found", not_found)
 
     assert %{"error" => "unauthenticated"} =
              ctx.conn |> get(~p"/api/groups/#{ctx.group.id}/home") |> json_response(401)

@@ -1,0 +1,26 @@
+{
+  "event": {
+    "active": true,
+    "cost_template": {
+      "items": [
+        {
+          "amount": 350000,
+          "category": "lapangan",
+          "label": null,
+          "member_ids": [],
+          "paid_by_member_id": 2559,
+          "scope": "all"
+        }
+      ]
+    },
+    "group_id": 1109,
+    "id": 504,
+    "name": "Group 30754",
+    "rrule": null,
+    "split_rule": null,
+    "starts_at": "2026-10-08T12:00:00Z",
+    "type": "one_off"
+  },
+  "event_id": 504,
+  "session_id": 529
+}

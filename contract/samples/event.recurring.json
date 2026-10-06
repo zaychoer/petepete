@@ -1,0 +1,26 @@
+{
+  "event": {
+    "active": true,
+    "cost_template": {
+      "items": [
+        {
+          "amount": 350000,
+          "category": "lapangan",
+          "label": null,
+          "member_ids": [],
+          "paid_by_member_id": 2556,
+          "scope": "all"
+        }
+      ]
+    },
+    "group_id": 1107,
+    "id": 503,
+    "name": "Group 30210",
+    "rrule": "FREQ=WEEKLY;BYDAY=TH;BYHOUR=19;BYMINUTE=0",
+    "split_rule": "equal",
+    "starts_at": null,
+    "type": "recurring"
+  },
+  "event_id": 503,
+  "session_id": null
+}

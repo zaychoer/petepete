@@ -4,7 +4,7 @@ defmodule PetepeteWeb.EventControllerTest do
   import Petepete.Fixtures
 
   alias Petepete.Billing.Session
-  alias Petepete.Repo
+  alias Petepete.{Contract, Repo}
   alias Petepete.Sessions.Event
 
   setup %{conn: conn} do
@@ -33,7 +33,9 @@ defmodule PetepeteWeb.EventControllerTest do
   }
 
   test "a host creates a recurring event and gets no session", ctx do
-    body = create(ctx.conn, ctx.host, ctx.group, @recurring) |> json_response(201)
+    created = create(ctx.conn, ctx.host, ctx.group, @recurring)
+    body = json_response(created, 201)
+    Contract.check!("event.recurring", created)
 
     assert %{"event_id" => id, "session_id" => nil, "event" => event} = body
     assert event["rrule"] == "FREQ=WEEKLY;BYDAY=TH;BYHOUR=19;BYMINUTE=0"
@@ -48,8 +50,9 @@ defmodule PetepeteWeb.EventControllerTest do
       "cost_template" => @recurring["cost_template"]
     }
 
-    assert %{"event_id" => event_id, "session_id" => session_id} =
-             create(ctx.conn, ctx.host, ctx.group, params) |> json_response(201)
+    created = create(ctx.conn, ctx.host, ctx.group, params)
+    assert %{"event_id" => event_id, "session_id" => session_id} = json_response(created, 201)
+    Contract.check!("event.one_off", created)
 
     assert %Session{status: "draft", event_id: ^event_id, starts_at: ~U[2026-10-08 12:00:00Z]} =
              Repo.get!(Session, session_id)
@@ -58,16 +61,21 @@ defmodule PetepeteWeb.EventControllerTest do
   test "an unsupported rrule is a 422 saying which part", ctx do
     params = Map.put(@recurring, "rrule", "FREQ=WEEKLY;INTERVAL=2;BYDAY=TH")
 
+    invalid = create(ctx.conn, ctx.host, ctx.group, params)
+
     assert %{"error" => "invalid_event", "details" => %{"rrule" => [message]}} =
-             create(ctx.conn, ctx.host, ctx.group, params) |> json_response(422)
+             json_response(invalid, 422)
+
+    Contract.check!("errors/invalid_event", invalid)
 
     assert message =~ "INTERVAL"
     assert Repo.aggregate(Event, :count) == 0
   end
 
   test "only hosts of the group may create events", ctx do
-    assert %{"error" => "forbidden"} =
-             create(ctx.conn, ctx.plain, ctx.group, @recurring) |> json_response(403)
+    forbidden = create(ctx.conn, ctx.plain, ctx.group, @recurring)
+    assert %{"error" => "forbidden"} = json_response(forbidden, 403)
+    Contract.check!("errors/forbidden", forbidden)
 
     # A host of another group learns nothing about this group.
     assert %{"error" => "not_found"} =

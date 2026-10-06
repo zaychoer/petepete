@@ -126,7 +126,7 @@ defmodule PetepeteWeb.ShareControllerTest do
       for action <- ~w(bills reminder) do
         path = "/api/sessions/#{ctx.session.id}/share/#{action}"
 
-        assert member_conn |> get(path) |> json_response(403) == %{"error" => "forbidden"}
+        assert %{"error" => "forbidden"} = member_conn |> get(path) |> json_response(403)
         assert build_conn() |> get(path) |> json_response(401)
       end
     end
@@ -136,9 +136,10 @@ defmodule PetepeteWeb.ShareControllerTest do
       _b = issued_group(user)
 
       for action <- ~w(bills reminder summary) do
-        assert conn
-               |> get("/api/sessions/#{a.session.id}/share/#{action}")
-               |> json_response(404) == %{"error" => "not_found"}
+        assert %{"error" => "not_found"} =
+                 conn
+                 |> get("/api/sessions/#{a.session.id}/share/#{action}")
+                 |> json_response(404)
       end
     end
   end
