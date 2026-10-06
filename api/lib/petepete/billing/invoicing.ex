@@ -25,6 +25,7 @@ defmodule Petepete.Billing.Invoicing do
   alias Petepete.Ledger
   alias Petepete.Ledger.Event.SessionBilled
   alias Petepete.Ledger.Txn
+  alias Petepete.Metrics
   alias Petepete.Repo
 
   @token_bytes 24
@@ -107,6 +108,7 @@ defmodule Petepete.Billing.Invoicing do
       final = Calculation.apply_credit(plan, result.balances_before)
       {:ok, issued} = Transitions.issue_session(session, result.txn.id)
       bills = for m <- final.members, m.share > 0, do: insert_bill(session, m)
+      record_metrics(session, bills)
 
       {:ok, %{session: issued, txn: result.txn, bills: load_members(bills), replayed: false}}
     end
@@ -128,6 +130,42 @@ defmodule Petepete.Billing.Invoicing do
   defp fresh_txn(%{replayed: false}), do: :ok
   defp fresh_txn(%{replayed: true}), do: {:error, :idempotency_key_conflict}
 
+  # PP-REL-02: in the issue transaction, so only the first issue of a key records anything.
+  defp record_metrics(session, bills) do
+    now = Clock.now()
+
+    if started_at = first_edit_at(session) do
+      Metrics.record(:session_build_duration,
+        group_id: session.group_id,
+        session_id: session.id,
+        value_ms: Metrics.duration_ms(started_at, now)
+      )
+    end
+
+    for bill <- bills do
+      Metrics.record(:bills_sent,
+        group_id: session.group_id,
+        session_id: session.id,
+        bill_id: bill.id
+      )
+    end
+
+    :ok
+  end
+
+  # The earliest cost item or attendance row the host created for the draft.
+  defp first_edit_at(%Session{id: session_id}) do
+    costs = Repo.one(from c in CostItem, where: c.session_id == ^session_id, select: min(c.inserted_at))
+
+    attendance =
+      Repo.one(from p in Participant, where: p.session_id == ^session_id, select: min(p.inserted_at))
+
+    case Enum.reject([costs, attendance], &is_nil/1) do
+      [] -> nil
+      times -> Enum.min(times, DateTime)
+    end
+  end
+
   defp insert_bill(session, member) do
     now = Clock.now()
     status = Transitions.initial_bill_status(member.amount_due)
@@ -142,7 +180,9 @@ defmodule Petepete.Billing.Invoicing do
       paid_via: if(status == "paid", do: "credit"),
       paid_at: if(status == "paid", do: now),
       pay_token: Base.url_encode64(:crypto.strong_rand_bytes(@token_bytes), padding: false),
-      token_expires_at: DateTime.add(now, @token_ttl_days, :day)
+      token_expires_at: DateTime.add(now, @token_ttl_days, :day),
+      inserted_at: now,
+      updated_at: now
     })
   end
 

@@ -29,6 +29,12 @@ if sentry_dsn = System.get_env("SENTRY_DSN") do
   config :sentry, dsn: if(String.trim(sentry_dsn) == "", do: nil, else: sentry_dsn)
 end
 
+# The bearer secret of GET /api/admin/metrics. Unset or blank: the endpoint answers 404.
+if config_env() != :test do
+  metrics_token = String.trim(System.get_env("METRICS_TOKEN", ""))
+  config :petepete, :metrics_token, if(metrics_token == "", do: nil, else: metrics_token)
+end
+
 if config_env() == :dev do
   config :petepete, PetepeteWeb.Endpoint,
     secret_key_base:
