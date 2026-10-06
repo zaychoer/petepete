@@ -107,8 +107,7 @@ defmodule Petepete.Billing.Voiding do
           replayed: true
         }
 
-        {:ok, reply,
-         %{subject: {"txn", replayed_txn.id}, metadata: %{}, replayed: true}}
+        {:ok, reply, %{subject: {"txn", replayed_txn.id}, metadata: %{}, replayed: true}}
 
       {:error, _} = error ->
         error

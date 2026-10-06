@@ -180,6 +180,35 @@ defmodule PetepeteWeb.SessionControllerTest do
              404
   end
 
+  test "authorization comes before the status: outsiders never learn it, nothing changes", ctx do
+    %{session: session, plain: plain} = ctx
+    session |> Ecto.Changeset.change(status: "issued") |> Repo.update!()
+
+    for {conn, status} <- [{ctx.plain_conn, 403}, {ctx.other_conn, 404}] do
+      assert put(conn, cost_path(session, "new"), %{category: "x", amount: 1}).status == status
+      assert put(conn, cost_path(session, 1), %{category: "x", amount: 1}).status == status
+      assert delete(conn, cost_path(session, 1)).status == status
+
+      assert put(conn, ~p"/api/sessions/#{session.id}/attendance", %{
+               member_id: plain.id,
+               attended: true
+             }).status == status
+    end
+
+    assert Petepete.Billing.list_cost_items(session.id) == []
+    assert Petepete.Billing.list_participants(session.id) == []
+  end
+
+  test "an unknown session is 404 on every route", %{host_conn: conn} do
+    assert get(conn, ~p"/api/sessions/0").status == 404
+    assert put(conn, ~p"/api/sessions/0/costs/new", %{category: "x", amount: 1}).status == 404
+    assert put(conn, ~p"/api/sessions/0/costs/1", %{category: "x", amount: 1}).status == 404
+    assert delete(conn, ~p"/api/sessions/0/costs/1").status == 404
+
+    assert put(conn, ~p"/api/sessions/0/attendance", %{member_id: 1, attended: true}).status ==
+             404
+  end
+
   test "an issued session answers 409 with its status until it is a draft again",
        %{host_conn: conn, session: session, plain: plain} do
     session |> Ecto.Changeset.change(status: "issued") |> Repo.update!()
