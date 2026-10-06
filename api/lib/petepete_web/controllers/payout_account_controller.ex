@@ -11,7 +11,7 @@ defmodule PetepeteWeb.PayoutAccountController do
   use PetepeteWeb, :controller
 
   alias Petepete.Payments
-  alias PetepeteWeb.{Labels, LedgerError}
+  alias PetepeteWeb.{FieldErrors, Labels, LedgerError}
   alias PetepeteWeb.Plugs.{GroupAccess, IdempotencyKey}
 
   plug GroupAccess, role: :host
@@ -38,14 +38,10 @@ defmodule PetepeteWeb.PayoutAccountController do
         })
 
       {:error, %Ecto.Changeset{} = changeset} ->
-        LedgerError.render_invalid(conn, changeset_errors(changeset))
+        LedgerError.render_invalid(conn, FieldErrors.changeset_errors(changeset))
 
       {:error, _reason} ->
         LedgerError.render_gateway_error(conn)
     end
-  end
-
-  defp changeset_errors(changeset) do
-    Ecto.Changeset.traverse_errors(changeset, fn {msg, _opts} -> msg end)
   end
 end

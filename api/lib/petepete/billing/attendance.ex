@@ -63,7 +63,8 @@ defmodule Petepete.Billing.Attendance do
          Changeset.add_error(
            {%{}, @types} |> Changeset.change(),
            :member_id,
-           "must be a member of the group"
+           "must be a member of the group",
+           validation: :not_in_group
          )}
 
       member ->

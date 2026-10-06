@@ -8,6 +8,8 @@ defmodule PetepeteWeb.FallbackController do
   """
   use PetepeteWeb, :controller
 
+  alias PetepeteWeb.FieldErrors
+
   @messages %{
     "not_found" => "Data nggak ditemukan.",
     "forbidden" => "Kamu nggak punya akses untuk aksi ini.",
@@ -46,17 +48,8 @@ defmodule PetepeteWeb.FallbackController do
   end
 
   def call(conn, {:error, %Ecto.Changeset{} = changeset}) do
-    errors = changeset_errors(changeset)
+    errors = FieldErrors.changeset_errors(changeset)
     respond(conn, 422, "invalid", %{errors: errors, fields: errors})
-  end
-
-  @doc "A changeset's errors as `%{field => [message]}` with interpolations filled in."
-  def changeset_errors(%Ecto.Changeset{} = changeset) do
-    Ecto.Changeset.traverse_errors(changeset, fn {message, opts} ->
-      Regex.replace(~r"%{(\w+)}", message, fn _, key ->
-        opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
-      end)
-    end)
   end
 
   @doc """

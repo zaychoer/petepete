@@ -1,7 +1,7 @@
 {
   "details": {
     "rrule": [
-      "INTERVAL is not supported; only FREQ=WEEKLY;BYDAY=<MO,TU,WE,TH,FR,SA,SU list> with a time of day is supported"
+      "INTERVAL belum didukung; yang didukung cuma FREQ=WEEKLY;BYDAY=<daftar MO,TU,WE,TH,FR,SA,SU> plus jam"
     ]
   },
   "error": "invalid_event",

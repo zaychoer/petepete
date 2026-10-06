@@ -182,12 +182,17 @@ defmodule Petepete.Billing.Costs do
   defp validate_members(cs, group_id) do
     case {Changeset.get_field(cs, :scope), Enum.uniq(Changeset.get_field(cs, :members) || [])} do
       {"subset", []} ->
-        Changeset.add_error(cs, :members, "must name at least one member for a subset cost")
+        Changeset.add_error(cs, :members, "must name at least one member for a subset cost",
+          validation: :members_required
+        )
 
       {"subset", ids} ->
         if all_in_group?(ids, group_id),
           do: cs,
-          else: Changeset.add_error(cs, :members, "must all belong to the group")
+          else:
+            Changeset.add_error(cs, :members, "must all belong to the group",
+              validation: :members_not_in_group
+            )
 
       _ ->
         cs
@@ -204,7 +209,10 @@ defmodule Petepete.Billing.Costs do
       id ->
         if all_in_group?([id], group_id),
           do: cs,
-          else: Changeset.add_error(cs, :paid_by, "must be a member of the group")
+          else:
+            Changeset.add_error(cs, :paid_by, "must be a member of the group",
+              validation: :not_in_group
+            )
     end
   end
 

@@ -108,7 +108,11 @@ defmodule Petepete.Payments do
     |> cast(attrs, Map.keys(@bank_types))
     |> update_change(:account_number, &String.replace(&1, ~r/[\s-]/, ""))
     |> validate_required(Map.keys(@bank_types))
-    |> validate_format(:account_number, ~r/^\d{6,}$/, message: "must be digits only")
+    |> validate_change(:account_number, fn :account_number, number ->
+      if number =~ ~r/^\d{6,}$/,
+        do: [],
+        else: [account_number: {"must be digits only", validation: :digits_only, min: 6}]
+    end)
     |> apply_action(:validate)
   end
 

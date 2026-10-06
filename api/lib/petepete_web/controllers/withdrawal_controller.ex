@@ -19,7 +19,7 @@ defmodule PetepeteWeb.WithdrawalController do
 
   alias Petepete.Payments
   alias Petepete.Payments.Withdrawal
-  alias PetepeteWeb.{FallbackController, Labels, LedgerError}
+  alias PetepeteWeb.{FallbackController, FieldErrors, Labels, LedgerError}
   alias PetepeteWeb.Plugs.{GroupAccess, IdempotencyKey}
 
   plug GroupAccess, role: :host
@@ -69,7 +69,7 @@ defmodule PetepeteWeb.WithdrawalController do
   end
 
   def create(conn, _params) do
-    LedgerError.render_invalid(conn, %{"amount" => "harus angka bulat dalam rupiah"})
+    LedgerError.render_invalid(conn, %{"amount" => FieldErrors.message(:whole_rupiah)})
   end
 
   def index(conn, _params) do
