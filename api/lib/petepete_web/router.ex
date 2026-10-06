@@ -72,6 +72,10 @@ defmodule PetepeteWeb.Router do
     get "/sessions/:id/share/bills", ShareController, :bills
     get "/sessions/:id/share/reminder", ShareController, :reminder
     get "/sessions/:id/share/summary", ShareController, :summary
+    post "/sessions/:id/void", SessionBillingController, :void
+
+    post "/bills/:id/cash", BillController, :cash
+    post "/bills/:id/cash/cancel", BillController, :cancel_cash
 
     get "/me", MeController, :show
     patch "/me", MeController, :update
