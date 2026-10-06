@@ -14,7 +14,7 @@ defmodule Petepete.Billing do
 
   import Ecto.Query, only: [from: 2]
 
-  alias Petepete.Accounts.Scope
+  alias Petepete.Actor
 
   alias Petepete.Billing.{
     Attendance,
@@ -29,12 +29,10 @@ defmodule Petepete.Billing do
     TransitionError
   }
 
-  alias Petepete.Groups
   alias Petepete.Repo
 
   @type edit_error ::
           :not_found
-          | :forbidden
           | {:session_not_editable, String.t()}
           | Ecto.Changeset.t()
 
@@ -194,24 +192,25 @@ defmodule Petepete.Billing do
   Adds a cost item to a draft session. `attrs` (string or atom keys): `category`, `amount`
   (positive integer rupiah), optional `label`, `paid_by` (member id of the group, default
   the acting host), `scope` (`"all"` default, or `"subset"`) and `members` (member ids,
-  at least one when subset). The caller must be the host of the session's group.
+  at least one when subset). `actor` is a host `Petepete.Actor` authorized for the session's
+  group at the edge; nothing is re-checked here, and a cost edit writes no audit row.
   """
-  @spec create_cost_item(Scope.t(), integer(), map()) ::
+  @spec create_cost_item(Actor.t(), integer(), map()) ::
           {:ok, %CostItem{}} | {:error, edit_error()}
-  defdelegate create_cost_item(scope, session_id, attrs), to: Costs, as: :create
+  defdelegate create_cost_item(actor, session_id, attrs), to: Costs, as: :create
 
   @doc """
   Replaces a cost item of the session with `attrs` (same shape as `create_cost_item/3`;
   an omitted `paid_by` becomes the acting host again, an `all` item keeps no members).
   """
-  @spec update_cost_item(Scope.t(), integer(), integer(), map()) ::
+  @spec update_cost_item(Actor.t(), integer(), integer(), map()) ::
           {:ok, %CostItem{}} | {:error, edit_error()}
-  defdelegate update_cost_item(scope, session_id, cost_item_id, attrs), to: Costs, as: :update
+  defdelegate update_cost_item(actor, session_id, cost_item_id, attrs), to: Costs, as: :update
 
   @doc "Removes a cost item of the draft session."
-  @spec delete_cost_item(Scope.t(), integer(), integer()) ::
+  @spec delete_cost_item(Actor.t(), integer(), integer()) ::
           {:ok, %CostItem{}} | {:error, edit_error()}
-  defdelegate delete_cost_item(scope, session_id, cost_item_id), to: Costs, as: :delete
+  defdelegate delete_cost_item(actor, session_id, cost_item_id), to: Costs, as: :delete
 
   @doc """
   The session's cost items with `member_ids` (who a subset item is limited to) and
@@ -236,9 +235,9 @@ defmodule Petepete.Billing do
   mil; a new participant defaults to the member's `default_weight`, an existing one keeps
   its weight).
   """
-  @spec set_attendance(Scope.t(), integer(), map()) ::
+  @spec set_attendance(Actor.t(), integer(), map()) ::
           {:ok, %Participant{}} | {:error, edit_error()}
-  defdelegate set_attendance(scope, session_id, attrs), to: Attendance, as: :set
+  defdelegate set_attendance(actor, session_id, attrs), to: Attendance, as: :set
 
   @doc "The session's participants with `member` loaded."
   @spec list_participants(integer()) :: [%Participant{}]
@@ -246,9 +245,10 @@ defmodule Petepete.Billing do
 
   @doc """
   A session as the host's screens need it: the session, its derived `progress`, cost items
-  and participants. Any member of the session's group may read it.
+  and participants. Reading is open to any member of the session's group, which the HTTP
+  edge (`PetepeteWeb.Plugs.SessionAccess`, role `:member`) checks.
   """
-  @spec get_session(Scope.t(), integer()) ::
+  @spec get_session(integer()) ::
           {:ok,
            %{
              session: %Session{},
@@ -257,19 +257,19 @@ defmodule Petepete.Billing do
              participants: [%Participant{}]
            }}
           | {:error, :not_found}
-  def get_session(%Scope{} = scope, session_id) when is_integer(session_id) do
-    with group_id when not is_nil(group_id) <- Groups.group_id_for(:session, session_id),
-         {:ok, _member} <- Groups.authorize(scope, group_id, :member),
-         %Session{} = session <- Repo.get(Session, session_id) do
-      {:ok,
-       %{
-         session: session,
-         progress: session_progress(session),
-         cost_items: list_cost_items(session.id),
-         participants: list_participants(session.id)
-       }}
-    else
-      _ -> {:error, :not_found}
+  def get_session(session_id) when is_integer(session_id) do
+    case Repo.get(Session, session_id) do
+      %Session{} = session ->
+        {:ok,
+         %{
+           session: session,
+           progress: session_progress(session),
+           cost_items: list_cost_items(session.id),
+           participants: list_participants(session.id)
+         }}
+
+      nil ->
+        {:error, :not_found}
     end
   end
 

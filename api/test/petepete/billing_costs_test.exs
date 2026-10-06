@@ -3,17 +3,16 @@ defmodule Petepete.BillingCostsTest do
 
   import Petepete.Fixtures
 
-  alias Petepete.Accounts.Scope
   alias Petepete.Billing
   alias Petepete.Billing.Session
 
   setup do
     a = group_fixture()
     b = group_fixture()
-    {host_user, host} = host_fixture(a)
-    {plain_user, plain} = plain_member_fixture(a)
+    {_host_user, host} = host_fixture(a)
+    {_plain_user, plain} = plain_member_fixture(a)
     {_guest_user, guest} = guest_fixture(a)
-    {other_host_user, other_host} = host_fixture(b)
+    {_other_host_user, other_host} = host_fixture(b)
     session = session_fixture(event_fixture(a))
 
     %{
@@ -23,16 +22,14 @@ defmodule Petepete.BillingCostsTest do
       guest: guest,
       other_host: other_host,
       session: session,
-      host_scope: Scope.for(host_user),
-      plain_scope: Scope.for(plain_user),
-      other_scope: Scope.for(other_host_user)
+      actor: host_actor(a, host)
     }
   end
 
   defp cost(ctx, attrs \\ %{}) do
     {:ok, item} =
       Billing.create_cost_item(
-        ctx.host_scope,
+        ctx.actor,
         ctx.session.id,
         Map.merge(%{"category" => "lapangan", "amount" => 350_000}, attrs)
       )
@@ -43,7 +40,7 @@ defmodule Petepete.BillingCostsTest do
   defp attend(ctx, member, attended \\ true, extra \\ %{}) do
     {:ok, p} =
       Billing.set_attendance(
-        ctx.host_scope,
+        ctx.actor,
         ctx.session.id,
         Map.merge(%{"member_id" => member.id, "attended" => attended}, extra)
       )
@@ -63,7 +60,7 @@ defmodule Petepete.BillingCostsTest do
       assert item.paid_by_member.display_name == ctx.host.display_name
 
       assert {:ok, again} =
-               Billing.update_cost_item(ctx.host_scope, ctx.session.id, item.id, %{
+               Billing.update_cost_item(ctx.actor, ctx.session.id, item.id, %{
                  "category" => "lapangan",
                  "amount" => 350_000,
                  "paid_by" => ctx.guest.id
@@ -75,7 +72,7 @@ defmodule Petepete.BillingCostsTest do
 
     test "a payer outside the group is rejected", ctx do
       assert {:error, cs} =
-               Billing.create_cost_item(ctx.host_scope, ctx.session.id, %{
+               Billing.create_cost_item(ctx.actor, ctx.session.id, %{
                  "category" => "lapangan",
                  "amount" => 100,
                  "paid_by" => ctx.other_host.id
@@ -87,7 +84,7 @@ defmodule Petepete.BillingCostsTest do
     test "amount must be a positive integer of rupiah", ctx do
       for bad <- [0, -1, 1000.5, 1000.0, "1000", nil, 1_000_000_000_001] do
         assert {:error, cs} =
-                 Billing.create_cost_item(ctx.host_scope, ctx.session.id, %{
+                 Billing.create_cost_item(ctx.actor, ctx.session.id, %{
                    "category" => "lapangan",
                    "amount" => bad
                  })
@@ -100,7 +97,7 @@ defmodule Petepete.BillingCostsTest do
 
     test "a category is required", ctx do
       assert {:error, cs} =
-               Billing.create_cost_item(ctx.host_scope, ctx.session.id, %{
+               Billing.create_cost_item(ctx.actor, ctx.session.id, %{
                  "category" => "  ",
                  "amount" => 100
                })
@@ -114,7 +111,7 @@ defmodule Petepete.BillingCostsTest do
       for members <- [[], nil, [ctx.other_host.id], [ctx.plain.id, ctx.other_host.id], ["1"]] do
         assert {:error, cs} =
                  Billing.create_cost_item(
-                   ctx.host_scope,
+                   ctx.actor,
                    ctx.session.id,
                    Map.put(attrs, "members", members)
                  )
@@ -124,7 +121,7 @@ defmodule Petepete.BillingCostsTest do
 
       assert {:ok, item} =
                Billing.create_cost_item(
-                 ctx.host_scope,
+                 ctx.actor,
                  ctx.session.id,
                  Map.put(attrs, "members", [ctx.guest.id, ctx.plain.id, ctx.plain.id])
                )
@@ -134,7 +131,7 @@ defmodule Petepete.BillingCostsTest do
 
     test "an unknown scope is rejected", ctx do
       assert {:error, cs} =
-               Billing.create_cost_item(ctx.host_scope, ctx.session.id, %{
+               Billing.create_cost_item(ctx.actor, ctx.session.id, %{
                  "category" => "minum",
                  "amount" => 100,
                  "scope" => "some"
@@ -149,7 +146,7 @@ defmodule Petepete.BillingCostsTest do
       assert item.member_ids == [ctx.plain.id]
 
       assert {:error, _} =
-               Billing.update_cost_item(ctx.host_scope, ctx.session.id, item.id, %{
+               Billing.update_cost_item(ctx.actor, ctx.session.id, item.id, %{
                  "category" => "lapangan",
                  "amount" => 0
                })
@@ -157,7 +154,7 @@ defmodule Petepete.BillingCostsTest do
       assert [%{amount: 350_000, member_ids: [_]}] = Billing.list_cost_items(ctx.session.id)
 
       assert {:ok, updated} =
-               Billing.update_cost_item(ctx.host_scope, ctx.session.id, item.id, %{
+               Billing.update_cost_item(ctx.actor, ctx.session.id, item.id, %{
                  "category" => "wasit",
                  "amount" => 100_000,
                  "scope" => "all",
@@ -172,26 +169,26 @@ defmodule Petepete.BillingCostsTest do
       other_session = session_fixture(event_fixture(ctx.a))
 
       {:ok, foreign} =
-        Billing.create_cost_item(ctx.host_scope, other_session.id, %{
+        Billing.create_cost_item(ctx.actor, other_session.id, %{
           "category" => "lapangan",
           "amount" => 1
         })
 
       assert {:error, :not_found} =
-               Billing.update_cost_item(ctx.host_scope, ctx.session.id, foreign.id, %{
+               Billing.update_cost_item(ctx.actor, ctx.session.id, foreign.id, %{
                  "category" => "x",
                  "amount" => 1
                })
 
       assert {:error, :not_found} =
-               Billing.delete_cost_item(ctx.host_scope, ctx.session.id, foreign.id)
+               Billing.delete_cost_item(ctx.actor, ctx.session.id, foreign.id)
 
-      assert {:error, :not_found} = Billing.delete_cost_item(ctx.host_scope, ctx.session.id, -1)
+      assert {:error, :not_found} = Billing.delete_cost_item(ctx.actor, ctx.session.id, -1)
     end
 
     test "delete removes the item and its subset members", ctx do
       item = cost(ctx, %{"scope" => "subset", "members" => [ctx.plain.id]})
-      assert {:ok, _} = Billing.delete_cost_item(ctx.host_scope, ctx.session.id, item.id)
+      assert {:ok, _} = Billing.delete_cost_item(ctx.actor, ctx.session.id, item.id)
       assert Billing.list_cost_items(ctx.session.id) == []
       assert Repo.aggregate(Petepete.Billing.CostItemMember, :count) == 0
     end
@@ -215,7 +212,7 @@ defmodule Petepete.BillingCostsTest do
     test "weight must be a positive integer per mil", ctx do
       for bad <- [0, -1, -1000, 1.2, "1200", 100_001] do
         assert {:error, cs} =
-                 Billing.set_attendance(ctx.host_scope, ctx.session.id, %{
+                 Billing.set_attendance(ctx.actor, ctx.session.id, %{
                    "member_id" => ctx.plain.id,
                    "attended" => true,
                    "weight" => bad
@@ -230,7 +227,7 @@ defmodule Petepete.BillingCostsTest do
     test "attended must be a boolean and the member must be on the roster", ctx do
       for bad <- [nil, "true", 1] do
         assert {:error, cs} =
-                 Billing.set_attendance(ctx.host_scope, ctx.session.id, %{
+                 Billing.set_attendance(ctx.actor, ctx.session.id, %{
                    "member_id" => ctx.plain.id,
                    "attended" => bad
                  })
@@ -239,7 +236,7 @@ defmodule Petepete.BillingCostsTest do
       end
 
       assert {:error, cs} =
-               Billing.set_attendance(ctx.host_scope, ctx.session.id, %{
+               Billing.set_attendance(ctx.actor, ctx.session.id, %{
                  "member_id" => ctx.other_host.id,
                  "attended" => true
                })
@@ -278,46 +275,22 @@ defmodule Petepete.BillingCostsTest do
     end
   end
 
-  describe "who and when" do
+  describe "when" do
     defp commands(ctx, item) do
       sid = ctx.session.id
 
       [
-        fn s ->
-          Billing.create_cost_item(s, sid, %{"category" => "x", "amount" => 1})
+        fn a ->
+          Billing.create_cost_item(a, sid, %{"category" => "x", "amount" => 1})
         end,
-        fn s ->
-          Billing.update_cost_item(s, sid, item.id, %{"category" => "x", "amount" => 2})
+        fn a ->
+          Billing.update_cost_item(a, sid, item.id, %{"category" => "x", "amount" => 2})
         end,
-        fn s -> Billing.delete_cost_item(s, sid, item.id) end,
-        fn s ->
-          Billing.set_attendance(s, sid, %{"member_id" => ctx.plain.id, "attended" => true})
+        fn a -> Billing.delete_cost_item(a, sid, item.id) end,
+        fn a ->
+          Billing.set_attendance(a, sid, %{"member_id" => ctx.plain.id, "attended" => true})
         end
       ]
-    end
-
-    test "a plain member is forbidden, another group's host gets not_found, nothing changes",
-         ctx do
-      item = cost(ctx)
-
-      for command <- commands(ctx, item) do
-        assert {:error, :forbidden} = command.(ctx.plain_scope)
-        assert {:error, :not_found} = command.(ctx.other_scope)
-      end
-
-      assert [%{amount: 350_000}] = Billing.list_cost_items(ctx.session.id)
-      assert Billing.list_participants(ctx.session.id) == []
-    end
-
-    test "authorization is checked before the status: outsiders never learn it", ctx do
-      item = cost(ctx)
-      set_status(ctx.session, "issued")
-
-      for command <- commands(ctx, item),
-          do: assert({:error, :not_found} = command.(ctx.other_scope))
-
-      for command <- commands(ctx, item),
-          do: assert({:error, :forbidden} = command.(ctx.plain_scope))
     end
 
     test "only a draft session accepts edits, again after the bills are cancelled", ctx do
@@ -327,7 +300,7 @@ defmodule Petepete.BillingCostsTest do
         set_status(ctx.session, status)
 
         for command <- commands(ctx, item) do
-          assert {:error, {:session_not_editable, ^status}} = command.(ctx.host_scope)
+          assert {:error, {:session_not_editable, ^status}} = command.(ctx.actor)
         end
       end
 
@@ -339,28 +312,27 @@ defmodule Petepete.BillingCostsTest do
       |> Ecto.Changeset.change(status: "draft")
       |> Repo.update!()
 
-      assert {:ok, _} = Billing.delete_cost_item(ctx.host_scope, ctx.session.id, item.id)
+      assert {:ok, _} = Billing.delete_cost_item(ctx.actor, ctx.session.id, item.id)
     end
 
     test "unknown sessions are not_found", ctx do
       assert {:error, :not_found} =
-               Billing.create_cost_item(ctx.host_scope, -1, %{"category" => "x", "amount" => 1})
+               Billing.create_cost_item(ctx.actor, -1, %{"category" => "x", "amount" => 1})
 
-      assert {:error, :not_found} = Billing.get_session(ctx.host_scope, -1)
+      assert {:error, :not_found} = Billing.get_session(-1)
     end
   end
 
-  describe "get_session/2" do
-    test "returns session, derived progress, cost items and participants to any member", ctx do
+  describe "get_session/1" do
+    test "returns session, derived progress, cost items and participants", ctx do
       cost(ctx)
       attend(ctx, ctx.plain)
 
       assert {:ok, %{session: %{id: id}, progress: :draft, cost_items: [_], participants: [p]}} =
-               Billing.get_session(ctx.plain_scope, ctx.session.id)
+               Billing.get_session(ctx.session.id)
 
       assert id == ctx.session.id
       assert p.member.id == ctx.plain.id
-      assert {:error, :not_found} = Billing.get_session(ctx.other_scope, ctx.session.id)
     end
   end
 end

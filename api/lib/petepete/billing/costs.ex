@@ -2,7 +2,7 @@ defmodule Petepete.Billing.Costs do
   @moduledoc """
   Cost items of a draft session: input, payer (talangan) and the members a `subset` item
   is limited to. Public entry points are the `Petepete.Billing` delegates; they run in
-  `Petepete.Billing.Editing` (session locked, host-only, draft-only).
+  `Petepete.Billing.Editing` (session locked, draft-only; the caller is a host `Petepete.Actor` authorized at the edge).
 
   Rules: `amount` is positive integer rupiah (floats and numeric strings are rejected);
   `paid_by` defaults to the acting host and may be any member of the group; a `subset`
@@ -13,6 +13,7 @@ defmodule Petepete.Billing.Costs do
   import Ecto.Query, only: [from: 2]
 
   alias Ecto.Changeset
+  alias Petepete.Actor
   alias Petepete.Billing.{CostItem, CostItemMember, Editing, Participant}
   alias Petepete.Groups.Member
   alias Petepete.Repo
@@ -28,31 +29,31 @@ defmodule Petepete.Billing.Costs do
   }
   @scopes ~w(all subset)
 
-  @spec create(Petepete.Accounts.Scope.t(), integer(), map()) ::
+  @spec create(Actor.t(), integer(), map()) ::
           {:ok, %CostItem{}} | {:error, term()}
-  def create(scope, session_id, attrs) do
-    Editing.run(scope, session_id, fn session, host ->
-      with {:ok, params} <- validate(attrs, host, session.group_id) do
+  def create(%Actor{} = actor, session_id, attrs) do
+    Editing.run(actor, session_id, fn session, actor ->
+      with {:ok, params} <- validate(attrs, actor, session.group_id) do
         %CostItem{session_id: session.id} |> save(params)
       end
     end)
   end
 
-  @spec update(Petepete.Accounts.Scope.t(), integer(), integer(), map()) ::
+  @spec update(Actor.t(), integer(), integer(), map()) ::
           {:ok, %CostItem{}} | {:error, term()}
-  def update(scope, session_id, cost_item_id, attrs) do
-    Editing.run(scope, session_id, fn session, host ->
+  def update(%Actor{} = actor, session_id, cost_item_id, attrs) do
+    Editing.run(actor, session_id, fn session, actor ->
       with {:ok, item} <- fetch(session.id, cost_item_id),
-           {:ok, params} <- validate(attrs, host, session.group_id) do
+           {:ok, params} <- validate(attrs, actor, session.group_id) do
         save(item, params)
       end
     end)
   end
 
-  @spec delete(Petepete.Accounts.Scope.t(), integer(), integer()) ::
+  @spec delete(Actor.t(), integer(), integer()) ::
           {:ok, %CostItem{}} | {:error, term()}
-  def delete(scope, session_id, cost_item_id) do
-    Editing.run(scope, session_id, fn session, _host ->
+  def delete(%Actor{} = actor, session_id, cost_item_id) do
+    Editing.run(actor, session_id, fn session, _actor ->
       with {:ok, item} <- fetch(session.id, cost_item_id) do
         # cost_item_members rows go with it (ON DELETE CASCADE)
         {:ok, Repo.delete!(item)}
@@ -133,7 +134,7 @@ defmodule Petepete.Billing.Costs do
   end
 
   # `attrs` come from JSON: only real integers pass as rupiah amounts and member ids.
-  defp validate(attrs, host, group_id) do
+  defp validate(attrs, actor, group_id) do
     attrs =
       attrs
       |> Map.new(fn {k, v} -> {to_string(k), v} end)
@@ -151,9 +152,9 @@ defmodule Petepete.Billing.Costs do
     |> Changeset.validate_number(:amount, greater_than: 0, less_than_or_equal_to: @max_amount)
     |> Changeset.validate_inclusion(:scope, @scopes)
     |> validate_members(group_id)
-    |> validate_payer(host, group_id)
+    |> validate_payer(group_id)
     |> case do
-      %Changeset{valid?: true} = cs -> {:ok, params(cs, host)}
+      %Changeset{valid?: true} = cs -> {:ok, params(cs, actor)}
       cs -> {:error, cs}
     end
   end
@@ -163,14 +164,14 @@ defmodule Petepete.Billing.Costs do
     if is_nil(value) or valid?.(value), do: attrs, else: Map.put(attrs, key, :invalid)
   end
 
-  defp params(cs, host) do
+  defp params(cs, %Actor{member_id: host_member_id}) do
     scope = Changeset.get_field(cs, :scope)
 
     %{
       category: Changeset.get_field(cs, :category),
       label: Changeset.get_field(cs, :label),
       amount: Changeset.get_field(cs, :amount),
-      paid_by: Changeset.get_field(cs, :paid_by) || host.id,
+      paid_by: Changeset.get_field(cs, :paid_by) || host_member_id,
       scope: scope,
       members: if(scope == "subset", do: Enum.uniq(Changeset.get_field(cs, :members)), else: [])
     }
@@ -193,9 +194,9 @@ defmodule Petepete.Billing.Costs do
     end
   end
 
-  defp validate_payer(%Changeset{valid?: false} = cs, _host, _group_id), do: cs
+  defp validate_payer(%Changeset{valid?: false} = cs, _group_id), do: cs
 
-  defp validate_payer(cs, _host, group_id) do
+  defp validate_payer(cs, group_id) do
     case Changeset.get_field(cs, :paid_by) do
       nil ->
         cs

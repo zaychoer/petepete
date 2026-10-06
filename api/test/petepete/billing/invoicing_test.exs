@@ -354,6 +354,7 @@ defmodule Petepete.Billing.InvoicingTest do
       assert Ledger.txns(ctx.group.id) == []
       assert Repo.get!(Session, ctx.session.id).status == "draft"
       assert Repo.aggregate(Bill, :count) == 1
+      assert Repo.aggregate(Petepete.Ledger.AuditLog, :count) == 0
     end
 
     test "invalid sessions post nothing" do
@@ -362,6 +363,7 @@ defmodule Petepete.Billing.InvoicingTest do
 
       assert {:error, {:invalid, [_ | _]}} = Billing.issue(ctx.session.id, ctx.opts)
       assert Ledger.txns(ctx.group.id) == []
+      assert Repo.aggregate(Petepete.Ledger.AuditLog, :count) == 0
       assert Repo.get!(Session, ctx.session.id).status == "draft"
     end
 

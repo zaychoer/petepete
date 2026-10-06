@@ -11,19 +11,20 @@ defmodule Petepete.Billing.Invoicing do
   `balances_before` of the `session_billed` txn it posts, inside one transaction, so credit
   is applied against exactly the balances the posting saw.
 
-  `issue/2` lock order (spec "Urutan kunci Billing"): the session row, the session's bill
-  rows by id (`Petepete.Billing.Locks.lock_session_and_bills/1`), then the Ledger group
-  lock inside `Ledger.record/2`.
+  `issue/2` is a host action (`Petepete.HostAction.run/4`: one transaction holding the
+  ledger post, the bills, the session transition and the `session.issue` audit row, which a
+  replay does not write). Lock order (spec "Urutan kunci Billing"): the session row, the
+  session's bill rows by id (`Petepete.Billing.Locks.lock_session_and_bills/1`), then the
+  Ledger group lock inside `Ledger.record/2`.
   """
 
   import Ecto.Query, only: [from: 2]
 
   alias Petepete.Billing.{Bill, Calculation, CostItem, CostItemMember, Locks, Participant}
-  alias Petepete.Billing.{Session, Transitions}
-  alias Petepete.{Actor, Clock}
+  alias Petepete.Billing.{Replay, Session, Transitions}
+  alias Petepete.{Actor, Clock, Groups, HostAction}
   alias Petepete.Groups.{Group, Member}
   alias Petepete.Ledger
-  alias Petepete.Ledger.Audit
   alias Petepete.Ledger.Event.SessionBilled
   alias Petepete.Ledger.Txn
   alias Petepete.Metrics
@@ -59,20 +60,17 @@ defmodule Petepete.Billing.Invoicing do
           {:ok, %{session: %Session{}, txn: %Txn{}, bills: [%Bill{}], replayed: boolean()}}
           | {:error, term()}
   def issue(session_id, opts) when is_integer(session_id) do
-    actor = Keyword.fetch!(opts, :actor)
+    %Actor{type: :host} = actor = Keyword.fetch!(opts, :actor)
     key = Keyword.get(opts, :idempotency_key)
 
-    if is_binary(key) and String.trim(key) != "" do
-      Repo.transaction(fn ->
-        with {:ok, session, bills} <- Locks.lock_session_and_bills(session_id),
-             {:ok, reply} <- issue_locked(session, bills, actor, key) do
-          reply
-        else
-          {:error, reason} -> Repo.rollback(reason)
+    with :ok <- Replay.require_key(key),
+         group_id when is_integer(group_id) <-
+           Groups.group_id_for(:session, session_id) || {:error, :not_found} do
+      HostAction.run(actor, group_id, "session.issue", fn ->
+        with {:ok, session, bills} <- Locks.lock_session_and_bills(session_id) do
+          issue_locked(session, bills, actor, key)
         end
       end)
-    else
-      {:error, :idempotency_key_required}
     end
   end
 
@@ -82,7 +80,8 @@ defmodule Petepete.Billing.Invoicing do
     case replayed_txn(session, key) do
       %Txn{} = txn ->
         live = Enum.reject(bills, &(&1.status == "void"))
-        {:ok, %{session: session, txn: txn, bills: load_members(live), replayed: true}}
+        reply = %{session: session, txn: txn, bills: load_members(live), replayed: true}
+        {:ok, reply, audit(session, txn, live, true)}
 
       nil ->
         post_and_bill(session, actor, key)
@@ -110,10 +109,22 @@ defmodule Petepete.Billing.Invoicing do
       {:ok, issued} = Transitions.issue_session(session, result.txn.id)
       bills = for m <- final.members, m.share > 0, do: insert_bill(session, m)
       record_metrics(session, bills)
-      record_audit(session, actor, result.txn, bills)
 
-      {:ok, %{session: issued, txn: result.txn, bills: load_members(bills), replayed: false}}
+      reply = %{session: issued, txn: result.txn, bills: load_members(bills), replayed: false}
+      {:ok, reply, audit(session, result.txn, bills, false)}
     end
+  end
+
+  defp audit(session, txn, bills, replayed) do
+    %{
+      subject: {"session", session.id},
+      metadata: %{
+        "txn_id" => txn.id,
+        "bill_ids" => Enum.map(bills, & &1.id),
+        "total_billed" => bills |> Enum.map(& &1.share) |> Enum.sum()
+      },
+      replayed: replayed
+    }
   end
 
   defp session_billed(session, key, plan, billable) do
@@ -158,15 +169,6 @@ defmodule Petepete.Billing.Invoicing do
     end
 
     :ok
-  end
-
-  # Host action that changes money: in the issue transaction, so a replay writes no second row.
-  defp record_audit(session, %Actor{user_id: user_id}, txn, bills) do
-    Audit.record(session.group_id, user_id, "session.issue", {"session", session.id}, %{
-      "txn_id" => txn.id,
-      "bill_ids" => Enum.map(bills, & &1.id),
-      "total_billed" => bills |> Enum.map(& &1.share) |> Enum.sum()
-    })
   end
 
   # The earliest cost item or attendance row the host created for the draft.

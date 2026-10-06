@@ -2,7 +2,7 @@ defmodule Petepete.Billing.Attendance do
   @moduledoc """
   Who attended a draft session and with which weight. Public entry points are the
   `Petepete.Billing` delegates; they run in `Petepete.Billing.Editing` (session locked,
-  host-only, draft-only).
+  draft-only; the caller is a host `Petepete.Actor` authorized at the edge).
 
   The participant must already be on the group's roster (members and guests alike);
   creating a guest is the Groups side. `weight` is integer per mil, 1000 = 1x, and must be
@@ -13,6 +13,7 @@ defmodule Petepete.Billing.Attendance do
   import Ecto.Query, only: [from: 2]
 
   alias Ecto.Changeset
+  alias Petepete.Actor
   alias Petepete.Billing.{Editing, Participant}
   alias Petepete.Groups.Member
   alias Petepete.Repo
@@ -20,10 +21,10 @@ defmodule Petepete.Billing.Attendance do
   @max_weight 100_000
   @types %{member_id: :integer, attended: :boolean, weight: :integer}
 
-  @spec set(Petepete.Accounts.Scope.t(), integer(), map()) ::
+  @spec set(Actor.t(), integer(), map()) ::
           {:ok, %Participant{}} | {:error, term()}
-  def set(scope, session_id, attrs) do
-    Editing.run(scope, session_id, fn session, _host ->
+  def set(%Actor{} = actor, session_id, attrs) do
+    Editing.run(actor, session_id, fn session, _actor ->
       with {:ok, params} <- validate(attrs),
            {:ok, member} <- fetch_member(params.member_id, session.group_id) do
         upsert(session.id, member, params)
