@@ -170,4 +170,30 @@ defmodule Petepete.Fixtures do
       )
     )
   end
+
+  @doc "A phone number that passes `Accounts.normalize_phone/1`, unique per call."
+  def valid_phone do
+    "628" <> (uniq() |> rem(1_000_000_000) |> Integer.to_string() |> String.pad_leading(9, "0"))
+  end
+
+  @doc """
+  `conn` carrying a valid access token for `user`, obtained through the real OTP login
+  (`user.phone` must be a `valid_phone/0`). The fake OTP sender messages the caller.
+  """
+  def bearer_conn(conn, user) do
+    endpoint = PetepeteWeb.Endpoint
+
+    Phoenix.ConnTest.dispatch(conn, endpoint, :post, "/api/auth/otp", %{phone: user.phone})
+    code = receive do: ({:otp_sent, _phone, code} -> code)
+
+    %{"access_token" => token} =
+      conn
+      |> Phoenix.ConnTest.dispatch(endpoint, :post, "/api/auth/verify", %{
+        phone: user.phone,
+        code: code
+      })
+      |> Phoenix.ConnTest.json_response(200)
+
+    Plug.Conn.put_req_header(conn, "authorization", "Bearer " <> token)
+  end
 end
