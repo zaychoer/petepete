@@ -65,3 +65,6 @@ config :phoenix, :stacktrace_depth, 20
 config :phoenix, :plug_init_mode, :runtime
 
 config :petepete, :gateway, Petepete.Payments.Gateway.Fake
+
+# Where invite links point: the web app (Next.js dev server).
+config :petepete, :web_base_url, "http://localhost:3000"

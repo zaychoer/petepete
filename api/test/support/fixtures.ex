@@ -170,4 +170,43 @@ defmodule Petepete.Fixtures do
       )
     )
   end
+
+  @doc """
+  Logs a fresh user in through the OTP endpoints (fake sender) and returns
+  `{conn_with_bearer_token, user}`. Uses a fresh client IP so the per-IP OTP limit never trips.
+  """
+  def bearer_login(conn) do
+    import ExUnit.Assertions
+    import Phoenix.ConnTest
+    import Plug.Conn
+
+    n = uniq()
+
+    phone =
+      "628" <> (n |> rem(1_000_000_000) |> Integer.to_string() |> String.pad_leading(9, "0"))
+
+    ip = {10, 8, rem(n, 250), rem(div(n, 250), 250)}
+    endpoint = PetepeteWeb.Endpoint
+
+    assert %{"ok" => true} =
+             conn
+             |> Map.put(:remote_ip, ip)
+             |> dispatch(endpoint, :post, "/api/auth/otp", %{phone: phone})
+             |> json_response(200)
+
+    assert_received {:otp_sent, _, code}
+
+    assert %{"access_token" => token, "user" => %{"id" => user_id}} =
+             conn
+             |> Map.put(:remote_ip, ip)
+             |> dispatch(endpoint, :post, "/api/auth/verify", %{phone: phone, code: code})
+             |> json_response(200)
+
+    user =
+      Repo.get!(User, user_id)
+      |> Ecto.Changeset.change(display_name: "Tester #{n}")
+      |> Repo.update!()
+
+    {put_req_header(conn, "authorization", "Bearer " <> token), user}
+  end
 end

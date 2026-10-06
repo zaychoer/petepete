@@ -38,3 +38,5 @@ config :phoenix,
   sort_verified_routes_query_params: true
 
 config :petepete, :gateway, Petepete.Payments.Gateway.Fake
+
+config :petepete, :web_base_url, "https://petepete.test"
