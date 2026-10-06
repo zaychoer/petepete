@@ -1,0 +1,7 @@
+{
+  "managed_url": "https://dashboard.fake.test/withdraw",
+  "replayed": false,
+  "status": "managed",
+  "status_label": "Selesaikan di dashboard gateway",
+  "withdrawal_id": 22
+}

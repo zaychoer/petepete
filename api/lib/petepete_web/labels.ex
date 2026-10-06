@@ -12,6 +12,15 @@ defmodule PetepeteWeb.Labels do
     "void" => "Dibatalkan"
   }
 
+  # The pay page's sentence under the chip; an unpaid bill has none.
+  @bill_message %{
+    "paid" => "Tagihan ini sudah lunas. Makasih ya!",
+    "needs_review" => "Pembayaranmu lagi dicek host. Tunggu sebentar ya.",
+    "void" => "Tagihan dibatalkan"
+  }
+
+  @payment_method %{"qris" => "QRIS", "va" => "Virtual Account", "ewallet" => "E-wallet"}
+
   # Session progress (stored draft | issued | cancelled, plus derived settled).
   @session %{
     "draft" => "Draft",
@@ -37,6 +46,14 @@ defmodule PetepeteWeb.Labels do
   @doc "Label for a bill status (`unpaid | paid | needs_review | void`)."
   @spec bill(String.t()) :: String.t()
   def bill(status), do: Map.fetch!(@bill, status)
+
+  @doc "The pay page's message for a bill status, `nil` when there is none (unpaid)."
+  @spec bill_message(String.t()) :: String.t() | nil
+  def bill_message(status), do: Map.get(@bill_message, status)
+
+  @doc "Label for a payment method (`qris | va | ewallet`)."
+  @spec payment_method(String.t()) :: String.t()
+  def payment_method(method), do: Map.fetch!(@payment_method, method)
 
   @doc "Label for a session status or progress (string or atom)."
   @spec session(String.t() | atom()) :: String.t()

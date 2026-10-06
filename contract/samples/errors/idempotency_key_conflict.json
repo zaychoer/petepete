@@ -1,0 +1,4 @@
+{
+  "error": "idempotency_key_conflict",
+  "message": "Permintaan ini bentrok dengan catatan sebelumnya. Muat ulang lalu coba lagi."
+}

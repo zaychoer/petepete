@@ -33,7 +33,15 @@ defmodule PetepeteWeb.PayoutAccountControllerTest do
   test "host registers the payout account and the audit row is written", ctx do
     conn = register(ctx.host, ctx.g, @bank)
 
-    assert %{"payout_account_id" => id, "status" => "pending_kyc"} = json_response(conn, 201)
+    Petepete.Contract.check!("payout_account.pending_kyc", conn)
+
+    assert %{
+             "payout_account_id" => id,
+             "status" => "pending_kyc",
+             "status_label" => "Menunggu verifikasi (KYC)",
+             "replayed" => false
+           } = json_response(conn, 201)
+
     assert %PayoutAccount{account_last4: "7890"} = Repo.get!(PayoutAccount, id)
 
     assert [%{subject_type: "payout_account", subject_id: ^id, metadata: meta}] =

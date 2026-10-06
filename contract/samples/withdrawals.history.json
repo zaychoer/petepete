@@ -1,0 +1,40 @@
+{
+  "withdrawals": [
+    {
+      "amount": 40000,
+      "id": 19,
+      "inserted_at": "2026-10-06T03:03:00Z",
+      "managed_url": "https://dashboard.fake.test/withdraw",
+      "provider_ref": null,
+      "status": "managed",
+      "status_label": "Selesaikan di dashboard gateway"
+    },
+    {
+      "amount": 30000,
+      "id": 18,
+      "inserted_at": "2026-10-06T03:02:00Z",
+      "managed_url": null,
+      "provider_ref": "fake-withdrawal-1",
+      "status": "submitted",
+      "status_label": "Penarikan diajukan"
+    },
+    {
+      "amount": 20000,
+      "id": 17,
+      "inserted_at": "2026-10-06T03:01:00Z",
+      "managed_url": null,
+      "provider_ref": null,
+      "status": "pending",
+      "status_label": "Penarikan lagi diproses"
+    },
+    {
+      "amount": 10000,
+      "id": 16,
+      "inserted_at": "2026-10-06T03:00:00Z",
+      "managed_url": null,
+      "provider_ref": null,
+      "status": "failed",
+      "status_label": "Penarikan gagal. Coba lagi."
+    }
+  ]
+}

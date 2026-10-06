@@ -1,0 +1,12 @@
+{
+  "action": {
+    "redirect_url": "https://fake-gateway.test/pay/158-2",
+    "type": "redirect_url"
+  },
+  "amount_due": 34000,
+  "expires_at": "2026-10-06T04:00:00Z",
+  "fee": 578,
+  "gross_amount": 34578,
+  "method": "ewallet",
+  "reused": false
+}

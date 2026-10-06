@@ -1,0 +1,10 @@
+{
+  "account_last4": null,
+  "balance": 500000,
+  "bank_name": null,
+  "can_withdraw": true,
+  "owner": true,
+  "payout_account_id": 21,
+  "status": "active",
+  "status_label": "Aktif"
+}

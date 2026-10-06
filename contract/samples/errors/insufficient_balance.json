@@ -1,0 +1,4 @@
+{
+  "error": "insufficient_balance",
+  "message": "Saldo sub-account tidak cukup untuk penarikan ini."
+}

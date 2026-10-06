@@ -1,10 +1,67 @@
 {
-  "errors": [],
+  "errors": [
+    "already_reversed",
+    "amount_not_positive",
+    "bill_needs_review",
+    "bill_paid",
+    "bill_void",
+    "gateway_error",
+    "idempotency_key_conflict",
+    "idempotency_key_required",
+    "insufficient_balance",
+    "insufficient_kas",
+    "invalid_params",
+    "no_payout_account",
+    "not_undoable",
+    "payout_account_not_active",
+    "reason_required",
+    "same_member",
+    "token_expired",
+    "undo_window_expired",
+    "unsupported_method"
+  ],
   "routes": {
+    "GET /api/groups/:group_id/balances": [
+      "balances.members"
+    ],
+    "GET /api/groups/:group_id/payout-account/balance": [
+      "payout_balance.active"
+    ],
+    "GET /api/groups/:group_id/txns": [
+      "txns.history"
+    ],
+    "GET /api/groups/:group_id/withdrawals": [
+      "withdrawals.history"
+    ],
     "GET /api/pay/:token": [
+      "pay_page.attempt",
+      "pay_page.attempt_expired",
+      "pay_page.needs_review",
       "pay_page.paid",
       "pay_page.unpaid",
       "pay_page.void"
+    ],
+    "POST /api/groups/:group_id/kas-spends": [
+      "kas_spend.recorded"
+    ],
+    "POST /api/groups/:group_id/payout-account": [
+      "payout_account.pending_kyc"
+    ],
+    "POST /api/groups/:group_id/settlements": [
+      "settlement.recorded"
+    ],
+    "POST /api/groups/:group_id/withdrawals": [
+      "withdrawal.managed",
+      "withdrawal.pending",
+      "withdrawal.submitted"
+    ],
+    "POST /api/pay/:token/payment": [
+      "payment_attempt.ewallet",
+      "payment_attempt.qris",
+      "payment_attempt.va"
+    ],
+    "POST /api/txns/:id/correction": [
+      "correction.recorded"
     ]
   }
 }
