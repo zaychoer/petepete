@@ -16,7 +16,9 @@ defmodule Petepete.Groups do
   Authorization: a user only sees their own group's data. Non-members get
   `:not_found` (existence is never leaked); a member acting beyond their role
   gets `:forbidden`. Everything that writes sessions, costs, bills or the
-  ledger is host-only.
+  ledger is host-only. `authorize/3` answers with the caller's `Member` (reads);
+  `authorize_actor/3` answers with a host `Petepete.Actor` and is the only way
+  production code obtains one (ADR-0003).
 
   Accounts meet rosters here: `link_members_by_phone/1` attaches entries added by
   phone number to a login, `hosts_active_group?/1` and `anonymize_roster/1` serve
@@ -26,6 +28,7 @@ defmodule Petepete.Groups do
 
   alias Ecto.Multi
   alias Petepete.Accounts.{Scope, User}
+  alias Petepete.Actor
   alias Petepete.Billing.{Bill, Session}
   alias Petepete.Groups.{Group, Member}
   alias Petepete.Ledger.Txn
@@ -64,6 +67,20 @@ defmodule Petepete.Groups do
 
   def authorize(%Scope{}, _group_id, role) when role in [:member, :host],
     do: {:error, :not_found}
+
+  @doc """
+  Authorizes the caller as host of `group_id` and returns the host `Petepete.Actor` that
+  contexts take for host actions. The only constructor of a host Actor in production code.
+
+  Non-members get `{:error, :not_found}`, non-host members `{:error, :forbidden}`.
+  """
+  @spec authorize_actor(Scope.t(), integer() | nil, :host) ::
+          {:ok, Actor.t()} | {:error, :not_found | :forbidden}
+  def authorize_actor(%Scope{} = scope, group_id, :host) do
+    with {:ok, %Member{} = member} <- authorize(scope, group_id, :host) do
+      {:ok, %Actor{type: :host, user_id: member.user_id, member_id: member.id}}
+    end
+  end
 
   @doc """
   Creates a group named and templated by the host, who becomes its host member.

@@ -20,7 +20,7 @@ defmodule Petepete.Billing.Invoicing do
 
   alias Petepete.Billing.{Bill, Calculation, CostItem, CostItemMember, Locks, Participant}
   alias Petepete.Billing.{Session, Transitions}
-  alias Petepete.Clock
+  alias Petepete.{Actor, Clock}
   alias Petepete.Groups.{Group, Member}
   alias Petepete.Ledger
   alias Petepete.Ledger.Audit
@@ -161,7 +161,7 @@ defmodule Petepete.Billing.Invoicing do
   end
 
   # Host action that changes money: in the issue transaction, so a replay writes no second row.
-  defp record_audit(session, {:host, user_id}, txn, bills) do
+  defp record_audit(session, %Actor{user_id: user_id}, txn, bills) do
     Audit.record(session.group_id, user_id, "session.issue", {"session", session.id}, %{
       "txn_id" => txn.id,
       "bill_ids" => Enum.map(bills, & &1.id),

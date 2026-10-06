@@ -323,7 +323,7 @@ defmodule Petepete.Billing do
   Issues a draft session: posts one `session_billed` txn, creates a bill per participant
   with a positive share, and moves the session draft -> issued, all in one transaction.
 
-  Options (both required): `actor: {:host, user_id}` and `idempotency_key: String.t()`
+  Options (both required): `actor: %Petepete.Actor{}` (host) and `idempotency_key: String.t()`
   (passed to the Ledger as the txn's `idempotency_key`). The same key again on the issued
   session returns the same txn and bills with `replayed: true`. `credit_applied` and
   `amount_due` come from the balances the Ledger saw just before posting; a bill with
@@ -347,7 +347,7 @@ defmodule Petepete.Billing do
   the ledger as the member's credit), marks the bills' pending payment attempts
   `cancelled`, reverts the session and writes the `session.void_issue` audit row.
 
-  Options (all required): `actor: {:host, user_id}`, `idempotency_key: String.t()` and
+  Options (all required): `actor: %Petepete.Actor{}` (host), `idempotency_key: String.t()` and
   `reason: String.t()` (non-blank). The same key again returns the original txn with
   `replayed: true` and changes nothing. Issuing again takes a new key and consumes the
   credit like any other. See `Petepete.Billing.Voiding`.
@@ -378,7 +378,7 @@ defmodule Petepete.Billing do
   all in one transaction that locks only the bill. The session's Selesai follows from the
   bills.
 
-  Options (required): `actor: {:host, user_id}`, `idempotency_key: String.t()`. A repeated
+  Options (required): `actor: %Petepete.Actor{}` (host), `idempotency_key: String.t()`. A repeated
   key returns the original txn with `replayed: true`.
 
   Returns `{:ok, %{bill: bill, txn: txn, replayed: boolean}}` or `{:error, reason}`:
@@ -395,7 +395,7 @@ defmodule Petepete.Billing do
   after 24 hours), returns the bill from `paid` to `unpaid` with its paid fields cleared and
   writes the `bill.cancel_cash` audit row.
 
-  Options (required): `actor: {:host, user_id}`, `idempotency_key: String.t()`,
+  Options (required): `actor: %Petepete.Actor{}` (host), `idempotency_key: String.t()`,
   `reason: String.t()`. A repeated key returns the original txn with `replayed: true`.
 
   Returns `{:ok, %{bill: bill, txn: txn, replayed: boolean}}` or `{:error, reason}`:

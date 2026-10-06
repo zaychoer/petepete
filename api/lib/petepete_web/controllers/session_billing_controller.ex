@@ -28,7 +28,7 @@ defmodule PetepeteWeb.SessionBillingController do
 
   def issue(conn, _params) do
     opts = [
-      actor: {:host, conn.assigns.current_scope.user.id},
+      actor: conn.assigns.actor,
       idempotency_key: List.first(get_req_header(conn, "idempotency-key"))
     ]
 
@@ -48,7 +48,7 @@ defmodule PetepeteWeb.SessionBillingController do
 
   def void(conn, %{"reason" => reason}) when is_binary(reason) do
     opts = [
-      actor: {:host, conn.assigns.current_scope.user.id},
+      actor: conn.assigns.actor,
       idempotency_key: conn.assigns.idempotency_key,
       reason: reason
     ]

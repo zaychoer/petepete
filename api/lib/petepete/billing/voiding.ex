@@ -28,6 +28,7 @@ defmodule Petepete.Billing.Voiding do
   """
 
   alias Petepete.Billing.{Locks, Replay, Transitions}
+  alias Petepete.Actor
   alias Petepete.Ledger
   alias Petepete.Ledger.Audit
   alias Petepete.Ledger.Event.SessionBillsCancelled
@@ -39,14 +40,14 @@ defmodule Petepete.Billing.Voiding do
   @doc "See `Petepete.Billing.void_issue/2`."
   @spec void_issue(pos_integer(), keyword()) :: {:ok, map()} | {:error, term()}
   def void_issue(session_id, opts) when is_integer(session_id) do
-    {:host, user_id} = Keyword.fetch!(opts, :actor)
+    %Actor{type: :host} = actor = Keyword.fetch!(opts, :actor)
     key = Keyword.get(opts, :idempotency_key)
     reason = Keyword.get(opts, :reason)
 
     with :ok <- Replay.require_key(key) do
       Repo.transaction(fn ->
         with {:ok, session, bills} <- Locks.lock_session_and_bills(session_id),
-             {:ok, reply} <- void_locked(session, bills, user_id, key, reason) do
+             {:ok, reply} <- void_locked(session, bills, actor, key, reason) do
           reply
         else
           {:error, reason} -> Repo.rollback(reason)
@@ -55,25 +56,25 @@ defmodule Petepete.Billing.Voiding do
     end
   end
 
-  defp void_locked(session, bills, user_id, key, reason) do
+  defp void_locked(session, bills, actor, key, reason) do
     case Replay.find(key, "session_bills_cancelled", "session", session.id) do
-      {:ok, txn} -> replay(session, txn, user_id, key, reason)
+      {:ok, txn} -> replay(session, txn, actor, key, reason)
       {:error, _} = error -> error
-      nil -> post(session, bills, user_id, key, reason)
+      nil -> post(session, bills, actor, key, reason)
     end
   end
 
-  defp post(session, bills, user_id, key, reason) do
+  defp post(session, bills, actor, key, reason) do
     with :ok <- Transitions.session(session.status, "draft", :void_issue),
          {:ok, %{txn: txn}} <-
-           Ledger.record({:host, user_id}, event(session, session.issue_txn_id, key, reason)),
+           Ledger.record(actor, event(session, session.issue_txn_id, key, reason)),
          live = Enum.reject(bills, &(&1.status == "void")),
          {:ok, voided} <- void_bills(live),
          attempt_ids = cancel_pending_attempts(voided),
          {:ok, draft} <- Transitions.revert_session_to_draft(session) do
       bill_ids = Enum.map(voided, & &1.id)
 
-      Audit.record(session.group_id, user_id, "session.void_issue", {"txn", txn.id}, %{
+      Audit.record(session.group_id, actor.user_id, "session.void_issue", {"txn", txn.id}, %{
         "session_id" => session.id,
         "reason" => reason,
         "voided_bill_ids" => bill_ids,
@@ -92,8 +93,8 @@ defmodule Petepete.Billing.Voiding do
   end
 
   # The session may be issued again by now, so the original txn comes from the stored one.
-  defp replay(session, txn, user_id, key, reason) do
-    case Ledger.record({:host, user_id}, event(session, txn.reverses_txn_id, key, reason)) do
+  defp replay(session, txn, actor, key, reason) do
+    case Ledger.record(actor, event(session, txn.reverses_txn_id, key, reason)) do
       {:ok, %{txn: replayed_txn, replayed: true}} ->
         {:ok,
          %{

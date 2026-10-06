@@ -22,7 +22,7 @@ defmodule Petepete.Billing.CashPayments do
   """
 
   alias Petepete.Billing.{Bill, Locks, Replay, Transitions}
-  alias Petepete.{Clock, Groups, Ledger}
+  alias Petepete.{Actor, Clock, Groups, Ledger}
   alias Petepete.Ledger.Audit
   alias Petepete.Ledger.Event.{CashPaymentCancelled, CashReceived}
   alias Petepete.Metrics
@@ -44,7 +44,7 @@ defmodule Petepete.Billing.CashPayments do
   end
 
   defp run(bill_id, opts, locked_fun) do
-    {:host, user_id} = Keyword.fetch!(opts, :actor)
+    %Actor{type: :host} = actor = Keyword.fetch!(opts, :actor)
     key = Keyword.get(opts, :idempotency_key)
 
     with :ok <- Replay.require_key(key),
@@ -52,7 +52,7 @@ defmodule Petepete.Billing.CashPayments do
            Groups.group_id_for(:bill, bill_id) || {:error, :not_found} do
       Repo.transaction(fn ->
         with [bill] <- Locks.lock_bills([bill_id]),
-             {:ok, reply} <- locked_fun.(bill, group_id, user_id, key, opts) do
+             {:ok, reply} <- locked_fun.(bill, group_id, actor, key, opts) do
           reply
         else
           [] -> Repo.rollback(:not_found)
@@ -64,35 +64,35 @@ defmodule Petepete.Billing.CashPayments do
 
   ## Tandai lunas
 
-  defp mark_locked(bill, group_id, user_id, key, _opts) do
+  defp mark_locked(bill, group_id, actor, key, _opts) do
     case Replay.find(key, "cash_received", "bill", bill.id) do
       {:ok, txn} ->
         replay(
           bill,
-          Ledger.record({:host, user_id}, cash_received(bill, group_id, key, txn.inserted_at))
+          Ledger.record(actor, cash_received(bill, group_id, key, txn.inserted_at))
         )
 
       {:error, _} = error ->
         error
 
       nil ->
-        pay(bill, group_id, user_id, key)
+        pay(bill, group_id, actor, key)
     end
   end
 
-  defp pay(bill, group_id, user_id, key) do
+  defp pay(bill, group_id, actor, key) do
     at = Clock.now()
 
     with :ok <- Transitions.bill(bill.status, "paid", :mark_paid_cash),
          {:ok, %{txn: txn}} <-
-           Ledger.record({:host, user_id}, cash_received(bill, group_id, key, at)),
+           Ledger.record(actor, cash_received(bill, group_id, key, at)),
          {:ok, paid} <-
            Transitions.transition_bill(bill, "paid", :mark_paid_cash,
              paid_via: "cash",
              paid_txn_id: txn.id,
              paid_at: at
            ) do
-      Audit.record(group_id, user_id, "bill.mark_paid_cash", {"txn", txn.id}, %{
+      Audit.record(group_id, actor.user_id, "bill.mark_paid_cash", {"txn", txn.id}, %{
         "bill_id" => bill.id,
         "member_id" => bill.member_id,
         "amount" => bill.amount_due,
@@ -117,33 +117,33 @@ defmodule Petepete.Billing.CashPayments do
 
   ## Batal cash
 
-  defp cancel_locked(bill, group_id, user_id, key, opts) do
+  defp cancel_locked(bill, group_id, actor, key, opts) do
     reason = Keyword.get(opts, :reason)
 
     case Replay.find(key, "cash_payment_cancelled", "bill", bill.id) do
       {:ok, txn} ->
         # The bill is unpaid again and no longer names the cash txn; the stored one does.
         event = cash_cancelled(group_id, key, txn.reverses_txn_id, reason, txn.inserted_at)
-        replay(bill, Ledger.record({:host, user_id}, event))
+        replay(bill, Ledger.record(actor, event))
 
       {:error, _} = error ->
         error
 
       nil ->
-        cancel(bill, group_id, user_id, key, reason)
+        cancel(bill, group_id, actor, key, reason)
     end
   end
 
-  defp cancel(bill, group_id, user_id, key, reason) do
+  defp cancel(bill, group_id, actor, key, reason) do
     with :ok <- Transitions.bill(bill.status, "unpaid", :cancel_cash),
          :ok <- cash_payment(bill),
          {:ok, %{txn: txn}} <-
            Ledger.record(
-             {:host, user_id},
+             actor,
              cash_cancelled(group_id, key, bill.paid_txn_id, reason, Clock.now())
            ),
          {:ok, unpaid} <- Transitions.transition_bill(bill, "unpaid", :cancel_cash) do
-      Audit.record(group_id, user_id, "bill.cancel_cash", {"txn", txn.id}, %{
+      Audit.record(group_id, actor.user_id, "bill.cancel_cash", {"txn", txn.id}, %{
         "bill_id" => bill.id,
         "member_id" => bill.member_id,
         "amount" => bill.amount_due,

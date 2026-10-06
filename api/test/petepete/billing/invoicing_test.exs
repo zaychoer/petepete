@@ -45,7 +45,7 @@ defmodule Petepete.Billing.InvoicingTest do
       drinkers: drinkers,
       others: others,
       session: session,
-      opts: [actor: {:host, user.id}, idempotency_key: "issue-#{uniq()}"]
+      opts: [actor: host_actor(group, host), idempotency_key: "issue-#{uniq()}"]
     }
   end
 
@@ -242,7 +242,7 @@ defmodule Petepete.Billing.InvoicingTest do
 
     test "rounding remainder goes to the kas" do
       ctx = rounding_example()
-      issue!(ctx, actor: {:host, ctx.user.id}, idempotency_key: "k1")
+      issue!(ctx, actor: host_actor(ctx.group, ctx.host), idempotency_key: "k1")
 
       balances = Ledger.balances(ctx.group.id)
       assert balances.kas == 2_000
@@ -318,12 +318,15 @@ defmodule Petepete.Billing.InvoicingTest do
       {:ok, _} = Billing.cancel_session(ctx.session.id)
 
       assert {:error, %TransitionError{from: "cancelled"}} =
-               Billing.issue(ctx.session.id, actor: {:host, ctx.user.id}, idempotency_key: "k")
+               Billing.issue(ctx.session.id,
+                 actor: host_actor(ctx.group, ctx.host),
+                 idempotency_key: "k"
+               )
     end
 
     test "a key whose txn was cancelled cannot issue the session again" do
       ctx = rounding_example()
-      opts = [actor: {:host, ctx.user.id}, idempotency_key: "old"]
+      opts = [actor: host_actor(ctx.group, ctx.host), idempotency_key: "old"]
       issue!(ctx, opts)
 
       # What Billing.void_issue/2 will do to the rows: bills void, session back to draft.
@@ -342,7 +345,10 @@ defmodule Petepete.Billing.InvoicingTest do
       bill_fixture(ctx.session, List.last(ctx.members))
 
       assert_raise Ecto.ConstraintError, fn ->
-        Billing.issue(ctx.session.id, actor: {:host, ctx.user.id}, idempotency_key: "k")
+        Billing.issue(ctx.session.id,
+          actor: host_actor(ctx.group, ctx.host),
+          idempotency_key: "k"
+        )
       end
 
       assert Ledger.txns(ctx.group.id) == []
@@ -366,7 +372,7 @@ defmodule Petepete.Billing.InvoicingTest do
       Repo.delete_all(Billing.CostItem)
       cost_item_fixture(ctx.session, amount: 90_000, paid_by: ctx.host, members: ctx.members)
 
-      result = issue!(ctx, actor: {:host, ctx.user.id}, idempotency_key: "k")
+      result = issue!(ctx, actor: host_actor(ctx.group, ctx.host), idempotency_key: "k")
 
       refute extra.id in Enum.map(result.bills, & &1.member_id)
       assert length(result.bills) == 3
@@ -390,7 +396,7 @@ defmodule Petepete.Billing.InvoicingTest do
 
     test "a blank or missing key is refused before anything is read" do
       ctx = rounding_example()
-      actor = {:host, ctx.user.id}
+      actor = host_actor(ctx.group, ctx.host)
 
       assert {:error, :idempotency_key_required} = Billing.issue(ctx.session.id, actor: actor)
 
@@ -399,7 +405,11 @@ defmodule Petepete.Billing.InvoicingTest do
     end
 
     test "unknown sessions" do
-      assert {:error, :not_found} = Billing.issue(0, actor: {:host, 1}, idempotency_key: "k")
+      assert {:error, :not_found} =
+               Billing.issue(0,
+                 actor: %Petepete.Actor{type: :host, user_id: 1, member_id: 1},
+                 idempotency_key: "k"
+               )
     end
   end
 end

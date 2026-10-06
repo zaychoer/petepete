@@ -44,7 +44,7 @@ defmodule PetepeteWeb.MemberControllerTest do
       {:ok, _} =
         Repo.transaction(fn ->
           Ledger.record(
-            {:host, ctx.host_user.id},
+            host_actor(ctx.group, ctx.host),
             %Settlement{
               idempotency_key: "claim-test-#{uniq()}",
               group_id: ctx.group.id,

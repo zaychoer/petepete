@@ -38,7 +38,7 @@ defmodule Petepete.MetricsTest do
 
   defp issue!(ctx, key \\ "issue-key") do
     {:ok, result} =
-      Billing.issue(ctx.session.id, actor: {:host, ctx.user.id}, idempotency_key: key)
+      Billing.issue(ctx.session.id, actor: host_actor(ctx.group, ctx.host), idempotency_key: key)
 
     result
   end

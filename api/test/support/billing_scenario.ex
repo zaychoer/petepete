@@ -7,7 +7,7 @@ defmodule Petepete.BillingScenario do
   """
   import Petepete.Fixtures
 
-  alias Petepete.{Billing, Ledger, Repo}
+  alias Petepete.{Actor, Billing, Ledger, Repo}
   alias Petepete.Billing.Bill
   alias Petepete.Ledger.Event.GatewayPaymentReceived
   alias Petepete.Payments.PaymentAttempt
@@ -39,7 +39,7 @@ defmodule Petepete.BillingScenario do
   def issue(ctx) do
     {:ok, result} =
       Billing.issue(ctx.session.id,
-        actor: {:host, ctx.user.id},
+        actor: host_actor(ctx.group, ctx.host),
         idempotency_key: "issue-#{uniq()}"
       )
 
@@ -48,7 +48,7 @@ defmodule Petepete.BillingScenario do
 
   @doc "Options for a host command: actor plus a fresh (or given) idempotency key."
   def opts(ctx, extra \\ []) do
-    Keyword.merge([actor: {:host, ctx.user.id}, idempotency_key: "k-#{uniq()}"], extra)
+    Keyword.merge([actor: host_actor(ctx.group, ctx.host), idempotency_key: "k-#{uniq()}"], extra)
   end
 
   def reload(%Bill{id: id}), do: Repo.get!(Bill, id)
@@ -80,7 +80,7 @@ defmodule Petepete.BillingScenario do
   def gateway_payment!(ctx, %Bill{} = bill, amount) do
     {:ok, {:ok, res}} =
       Repo.transaction(fn ->
-        Ledger.record(:gateway, %GatewayPaymentReceived{
+        Ledger.record(Actor.gateway(), %GatewayPaymentReceived{
           idempotency_key: "gw-#{uniq()}",
           group_id: ctx.group.id,
           bill_id: bill.id,

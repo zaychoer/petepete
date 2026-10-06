@@ -29,7 +29,7 @@ defmodule PetepeteWeb.BillController do
 
   defp opts(conn) do
     [
-      actor: {:host, conn.assigns.current_scope.user.id},
+      actor: conn.assigns.actor,
       idempotency_key: conn.assigns.idempotency_key
     ]
   end

@@ -3,7 +3,7 @@ defmodule Petepete.LedgerTest do
 
   import Petepete.Fixtures
 
-  alias Petepete.Ledger
+  alias Petepete.{Actor, Ledger}
 
   alias Petepete.Ledger.Event.{
     CashPaymentCancelled,
@@ -25,7 +25,7 @@ defmodule Petepete.LedgerTest do
     [a, b, c] = for _ <- 1..3, do: member_fixture(group)
     payout_account_fixture(group, host)
 
-    {:ok, g: group.id, actor: {:host, host_user.id}, host: host.id, a: a.id, b: b.id, c: c.id}
+    {:ok, g: group.id, actor: host_actor(group, host), host: host.id, a: a.id, b: b.id, c: c.id}
   end
 
   defp key, do: "k#{System.unique_integer([:positive])}"
@@ -143,7 +143,7 @@ defmodule Petepete.LedgerTest do
     end
 
     test "gateway_payment_received: payer credited, payout account owner debited", ctx do
-      %{txn: txn} = record!(:gateway, gateway(ctx))
+      %{txn: txn} = record!(Actor.gateway(), gateway(ctx))
 
       assert {txn.kind, txn.actor_type, txn.actor_user_id} ==
                {"gateway_payment_received", "gateway", nil}
@@ -264,7 +264,9 @@ defmodule Petepete.LedgerTest do
 
     test "amounts must be positive integers", ctx do
       for amount <- [0, -5, 1.5, nil] do
-        assert {:error, :amount_not_positive} = try_record(:gateway, gateway(ctx, amount: amount))
+        assert {:error, :amount_not_positive} =
+                 try_record(Actor.gateway(), gateway(ctx, amount: amount))
+
         assert {:error, :amount_not_positive} = try_record(ctx.actor, cash(ctx, amount: amount))
 
         assert {:error, :amount_not_positive} =
@@ -282,7 +284,7 @@ defmodule Petepete.LedgerTest do
                try_record(ctx.actor, settlement(ctx, payee_member_id: other.id))
 
       assert {:error, :member_not_in_group} =
-               try_record(:gateway, gateway(ctx, member_id: other.id))
+               try_record(Actor.gateway(), gateway(ctx, member_id: other.id))
 
       assert {:error, :member_not_in_group} =
                try_record(ctx.actor, billed(ctx, fronted: [{other.id, 100_000}]))
@@ -310,27 +312,31 @@ defmodule Petepete.LedgerTest do
       assert {:error, :insufficient_kas} = try_record(ctx.actor, kas_spend(ctx, amount: 1))
 
       assert {:ok, _} = try_record(ctx.actor, cash(ctx, amount: 9_999_999))
-      assert {:ok, _} = try_record(:gateway, gateway(ctx, amount: 9_999_999))
+      assert {:ok, _} = try_record(Actor.gateway(), gateway(ctx, amount: 9_999_999))
     end
 
     test "actor rules by kind", ctx do
       assert {:error, :invalid_actor} = try_record(ctx.actor, gateway(ctx))
 
       for {actor, ev} <- [
-            {:gateway, billed(ctx)},
-            {:gateway, cash(ctx)},
-            {:gateway, settlement(ctx)},
-            {:gateway, kas_spend(ctx)},
-            {:system, settlement(ctx)},
-            {{:host, "x"}, settlement(ctx)},
-            {nil, gateway(ctx)}
+            {Actor.gateway(), billed(ctx)},
+            {Actor.gateway(), cash(ctx)},
+            {Actor.gateway(), settlement(ctx)},
+            {Actor.gateway(), kas_spend(ctx)},
+            {%Actor{type: :system, user_id: 1, member_id: ctx.host}, settlement(ctx)},
+            {%Actor{type: :host, user_id: "x", member_id: ctx.host}, settlement(ctx)},
+            {%Actor{type: :host, user_id: 1, member_id: nil}, settlement(ctx)},
+            {%Actor{type: :host, user_id: nil, member_id: nil}, gateway(ctx)}
           ] do
         assert {:error, :invalid_actor} = try_record(actor, ev)
       end
     end
 
-    test "cash_received needs the host to be a member of the group", ctx do
-      assert {:error, :actor_not_member} = try_record({:host, user_fixture().id}, cash(ctx))
+    test "cash_received needs the host Actor's member to be on the group's roster", ctx do
+      elsewhere = member_fixture(group_fixture(), role: "host", user: user_fixture())
+      actor = %Actor{type: :host, user_id: elsewhere.user_id, member_id: elsewhere.id}
+
+      assert {:error, :member_not_in_group} = try_record(actor, cash(ctx))
     end
 
     test "gateway payment needs a payout account", ctx do
@@ -338,7 +344,7 @@ defmodule Petepete.LedgerTest do
       m = member_fixture(bare)
 
       assert {:error, :no_payout_account} =
-               try_record(:gateway, gateway(ctx, group_id: bare.id, member_id: m.id))
+               try_record(Actor.gateway(), gateway(ctx, group_id: bare.id, member_id: m.id))
     end
 
     test "idempotency key is required", ctx do
@@ -364,7 +370,9 @@ defmodule Petepete.LedgerTest do
       }
 
       assert_raise ArgumentError, ~r/inside the caller's/, fn ->
-        Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn -> Ledger.record({:host, 1}, ev) end)
+        Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
+          Ledger.record(%Actor{type: :host, user_id: 1, member_id: 1}, ev)
+        end)
       end
     end
   end
@@ -400,15 +408,15 @@ defmodule Petepete.LedgerTest do
 
     test "gateway replay survives a change of payout account owner and keeps history", ctx do
       ev = gateway(ctx)
-      %{txn: first} = record!(:gateway, ev)
+      %{txn: first} = record!(Actor.gateway(), ev)
       payout_account_fixture(%{id: ctx.g}, %{id: ctx.c})
 
-      assert %{txn: %{id: id}, replayed: true} = record!(:gateway, ev)
+      assert %{txn: %{id: id}, replayed: true} = record!(Actor.gateway(), ev)
       assert id == first.id
       assert Ledger.balances(ctx.g).members[ctx.host] == -34_000
 
       later = gateway(ctx, bill_id: 10)
-      %{txn: txn} = record!(:gateway, later)
+      %{txn: txn} = record!(Actor.gateway(), later)
       assert {"member", ctx.c, -34_000} in entries(txn)
     end
 
@@ -423,7 +431,10 @@ defmodule Petepete.LedgerTest do
                try_record(ctx.actor, kas_spend(ctx, idempotency_key: k))
 
       assert {:error, :idempotency_key_conflict} =
-               try_record({:host, user_fixture().id}, settlement(ctx, idempotency_key: k))
+               try_record(
+                 %Actor{type: :host, user_id: user_fixture().id, member_id: ctx.host},
+                 settlement(ctx, idempotency_key: k)
+               )
 
       assert length(Ledger.txns(ctx.g)) == 1
     end
@@ -466,7 +477,7 @@ defmodule Petepete.LedgerTest do
     test "legality matrix", ctx do
       txns = %{
         "session_billed" => record!(ctx.actor, billed(ctx)).txn,
-        "gateway_payment_received" => record!(:gateway, gateway(ctx)).txn,
+        "gateway_payment_received" => record!(Actor.gateway(), gateway(ctx)).txn,
         "cash_received" => record!(ctx.actor, cash(ctx)).txn,
         "settlement" => record!(ctx.actor, settlement(ctx)).txn,
         "kas_spend" => record!(ctx.actor, kas_spend(ctx)).txn
@@ -570,7 +581,7 @@ defmodule Petepete.LedgerTest do
     test "balances equal the manual sums, including members with no entries", ctx do
       record!(ctx.actor, billed(ctx))
       record!(ctx.actor, cash(ctx))
-      record!(:gateway, gateway(ctx))
+      record!(Actor.gateway(), gateway(ctx))
       record!(ctx.actor, settlement(ctx))
       record!(ctx.actor, kas_spend(ctx, amount: 1_500))
 
