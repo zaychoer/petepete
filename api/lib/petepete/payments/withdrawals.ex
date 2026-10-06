@@ -203,7 +203,10 @@ defmodule Petepete.Payments.Withdrawals do
   defp check_balance(account, amount) do
     with {:ok, balance} <- gateway_balance(account),
          :ok <-
-           if(amount <= balance - in_flight(account), do: :ok, else: {:error, :insufficient_balance}) do
+           if(amount <= balance - in_flight(account),
+             do: :ok,
+             else: {:error, :insufficient_balance}
+           ) do
       :ok
     else
       {:error, reason} -> Repo.rollback(reason)
