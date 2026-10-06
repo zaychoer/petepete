@@ -32,7 +32,14 @@ defmodule PetepeteWeb.Labels do
     "active" => "Aktif"
   }
 
+  @paid_via %{"cash" => "Cash", "gateway" => "Online", "credit" => "Saldo"}
+
   @role %{"host" => "Host", "member" => "Anggota", "guest" => "Tamu"}
+
+  @doc "Label for how a bill was paid (`cash | gateway | credit`); `nil` (unpaid) has none."
+  @spec paid_via(String.t() | nil) :: String.t() | nil
+  def paid_via(nil), do: nil
+  def paid_via(via), do: Map.fetch!(@paid_via, via)
 
   @doc "Label for a bill status (`unpaid | paid | needs_review | void`)."
   @spec bill(String.t()) :: String.t()

@@ -60,10 +60,20 @@ defmodule PetepeteWeb.BillControllerTest do
 
   describe "POST /api/bills/:id/cash" do
     test "marks the bill paid in cash", ctx do
-      body = cash(ctx.host_conn, ctx.bill, "cash-1") |> json_response(201)
+      conn = cash(ctx.host_conn, ctx.bill, "cash-1")
+      body = json_response(conn, 201)
+      Petepete.Contract.check!("bill_cash.paid", conn)
 
       assert %{"txn_id" => txn_id, "replayed" => false, "bill" => bill} = body
-      assert %{"status" => "paid", "paid_via" => "cash", "amount_due" => 50_000} = bill
+
+      assert %{
+               "status" => "paid",
+               "status_label" => "Lunas",
+               "paid_via" => "cash",
+               "paid_via_label" => "Cash",
+               "amount_due" => 50_000
+             } = bill
+
       assert %Txn{kind: "cash_received"} = Repo.get!(Txn, txn_id)
       assert %Bill{status: "paid", paid_txn_id: ^txn_id} = Repo.get!(Bill, ctx.bill.id)
       assert audit_count(ctx.group, "bill.mark_paid_cash") == 1
@@ -72,8 +82,12 @@ defmodule PetepeteWeb.BillControllerTest do
     test "a bill that is not open is 409", ctx do
       cash(ctx.host_conn, ctx.bill, "k1") |> json_response(201)
 
+      conflict = cash(ctx.host_conn, ctx.bill, "k2")
+
       assert %{"error" => "invalid_transition", "entity" => "bill", "status" => "paid"} =
-               cash(ctx.host_conn, ctx.bill, "k2") |> json_response(409)
+               json_response(conflict, 409)
+
+      Petepete.Contract.check!("errors/invalid_transition", conflict)
     end
 
     test "only the host of the bill's group: member 403, other group's host and anon 404/401",
@@ -107,7 +121,9 @@ defmodule PetepeteWeb.BillControllerTest do
     end
 
     test "cancels within 24 hours: new reversing txn, bill unpaid", ctx do
-      body = cancel(ctx.host_conn, ctx.bill, "undo-1", "salah orang") |> json_response(201)
+      conn = cancel(ctx.host_conn, ctx.bill, "undo-1", "salah orang")
+      body = json_response(conn, 201)
+      Petepete.Contract.check!("bill_cash.cancelled", conn)
 
       assert %{"txn_id" => id, "replayed" => false, "bill" => %{"status" => "unpaid"}} = body
       assert %Txn{kind: "cash_payment_cancelled", reason: "salah orang"} = Repo.get!(Txn, id)
@@ -158,8 +174,9 @@ defmodule PetepeteWeb.BillControllerTest do
               b.session_id == ^ctx.session.id and b.status == "paid" and b.paid_via == "credit"
         )
 
-      assert %{"error" => "not_cash_payment"} =
-               cancel(ctx.host_conn, host_bill, "u1", "x") |> json_response(422)
+      conn = cancel(ctx.host_conn, host_bill, "u1", "x")
+      assert %{"error" => "not_cash_payment", "message" => _} = json_response(conn, 422)
+      Petepete.Contract.check!("errors/not_cash_payment", conn)
     end
 
     test "only the host of the bill's group", ctx do

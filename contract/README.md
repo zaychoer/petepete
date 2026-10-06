@@ -40,6 +40,10 @@ classification in `api/test/petepete_web/router_classification_test.exs`; that t
 an unrecorded `:client` route, a manifest entry without its file, and a sample file the
 manifest does not list.
 
+A route whose success response has no body (`DELETE /api/sessions/:id/costs/:cid`, 204) is
+classified `:no_body` in the classification test: it needs no sample and is not in the
+manifest. Its error responses still have `errors/<code>` samples.
+
 ## Used by the clients
 
 Fakes and tests load `samples/` and `manifest.json` instead of typing payloads. An override may

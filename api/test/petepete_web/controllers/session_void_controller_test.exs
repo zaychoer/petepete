@@ -58,7 +58,9 @@ defmodule PetepeteWeb.SessionVoidControllerTest do
   test "voids the session: reversing txn, voided bills, draft session, cancelled attempts", ctx do
     attempt = attempt!(ctx.bill)
 
-    body = void(ctx.host_conn, ctx.session, "void-1", "salah hitung") |> json_response(201)
+    conn = void(ctx.host_conn, ctx.session, "void-1", "salah hitung")
+    body = json_response(conn, 201)
+    Petepete.Contract.check!("void.voided", conn)
 
     assert %{
              "txn_id" => txn_id,

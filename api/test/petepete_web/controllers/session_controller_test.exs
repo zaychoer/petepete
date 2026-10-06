@@ -3,6 +3,7 @@ defmodule PetepeteWeb.SessionControllerTest do
 
   import Petepete.Fixtures
 
+  alias Petepete.Contract
   alias Petepete.Repo
 
   setup %{conn: conn} do
@@ -54,8 +55,10 @@ defmodule PetepeteWeb.SessionControllerTest do
       conn =
         put(conn, ~p"/api/sessions/#{session.id}/attendance", %{member_id: m.id, attended: true})
 
-      assert %{"participant" => %{"attended" => true, "weight" => 1000}} =
+      assert %{"participant" => %{"attended" => true, "weight" => 1000, "role_label" => _}} =
                json_response(conn, 200)
+
+      Contract.check!("participant.saved", conn)
     end
 
     for {category, amount, extra} <- [
@@ -73,8 +76,15 @@ defmodule PetepeteWeb.SessionControllerTest do
       assert %{"cost_item" => %{"id" => _}} = json_response(conn, 201)
     end
 
+    draft = get(conn, ~p"/api/sessions/#{session.id}")
+
     assert %{"cost_items" => [lapangan, wasit, minum], "participants" => participants} =
-             get(conn, ~p"/api/sessions/#{session.id}") |> json_response(200)
+             json_response(draft, 200)
+
+    assert %{"session" => %{"status_label" => "Draft", "progress_label" => "Draft"}} =
+             json_response(draft, 200)
+
+    Contract.check!("session.draft", draft)
 
     all_ids = members |> Enum.map(& &1.id) |> Enum.sort()
     assert length(participants) == 10
@@ -100,20 +110,27 @@ defmodule PetepeteWeb.SessionControllerTest do
 
   test "cost item payload shows the payer; default host, changeable, 'new' vs existing id",
        %{host_conn: conn, session: session, host: host, plain: plain} do
+    created = put(conn, cost_path(session, "new"), %{category: "lapangan", amount: 350_000})
+
     assert %{"cost_item" => %{"id" => id, "paid_by" => paid_by, "paid_by_name" => name}} =
-             put(conn, cost_path(session, "new"), %{category: "lapangan", amount: 350_000})
-             |> json_response(201)
+             json_response(created, 201)
+
+    Contract.check!("cost_item.saved", created)
 
     assert paid_by == host.id
     assert name == host.display_name
 
+    updated =
+      put(conn, cost_path(session, id), %{
+        category: "lapangan",
+        amount: 350_000,
+        paid_by: plain.id
+      })
+
     assert %{"cost_item" => %{"id" => ^id, "paid_by" => pid, "paid_by_name" => pname}} =
-             put(conn, cost_path(session, id), %{
-               category: "lapangan",
-               amount: 350_000,
-               paid_by: plain.id
-             })
-             |> json_response(200)
+             json_response(updated, 200)
+
+    Contract.check!("cost_item.saved", updated)
 
     assert pid == plain.id
     assert pname == plain.display_name
@@ -210,12 +227,17 @@ defmodule PetepeteWeb.SessionControllerTest do
   end
 
   test "an issued session answers 409 with its status until it is a draft again",
-       %{host_conn: conn, session: session, plain: plain} do
+       %{host_conn: conn, session: session, plain: plain, host: host} do
+    cost_item_fixture(session, amount: 50_000, paid_by: host)
+    attendance_fixture(session, plain)
     session |> Ecto.Changeset.change(status: "issued") |> Repo.update!()
 
-    assert %{"error" => "session_not_editable", "status" => "issued"} =
-             put(conn, cost_path(session, "new"), %{category: "x", amount: 1})
-             |> json_response(409)
+    put_conn = put(conn, cost_path(session, "new"), %{category: "x", amount: 1})
+
+    assert %{"error" => "session_not_editable", "status" => "issued", "status_label" => "Ditagih"} =
+             json_response(put_conn, 409)
+
+    Contract.check!("errors/session_not_editable", put_conn)
 
     assert put(conn, ~p"/api/sessions/#{session.id}/attendance", %{
              member_id: plain.id,
@@ -223,13 +245,43 @@ defmodule PetepeteWeb.SessionControllerTest do
            }).status ==
              409
 
-    assert %{"session" => %{"status" => "issued", "progress" => "issued"}} =
-             get(conn, ~p"/api/sessions/#{session.id}") |> json_response(200)
+    show = get(conn, ~p"/api/sessions/#{session.id}")
+
+    assert %{
+             "session" => %{
+               "status" => "issued",
+               "status_label" => "Ditagih",
+               "progress" => "issued",
+               "progress_label" => "Ditagih"
+             }
+           } = json_response(show, 200)
+
+    Contract.check!("session.issued", show)
 
     Repo.get!(Petepete.Billing.Session, session.id)
     |> Ecto.Changeset.change(status: "draft")
     |> Repo.update!()
 
     assert put(conn, cost_path(session, "new"), %{category: "x", amount: 1}).status == 201
+  end
+
+  test "a session whose bills are all paid is settled",
+       %{host_conn: conn, session: session, plain: plain, host: host} do
+    cost_item_fixture(session, amount: 50_000, paid_by: host)
+    attendance_fixture(session, plain)
+    session |> Ecto.Changeset.change(status: "issued") |> Repo.update!()
+    bill_fixture(session, plain, status: "paid", paid_via: "cash")
+
+    show = get(conn, ~p"/api/sessions/#{session.id}")
+
+    assert %{
+             "session" => %{
+               "status" => "issued",
+               "progress" => "settled",
+               "progress_label" => "Selesai"
+             }
+           } = json_response(show, 200)
+
+    Contract.check!("session.settled", show)
   end
 end

@@ -1,0 +1,168 @@
+{
+  "cost_items": [
+    {
+      "amount": 350000,
+      "bearer_ids": [
+        79,
+        87,
+        88,
+        89,
+        90,
+        92,
+        93,
+        95,
+        97,
+        98
+      ],
+      "category": "lapangan",
+      "id": 26,
+      "label": null,
+      "members": [],
+      "paid_by": 79,
+      "paid_by_name": "Member 13826",
+      "scope": "all",
+      "session_id": 27
+    },
+    {
+      "amount": 100000,
+      "bearer_ids": [
+        79,
+        87,
+        88,
+        89,
+        90,
+        92,
+        93,
+        95,
+        97,
+        98
+      ],
+      "category": "wasit",
+      "id": 27,
+      "label": null,
+      "members": [],
+      "paid_by": 79,
+      "paid_by_name": "Member 13826",
+      "scope": "all",
+      "session_id": 27
+    },
+    {
+      "amount": 60000,
+      "bearer_ids": [
+        79,
+        87,
+        88,
+        89,
+        90,
+        92
+      ],
+      "category": "minum",
+      "id": 28,
+      "label": null,
+      "members": [
+        79,
+        87,
+        88,
+        89,
+        90,
+        92
+      ],
+      "paid_by": 79,
+      "paid_by_name": "Member 13826",
+      "scope": "subset",
+      "session_id": 27
+    }
+  ],
+  "participants": [
+    {
+      "attended": true,
+      "display_name": "Member 13826",
+      "member_id": 79,
+      "role": "host",
+      "role_label": "Host",
+      "weight": 1000
+    },
+    {
+      "attended": true,
+      "display_name": "Member 10823",
+      "member_id": 87,
+      "role": "member",
+      "role_label": "Anggota",
+      "weight": 1000
+    },
+    {
+      "attended": true,
+      "display_name": "Member 10855",
+      "member_id": 88,
+      "role": "member",
+      "role_label": "Anggota",
+      "weight": 1000
+    },
+    {
+      "attended": true,
+      "display_name": "Member 10919",
+      "member_id": 89,
+      "role": "member",
+      "role_label": "Anggota",
+      "weight": 1000
+    },
+    {
+      "attended": true,
+      "display_name": "Member 10951",
+      "member_id": 90,
+      "role": "member",
+      "role_label": "Anggota",
+      "weight": 1000
+    },
+    {
+      "attended": true,
+      "display_name": "Member 11015",
+      "member_id": 92,
+      "role": "member",
+      "role_label": "Anggota",
+      "weight": 1000
+    },
+    {
+      "attended": true,
+      "display_name": "Member 11079",
+      "member_id": 93,
+      "role": "member",
+      "role_label": "Anggota",
+      "weight": 1000
+    },
+    {
+      "attended": true,
+      "display_name": "Member 11111",
+      "member_id": 95,
+      "role": "member",
+      "role_label": "Anggota",
+      "weight": 1000
+    },
+    {
+      "attended": true,
+      "display_name": "Member 11143",
+      "member_id": 97,
+      "role": "member",
+      "role_label": "Anggota",
+      "weight": 1000
+    },
+    {
+      "attended": true,
+      "display_name": "Member 11239",
+      "member_id": 98,
+      "role": "member",
+      "role_label": "Anggota",
+      "weight": 1000
+    }
+  ],
+  "session": {
+    "event_id": 27,
+    "group_id": 35,
+    "id": 27,
+    "progress": "draft",
+    "progress_label": "Draft",
+    "starts_at": "2026-10-08T12:00:00Z",
+    "status": "draft",
+    "status_label": "Draft"
+  }
+}

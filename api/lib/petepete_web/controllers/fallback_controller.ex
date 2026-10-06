@@ -8,10 +8,24 @@ defmodule PetepeteWeb.FallbackController do
 
   def call(conn, {:error, :not_found}), do: respond(conn, 404, "not_found")
   def call(conn, {:error, :forbidden}), do: respond(conn, 403, "forbidden")
+
+  def call(conn, {:error, {:conflict, :session_not_issued}}) do
+    conn
+    |> put_status(409)
+    |> json(%{error: "session_not_issued", message: "Sesi ini belum ditagih."})
+  end
+
   def call(conn, {:error, {:conflict, code}}), do: respond(conn, 409, Atom.to_string(code))
 
   def call(conn, {:error, {:session_not_editable, status}}) do
-    conn |> put_status(409) |> json(%{error: "session_not_editable", status: status})
+    conn
+    |> put_status(409)
+    |> json(%{
+      error: "session_not_editable",
+      status: status,
+      status_label: PetepeteWeb.Labels.session(status),
+      message: "Sesi ini sudah ditagih, jadi nggak bisa diubah lagi. Muat ulang dulu ya."
+    })
   end
 
   def call(conn, {:error, %Ecto.Changeset{} = changeset}) do

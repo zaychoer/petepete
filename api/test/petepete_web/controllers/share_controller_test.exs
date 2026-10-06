@@ -3,6 +3,8 @@ defmodule PetepeteWeb.ShareControllerTest do
 
   import Petepete.Fixtures
 
+  alias Petepete.Contract
+
   setup %{conn: conn} do
     {conn, user} = bearer_login(conn)
     %{conn: conn, user: user}
@@ -38,6 +40,7 @@ defmodule PetepeteWeb.ShareControllerTest do
 
       conn = get(conn, ~p"/api/sessions/#{ctx.session.id}/share/bills")
       body = json_response(conn, 200)
+      Contract.check!("share_bills.issued", conn)
 
       assert get_resp_header(conn, "cache-control") == ["no-store"]
       assert [other, _host_bill] = body["bills"]
@@ -50,10 +53,53 @@ defmodule PetepeteWeb.ShareControllerTest do
       assert other["pay_url"] == "https://petepete.test/pay/#{ctx.bill.pay_token}"
     end
 
+    test "every bill state keeps the entry shape and carries its labels", %{
+      conn: conn,
+      user: user
+    } do
+      ctx = issued_group(user)
+      now = Petepete.Clock.now()
+      cash_member = member_fixture(ctx.group, role: "member")
+      review_member = member_fixture(ctx.group, role: "member")
+      void_member = member_fixture(ctx.group, role: "member")
+
+      bill_fixture(ctx.session, cash_member,
+        status: "paid",
+        paid_via: "cash",
+        paid_at: now,
+        amount_due: 20_000
+      )
+
+      bill_fixture(ctx.session, review_member, status: "needs_review")
+      bill_fixture(ctx.session, void_member, status: "void")
+
+      conn = get(conn, ~p"/api/sessions/#{ctx.session.id}/share/bills")
+      entries = Map.new(json_response(conn, 200)["bills"], &{&1["member_id"], &1})
+
+      assert %{"status_label" => "Lunas", "paid_via_label" => "Cash", "cash_cancellable" => true} =
+               entries[cash_member.id]
+
+      assert %{"status_label" => "Perlu dicek", "paid_via_label" => nil} =
+               entries[review_member.id]
+
+      assert %{
+               "status_label" => "Dibatalkan",
+               "text" => nil,
+               "share_url" => nil,
+               "pay_url" => nil
+             } =
+               entries[void_member.id]
+
+      assert %{"status_label" => "Lunas", "paid_via_label" => "Saldo"} = entries[ctx.host.id]
+      Contract.check!("share_bills.issued", conn)
+    end
+
     test "reminder lists the unpaid", %{conn: conn, user: user} do
       ctx = issued_group(user)
 
-      body = conn |> get(~p"/api/sessions/#{ctx.session.id}/share/reminder") |> json_response(200)
+      conn = get(conn, ~p"/api/sessions/#{ctx.session.id}/share/reminder")
+      body = json_response(conn, 200)
+      Contract.check!("share_reminder.owing", conn)
 
       assert %{"count" => 1, "group_text" => text} = body
       assert text =~ "Rp30.000" and text =~ ctx.bill.pay_token
@@ -65,9 +111,10 @@ defmodule PetepeteWeb.ShareControllerTest do
       session = session_fixture(event_fixture(group))
 
       for action <- ~w(bills reminder summary) do
-        assert conn
-               |> get("/api/sessions/#{session.id}/share/#{action}")
-               |> json_response(409) == %{"error" => "session_not_issued"}
+        conn = get(conn, "/api/sessions/#{session.id}/share/#{action}")
+
+        assert %{"error" => "session_not_issued", "message" => _} = json_response(conn, 409)
+        Contract.check!("errors/session_not_issued", conn)
       end
     end
 
@@ -103,6 +150,7 @@ defmodule PetepeteWeb.ShareControllerTest do
 
       conn = get(conn, ~p"/api/sessions/#{ctx.session.id}/share/summary")
       body = json_response(conn, 200)
+      Contract.check!("share_summary.issued", conn)
 
       assert body["text"] =~ "Total biaya: Rp60.000"
       assert body["text"] =~ "(Belum bayar)"
