@@ -70,7 +70,7 @@ void main() {
       tester,
     ) async {
       final fake = FakeApi()
-        ..accounts[_phone] = {'id': 'u0', 'display_name': 'Sari'};
+        ..accounts[_phone] = {'id': 90, 'display_name': 'Sari'};
       await _launch(tester, fake);
 
       await _requestCode(tester);
@@ -83,8 +83,7 @@ void main() {
     testWidgets('an account that never set a name is asked again', (
       tester,
     ) async {
-      final fake = FakeApi()
-        ..accounts[_phone] = {'id': 'u0', 'display_name': ''};
+      final fake = FakeApi()..accounts[_phone] = {'id': 90, 'display_name': ''};
       await _launch(tester, fake);
 
       await _requestCode(tester);

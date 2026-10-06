@@ -5,9 +5,24 @@ defmodule Petepete.Payments.Withdrawals do
 
   Only the payout account's owner (a host) may withdraw. A request holds the payout
   account row lock while it reads the gateway balance and calls the gateway, so two
-  requests cannot both spend the same balance. The same `Idempotency-Key` returns the
-  first withdrawal without calling the gateway again. Each new withdrawal writes an
-  `audit_log` row in the same transaction. The Ledger is not touched.
+  requests cannot both spend the same balance.
+
+  ## Durability
+
+  A request is committed as a `pending` withdrawal (unique on `(group_id, idempotency_key)`)
+  together with its `withdrawal.request` audit row before the gateway is called, and the
+  call happens outside any transaction with the stable reference `withdrawal-<id>`, which
+  the adapter passes to the provider as idempotency key. The outcome is then written to the
+  row (`submitted`, `managed`, or `failed`) with a `withdrawal.<status>` audit row. While a
+  request is `pending` its amount counts against the balance, so concurrent requests
+  cannot overspend it.
+
+  The same `Idempotency-Key` returns the stored withdrawal and never calls the gateway
+  again, whatever its status (`pending`, `submitted`, `managed`), with one exception: a
+  `failed` withdrawal is attempted again, on the same row and reference. A withdrawal left
+  `pending` by a crash between commit and outcome is therefore NOT retried automatically
+  (the provider may have executed it); it needs a manual check at the provider. The
+  Ledger is not touched.
   """
   import Ecto.Query, only: [from: 2]
 
@@ -52,37 +67,92 @@ defmodule Petepete.Payments.Withdrawals do
   @doc """
   Withdraws `amount` (positive rupiah) for the host `member` of the group, who acts as
   `actor_user_id`. Returns `{:ok, %{withdrawal: w, replayed: boolean}}`; see `t:error/0`.
+
+  The request is durable before the gateway is asked (see the moduledoc): a replay returns
+  the stored withdrawal whatever its status, except that a `failed` one is attempted again.
   """
   @spec withdraw(pos_integer(), Member.t(), pos_integer(), String.t() | nil, term()) ::
           {:ok, %{withdrawal: Withdrawal.t(), replayed: boolean()}} | {:error, error()}
   def withdraw(group_id, %Member{} = member, actor_user_id, key, amount) do
     cond do
-      not (is_binary(key) and String.trim(key) != "") -> {:error, :idempotency_key_required}
-      not (is_integer(amount) and amount > 0) -> {:error, :amount_not_positive}
-      true -> locked_withdraw(group_id, member, actor_user_id, String.trim(key), amount)
+      not (is_binary(key) and String.trim(key) != "") ->
+        {:error, :idempotency_key_required}
+
+      not (is_integer(amount) and amount > 0) ->
+        {:error, :amount_not_positive}
+
+      true ->
+        key = String.trim(key)
+
+        with {:ok, step} <- accept_request(group_id, member, actor_user_id, key, amount) do
+          run(step, actor_user_id)
+        end
     end
   end
 
-  defp locked_withdraw(group_id, member, actor_user_id, key, amount) do
+  # Under the payout account lock: find the request by its key or record a new `pending`
+  # one (with its audit row), then commit. No withdrawal call happens in here.
+  defp accept_request(group_id, member, actor_user_id, key, amount) do
     Repo.transaction(fn ->
       account = group_id |> latest_account() |> Ecto.Query.lock("FOR UPDATE") |> Repo.one()
 
       with %PayoutAccount{} <- account || {:error, :no_payout_account},
            :ok <- check_owner(account, member) do
         case Repo.get_by(Withdrawal, group_id: group_id, idempotency_key: key) do
+          %Withdrawal{amount: ^amount, status: "failed"} = failed ->
+            {:call, account, retry(failed, account, actor_user_id)}
+
           %Withdrawal{amount: ^amount} = withdrawal ->
-            %{withdrawal: withdrawal, replayed: true}
+            {:replay, withdrawal}
 
           %Withdrawal{} ->
             Repo.rollback(:idempotency_key_conflict)
 
           nil ->
-            new_withdrawal(account, actor_user_id, key, amount)
+            {:call, account, new_withdrawal(account, actor_user_id, key, amount)}
         end
       else
         {:error, reason} -> Repo.rollback(reason)
       end
     end)
+  end
+
+  defp run({:replay, withdrawal}, _actor_user_id),
+    do: {:ok, %{withdrawal: withdrawal, replayed: true}}
+
+  defp run({:call, account, {withdrawal, replayed}}, actor_user_id) do
+    reference = "withdrawal-#{withdrawal.id}"
+
+    case Payments.gateway().withdraw(account.provider_account_id, withdrawal.amount, reference) do
+      {:ok, %{provider_ref: ref}} ->
+        settle(withdrawal, actor_user_id, replayed, status: "submitted", provider_ref: ref)
+
+      {:managed, url} ->
+        settle(withdrawal, actor_user_id, replayed, status: "managed", managed_url: url)
+
+      {:error, reason} ->
+        settle(withdrawal, actor_user_id, replayed, status: "failed")
+        {:error, {:gateway_error, reason}}
+    end
+  end
+
+  defp settle(withdrawal, actor_user_id, replayed, changes) do
+    {:ok, updated} =
+      Repo.transaction(fn ->
+        updated = withdrawal |> Ecto.Changeset.change(changes) |> Repo.update!()
+
+        Audit.record(
+          updated.group_id,
+          actor_user_id,
+          "withdrawal.#{updated.status}",
+          {"withdrawal", updated.id},
+          %{"amount" => updated.amount, "provider_ref" => updated.provider_ref}
+        )
+
+        updated
+      end)
+
+    {:ok, %{withdrawal: updated, replayed: replayed}}
   end
 
   defp check_owner(%PayoutAccount{owner_member_id: id, status: status}, %Member{id: id}) do
@@ -92,52 +162,60 @@ defmodule Petepete.Payments.Withdrawals do
   defp check_owner(_account, _member), do: {:error, :forbidden}
 
   defp new_withdrawal(account, actor_user_id, key, amount) do
-    gateway = Payments.gateway()
+    :ok = check_balance(account, amount)
 
+    withdrawal =
+      Repo.insert!(%Withdrawal{
+        group_id: account.group_id,
+        payout_account_id: account.id,
+        amount: amount,
+        status: "pending",
+        idempotency_key: key
+      })
+
+    record_request(withdrawal, actor_user_id)
+    {withdrawal, false}
+  end
+
+  # The same key after a `failed` attempt asks the gateway again, with the same reference.
+  defp retry(%Withdrawal{} = failed, account, actor_user_id) do
+    :ok = check_balance(account, failed.amount)
+    withdrawal = failed |> Ecto.Changeset.change(status: "pending") |> Repo.update!()
+    record_request(withdrawal, actor_user_id)
+    {withdrawal, true}
+  end
+
+  defp record_request(withdrawal, actor_user_id) do
+    Audit.record(
+      withdrawal.group_id,
+      actor_user_id,
+      "withdrawal.request",
+      {"withdrawal", withdrawal.id},
+      %{
+        "amount" => withdrawal.amount,
+        "payout_account_id" => withdrawal.payout_account_id,
+        "status" => withdrawal.status
+      }
+    )
+  end
+
+  # Withdrawals still `pending` have not reached the provider balance yet; they count as spent.
+  defp check_balance(account, amount) do
     with {:ok, balance} <- gateway_balance(account),
-         :ok <- if(amount <= balance, do: :ok, else: {:error, :insufficient_balance}),
-         {:ok, outcome} <- request_withdrawal(gateway, account, amount) do
-      withdrawal =
-        Repo.insert!(%Withdrawal{
-          group_id: account.group_id,
-          payout_account_id: account.id,
-          amount: amount,
-          status: outcome.status,
-          provider_ref: outcome.provider_ref,
-          managed_url: outcome.managed_url,
-          idempotency_key: key
-        })
-
-      Audit.record(
-        account.group_id,
-        actor_user_id,
-        "withdrawal.request",
-        {"withdrawal", withdrawal.id},
-        %{
-          "amount" => amount,
-          "payout_account_id" => account.id,
-          "status" => withdrawal.status,
-          "provider_ref" => withdrawal.provider_ref
-        }
-      )
-
-      %{withdrawal: withdrawal, replayed: false}
+         :ok <-
+           if(amount <= balance - in_flight(account), do: :ok, else: {:error, :insufficient_balance}) do
+      :ok
     else
       {:error, reason} -> Repo.rollback(reason)
     end
   end
 
-  defp request_withdrawal(gateway, account, amount) do
-    case gateway.withdraw(account.provider_account_id, amount) do
-      {:ok, %{provider_ref: ref}} ->
-        {:ok, %{status: "submitted", provider_ref: ref, managed_url: nil}}
-
-      {:managed, url} ->
-        {:ok, %{status: "managed", provider_ref: nil, managed_url: url}}
-
-      {:error, reason} ->
-        {:error, {:gateway_error, reason}}
-    end
+  defp in_flight(account) do
+    Repo.one(
+      from w in Withdrawal,
+        where: w.payout_account_id == ^account.id and w.status == "pending",
+        select: type(coalesce(sum(w.amount), 0), :integer)
+    )
   end
 
   defp gateway_balance(%PayoutAccount{provider_account_id: id}) do

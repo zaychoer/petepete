@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/fake_groups_api.dart';
@@ -16,6 +17,20 @@ FakeGroupsApi _hostOfFutsal() {
     {'id': 1, 'display_name': 'Budi', 'role': 'host', 'has_account': true},
   ];
   return fake;
+}
+
+/// Delivers [url] the way Android hands over a link the user tapped while the app
+/// is running.
+Future<void> _openLink(WidgetTester tester, String url) async {
+  final message = const JSONMethodCodec().encodeMethodCall(
+    MethodCall('pushRouteInformation', {'location': url}),
+  );
+  await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+    'flutter/navigation',
+    message,
+    (_) {},
+  );
+  await tester.pumpAndSettle();
 }
 
 void main() {
@@ -178,6 +193,69 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Gabung ke grup'), findsOneWidget);
+    });
+  });
+
+  group('handoff from the web join page', () {
+    for (final url in [
+      'https://petepete.test/join/token-5?claim=9',
+      'petepete://join/token-5?claim=9',
+    ]) {
+      testWidgets('$url opens the claim screen for that member', (
+        tester,
+      ) async {
+        final fake = _hostOfFutsal();
+        final app = AppHarness(fake);
+        await app.pump(tester, app.appRouter);
+        expect(find.text('Klaim namamu'), findsNothing);
+
+        await _openLink(tester, url);
+
+        expect(find.text('Klaim namamu'), findsOneWidget);
+        await tester.tap(find.text('Ini aku, ajukan klaim'));
+        await tester.pumpAndSettle();
+        expect(fake.calls('POST /api/members/9/claim'), hasLength(1));
+        expect(fake.calls('POST /api/invites/token-5/join'), isEmpty);
+      });
+    }
+
+    testWidgets('petepete://join/<token> without claim opens the plain join', (
+      tester,
+    ) async {
+      final app = AppHarness(_hostOfFutsal());
+      await app.pump(tester, app.appRouter);
+
+      await _openLink(tester, 'petepete://join/token-5');
+
+      expect(find.text('Gabung ke grup'), findsOneWidget);
+      expect(find.text('Klaim namamu'), findsNothing);
+    });
+
+    testWidgets('the app launched by the custom scheme lands on the claim', (
+      tester,
+    ) async {
+      tester.platformDispatcher.defaultRouteNameTestValue =
+          'petepete://join/token-5?claim=9';
+      addTearDown(tester.platformDispatcher.clearDefaultRouteNameTestValue);
+      final app = AppHarness(_hostOfFutsal());
+      await app.pump(tester, app.appRouter);
+
+      expect(find.text('Klaim namamu'), findsOneWidget);
+    });
+
+    testWidgets('a custom-scheme link opened logged out continues after login '
+        'with the claim intact', (tester) async {
+      final app = AppHarness(_hostOfFutsal(), signedIn: false);
+      await app.pump(tester, app.appRouter);
+
+      await _openLink(tester, 'petepete://join/token-5?claim=9');
+      expect(find.text('Masuk ke Petepete'), findsOneWidget);
+
+      await app.auth.requestOtp('6281234567890');
+      await app.auth.verifyOtp('123456');
+      await tester.pumpAndSettle();
+
+      expect(find.text('Klaim namamu'), findsOneWidget);
     });
   });
 }

@@ -9,10 +9,14 @@ Map<String, dynamic> _bill(int id, String name, String status, int due) => {
   'display_name': name,
   'status': status,
   'amount_due': due,
+  'paid_via': status == 'paid' ? 'cash' : null,
+  'paid_at': status == 'paid' ? '2026-10-06T12:00:00Z' : null,
+  'cash_cancellable': status == 'paid',
   'has_phone': false,
   'wa_number': null,
-  'text': 'Halo $name',
-  'share_url': 'https://wa.me/?text=Halo',
+  // A void entry carries no text, like the API's.
+  'text': status == 'void' ? null : 'Halo $name',
+  'share_url': status == 'void' ? null : 'https://wa.me/?text=Halo',
 };
 
 FakeSessionServer _issued() {
@@ -168,6 +172,82 @@ void main() {
 
     expect(find.textContaining('24 jam sudah lewat'), findsOneWidget);
     expect(find.byKey(const Key('reason-input')), findsOneWidget);
+  });
+
+  testWidgets('Batal cash shows only where the server says it is cancellable', (
+    tester,
+  ) async {
+    final server = _issued();
+    server.shareBills = [
+      _bill(2, 'Andi', 'paid', 30000), // cash, inside 24 hours
+      {
+        ..._bill(4, 'Dewi', 'paid', 10000),
+        'paid_via': 'gateway',
+        'cash_cancellable': false,
+      },
+      {
+        ..._bill(5, 'Eko', 'paid', 10000),
+        'paid_via': 'cash',
+        'paid_at': '2026-10-01T12:00:00Z',
+        'cash_cancellable': false, // cash, but past the 24 hour window
+      },
+    ];
+    await pumpSession(tester, server, launcher);
+
+    expect(find.byKey(const Key('bill-cancel-2')), findsOneWidget);
+    expect(find.byKey(const Key('bill-cancel-4')), findsNothing);
+    expect(find.byKey(const Key('bill-cancel-5')), findsNothing);
+    // All three are still shown as paid.
+    expect(find.text('Lunas'), findsNWidgets(3));
+  });
+
+  testWidgets('a void bill reads Dibatalkan and has no actions', (
+    tester,
+  ) async {
+    final server = _issued();
+    server.shareBills = [
+      _bill(1, 'Sari', 'unpaid', 50000),
+      _bill(6, 'Rina', 'void', 20000),
+    ];
+    await pumpSession(tester, server, launcher);
+
+    final rina = find.byKey(const Key('bill-6'));
+    expect(
+      find.descendant(of: rina, matching: find.text('Dibatalkan')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: rina, matching: find.byType(TextButton)),
+      findsNothing,
+    );
+    // The live bill keeps its actions.
+    expect(find.byKey(const Key('bill-paid-1')), findsOneWidget);
+
+    // The share sheet lists live bills only: a void entry has no text to send.
+    await tester.tap(find.byKey(const Key('share-bills')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('share-1')), findsOneWidget);
+    expect(find.byKey(const Key('share-6')), findsNothing);
+  });
+
+  testWidgets('a session whose bills are all void still lists them', (
+    tester,
+  ) async {
+    final server = _issued();
+    server.shareBills = [
+      _bill(6, 'Rina', 'void', 20000),
+      _bill(7, 'Sari', 'void', 50000),
+    ];
+    await pumpSession(tester, server, launcher);
+
+    expect(find.text('Tagihan'), findsOneWidget);
+    expect(find.text('Dibatalkan'), findsNWidgets(2));
+    expect(find.text('Rina'), findsOneWidget);
+    expect(find.text('Sari'), findsOneWidget);
+    // Nothing live to pay, remind or cancel.
+    expect(find.byKey(const Key('share-bills')), findsNothing);
+    expect(find.byKey(const Key('void-issue')), findsNothing);
+    expect(find.byKey(const Key('bill-paid-6')), findsNothing);
   });
 
   testWidgets('Batalkan tagihan requires a reason and explains credit', (

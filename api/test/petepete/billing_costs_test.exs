@@ -14,7 +14,7 @@ defmodule Petepete.BillingCostsTest do
     {plain_user, plain} = plain_member_fixture(a)
     {_guest_user, guest} = guest_fixture(a)
     {other_host_user, other_host} = host_fixture(b)
-    session = session_fixture(a)
+    session = session_fixture(event_fixture(a))
 
     %{
       a: a,
@@ -169,7 +169,7 @@ defmodule Petepete.BillingCostsTest do
     end
 
     test "update and delete only reach items of that session", ctx do
-      other_session = session_fixture(ctx.a)
+      other_session = session_fixture(event_fixture(ctx.a))
 
       {:ok, foreign} =
         Billing.create_cost_item(ctx.host_scope, other_session.id, %{

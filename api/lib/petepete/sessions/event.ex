@@ -31,9 +31,15 @@ defmodule Petepete.Sessions.Event do
   Params: `name` (defaults to the group's name), `type` (`recurring` | `one_off`),
   `rrule` and `time` (`"HH:MM"` WIB) for recurring, `starts_at` (ISO 8601 with a UTC
   offset) for one-off, `cost_template`, `split_rule`. The stored `rrule` is the
-  canonical text including the time of day.
+  canonical text including the time of day. A template item without `paid_by_member_id`
+  is stored as paid by `host_member_id`, the creating host.
   """
-  def create_changeset(%__MODULE__{} = event, %{id: group_id, name: group_name}, params) do
+  def create_changeset(
+        %__MODULE__{} = event,
+        %{id: group_id, name: group_name},
+        host_member_id,
+        params
+      ) do
     event
     |> cast(params, [:name, :type, :split_rule])
     |> put_change(:group_id, group_id)
@@ -43,7 +49,7 @@ defmodule Petepete.Sessions.Event do
     |> validate_length(:name, max: 120)
     |> validate_length(:split_rule, max: 50)
     |> put_schedule(params)
-    |> put_cost_template(params, group_id)
+    |> put_cost_template(params, group_id, host_member_id)
   end
 
   defp default_name(changeset, group_name) do
@@ -119,8 +125,8 @@ defmodule Petepete.Sessions.Event do
     end
   end
 
-  defp put_cost_template(changeset, params, group_id) do
-    case CostTemplate.cast(params["cost_template"], group_id) do
+  defp put_cost_template(changeset, params, group_id, host_member_id) do
+    case CostTemplate.cast(params["cost_template"], group_id, host_member_id) do
       {:ok, template} ->
         put_change(changeset, :cost_template, template)
 

@@ -19,8 +19,8 @@ defmodule Petepete.Payments.CancelAttemptsJobTest do
     on_exit(fn -> Application.put_env(:petepete, :gateway, original) end)
 
     group = group_fixture()
-    session = session_fixture(group)
-    bill = bill_fixture(session, member_fixture(group, "member"))
+    session = session_fixture(event_fixture(group))
+    bill = bill_fixture(session, member_fixture(group, role: "member"))
     %{bill: bill}
   end
 

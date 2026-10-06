@@ -8,7 +8,8 @@ defmodule Petepete.Share do
   Three texts, all Indonesian casual, amounts as `Rp45.000`
   (`Petepete.Ledger.Description.rupiah/1`), date as the session's WIB date:
 
-    * `bills/1`: one personal message per live Bill. Unpaid and needs_review Bills carry
+    * `bills/1`: one personal message per live Bill (plus a text-less `void` entry for a
+      Member whose only Bill was voided, so the host's status screen is never blank). Unpaid and needs_review Bills carry
       the pay link `<web_base_url>/pay/<pay_token>`. A Member with a phone gets it as
       `wa_number` (digits only, e.g. `6281234567890`) so the host's app can open a personal
       wa.me link; everyone else only gets `has_phone: false`. Host only: it holds pay tokens
@@ -33,7 +34,7 @@ defmodule Petepete.Share do
   alias Petepete.Billing.{Bill, CostItem, Session}
   alias Petepete.Groups.{Group, Member}
   alias Petepete.Ledger.Description
-  alias Petepete.{Repo, Wib}
+  alias Petepete.{Clock, Ledger, Repo, Wib}
 
   @days ~w(Senin Selasa Rabu Kamis Jumat Sabtu Minggu)
   @months ~w(Jan Feb Mar Apr Mei Jun Jul Agu Sep Okt Nov Des)
@@ -44,12 +45,15 @@ defmodule Petepete.Share do
           display_name: String.t(),
           status: String.t(),
           amount_due: integer(),
+          paid_via: String.t() | nil,
+          paid_at: DateTime.t() | nil,
+          cash_cancellable: boolean(),
           has_phone: boolean(),
           wa_number: String.t() | nil,
           pay_url: String.t() | nil,
           token_expires_at: DateTime.t() | nil,
-          text: String.t(),
-          share_url: String.t()
+          text: String.t() | nil,
+          share_url: String.t() | nil
         }
 
   @type error :: :not_found | {:conflict, :session_not_issued}
@@ -66,18 +70,25 @@ defmodule Petepete.Share do
   end
 
   @doc """
-  Personal bill messages of an issued session, one per live Bill (void ones are skipped),
-  ordered by bill id: `{:ok, %{session_id: id, bills: [entry]}}`.
+  Personal bill messages of an issued session, one per live Bill, ordered by bill id:
+  `{:ok, %{session_id: id, bills: [entry]}}`. A Member who only has void Bills (an earlier
+  issue was voided) appears once with `status: "void"`, no `text`, `share_url` or `pay_url`,
+  so a session whose Bills were all voided is still listed; no message is generated for
+  void Bills.
 
   Each `entry` has `bill_id`, `member_id`, `display_name`, `status`, `amount_due`,
-  `has_phone`, `wa_number` (digits or `nil`), `pay_url` (`nil` once paid), `token_expires_at`,
-  `text` and `share_url` (a number-less `wa_me_url/2` of `text`, for picking the chat).
+  `paid_via` (`cash`, `gateway`, `credit` or `nil`), `paid_at`, `cash_cancellable` (a cash
+  payment still inside the Ledger's 24 hour undo window; the Ledger decides on the actual
+  cancel), `has_phone`, `wa_number` (digits or `nil`), `pay_url` (`nil` once paid),
+  `token_expires_at`, `text` and `share_url` (a number-less `wa_me_url/2` of `text`, for
+  picking the chat).
   """
   @spec bills(pos_integer()) ::
           {:ok, %{session_id: pos_integer(), bills: [entry()]}} | {:error, error()}
   def bills(session_id) do
     with {:ok, ctx} <- load(session_id) do
-      {:ok, %{session_id: session_id, bills: Enum.map(live(ctx), &entry(ctx, &1, :bill))}}
+      rows = Enum.sort_by(summary_rows(ctx), fn {bill, _} -> bill.id end)
+      {:ok, %{session_id: session_id, bills: Enum.map(rows, &entry(ctx, &1, :bill))}}
     end
   end
 
@@ -165,7 +176,7 @@ defmodule Petepete.Share do
 
   defp entry(ctx, {bill, member}, kind) do
     number = digits(member.phone)
-    text = message(ctx, bill, member, kind)
+    text = if bill.status != "void", do: message(ctx, bill, member, kind)
 
     %{
       bill_id: bill.id,
@@ -173,14 +184,22 @@ defmodule Petepete.Share do
       display_name: member.display_name,
       status: bill.status,
       amount_due: bill.amount_due,
+      paid_via: bill.paid_via,
+      paid_at: bill.paid_at,
+      cash_cancellable: cash_cancellable?(bill),
       has_phone: number != "",
       wa_number: if(number != "", do: number),
-      pay_url: if(bill.status != "paid", do: pay_url(bill)),
+      pay_url: if(bill.status not in ~w(paid void), do: pay_url(bill)),
       token_expires_at: bill.token_expires_at,
       text: text,
-      share_url: wa_me_url(nil, text)
+      share_url: text && wa_me_url(nil, text)
     }
   end
+
+  defp cash_cancellable?(%Bill{status: "paid", paid_via: "cash", paid_at: %DateTime{} = at}),
+    do: Ledger.cash_undo_window_open?(at, Clock.now())
+
+  defp cash_cancellable?(_bill), do: false
 
   defp message(ctx, %Bill{status: "paid"} = bill, member, _kind) do
     """

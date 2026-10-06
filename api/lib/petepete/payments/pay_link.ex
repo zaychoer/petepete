@@ -15,6 +15,16 @@ defmodule Petepete.Payments.PayLink do
   webhook. If the gateway refuses the request the attempt is kept as `failed` (so its
   `seq` is never reused) and the caller gets `{:error, :gateway_error}`.
 
+  ## Durability
+
+  The attempt row is committed first (`pending`, no `provider_ref`/`action`), and only then is
+  the gateway asked, outside any transaction, with the attempt's `external_id` as the provider's
+  order/idempotency key. The result is written back afterwards. A crash or a failed write
+  after the provider accepted therefore never loses the attempt: the webhook finds it by
+  `external_id`, and a repeat request for the same method finds the pending attempt that still
+  has no provider data and asks the gateway again with the same `external_id` (the adapter
+  must treat a repeated `external_id` as the same order) instead of creating a new one.
+
   An attempt expires after `attempt_ttl_seconds` (config
   `config :petepete, Petepete.Payments, attempt_ttl_seconds: n`, default 3600), never past
   the link's `token_expires_at`. A link works until its bill is paid or `token_expires_at`
@@ -26,7 +36,8 @@ defmodule Petepete.Payments.PayLink do
   `start_payment/2` locks only the bill row (`Billing.lock_bills/1`), like the webhook and
   cash flows: it never touches the session row and never reaches the Ledger. The lock
   also serialises concurrent requests, so `seq` cannot collide and a double tap yields
-  one attempt. The gateway call happens under that lock.
+  one attempt. The lock is held only while the attempt row is chosen or inserted; the
+  gateway call happens after it is released.
   """
   import Ecto.Query, only: [from: 2]
 
@@ -59,7 +70,8 @@ defmodule Petepete.Payments.PayLink do
   `view` has `:bill`, `:page` (`Billing.pay_page/1`), `:token_expired`, `:can_pay`
   (unpaid and token valid), `:methods` (`[%{method, fee, gross_amount}]`, empty unless
   `can_pay`), `:attempt` (the newest active pending attempt or `nil`) and
-  `:attempt_expired` (the bill is unpaid, no attempt is active and the latest one expired).
+  `:attempt_expired` (the bill is unpaid, no attempt is active and the latest one expired)
+  and `:expired_method` (the method of that expired attempt, `nil` unless `attempt_expired`).
   Marks overdue pending attempts of an unpaid bill as `expired`.
   """
   @spec show(term()) :: {:ok, map()} | {:error, :not_found}
@@ -79,6 +91,8 @@ defmodule Petepete.Payments.PayLink do
     token_expired = token_expired?(bill, now)
     can_pay = bill.status == "unpaid" and not token_expired
     active = newest_active_attempt(bill.id, now)
+    latest = latest_attempt(bill.id)
+    attempt_expired = bill.status == "unpaid" and is_nil(active) and latest_expired?(latest)
 
     %{
       bill: bill,
@@ -87,8 +101,8 @@ defmodule Petepete.Payments.PayLink do
       can_pay: can_pay,
       methods: if(can_pay, do: method_fees(bill.amount_due), else: []),
       attempt: active,
-      attempt_expired:
-        bill.status == "unpaid" and is_nil(active) and latest_expired?(latest_attempt(bill.id))
+      attempt_expired: attempt_expired,
+      expired_method: if(attempt_expired, do: latest.method)
     }
   end
 
@@ -111,33 +125,52 @@ defmodule Petepete.Payments.PayLink do
           {:ok, %{attempt: PaymentAttempt.t(), reused: boolean()}} | {:error, start_error()}
   def start_payment(token, method) do
     with :ok <- check_method(method),
-         %Bill{} = bill <- Billing.bill_by_token(token) || {:error, :not_found} do
-      transact(bill.id, method)
+         %Bill{} = bill <- Billing.bill_by_token(token) || {:error, :not_found},
+         {:ok, step} <- prepare(bill.id, method) do
+      run(step)
     end
   end
 
   defp check_method(method) when method in @methods, do: :ok
   defp check_method(_), do: {:error, :unsupported_method}
 
-  defp transact(bill_id, method) do
-    result =
-      Repo.transaction(fn ->
-        [bill] = Billing.lock_bills([bill_id])
-        now = Clock.now()
+  # Under the bill lock: pick the attempt to return or complete, inserting a new `pending`
+  # row when there is none. Commits before the gateway is involved.
+  defp prepare(bill_id, method) do
+    Repo.transaction(fn ->
+      [bill] = Billing.lock_bills([bill_id])
+      now = Clock.now()
 
-        with :ok <- check_payable(bill, now) do
-          expire_overdue(bill.id, now)
+      with :ok <- check_payable(bill, now) do
+        expire_overdue(bill.id, now)
 
-          case active_attempt(bill.id, method, now) do
-            %PaymentAttempt{} = attempt -> {:ok, %{attempt: attempt, reused: true}}
-            nil -> create_attempt(bill, method, now)
-          end
+        case active_attempt(bill.id, method, now) do
+          %PaymentAttempt{provider_ref: ref} = attempt when is_binary(ref) -> {:reuse, attempt}
+          %PaymentAttempt{} = attempt -> {:call, attempt}
+          nil -> {:call, insert_attempt(bill, method, now)}
         end
-      end)
+      else
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
+  end
 
-    # Every outcome is a committed value (a failed gateway call keeps its row), never a rollback.
-    {:ok, reply} = result
-    reply
+  defp run({:reuse, attempt}), do: {:ok, %{attempt: attempt, reused: true}}
+
+  defp run({:call, %PaymentAttempt{} = attempt}) do
+    gateway = Payments.gateway()
+
+    request = %{
+      external_id: attempt.external_id,
+      method: attempt.method,
+      gross_amount: attempt.gross_amount,
+      expires_at: attempt.expires_at
+    }
+
+    case gateway.create_payment(request) do
+      {:ok, payment} -> accept(gateway, attempt, payment)
+      {:error, _reason} -> refuse(attempt)
+    end
   end
 
   defp check_payable(%Bill{status: "paid"}, _now), do: {:error, :bill_paid}
@@ -153,56 +186,62 @@ defmodule Petepete.Payments.PayLink do
   defp token_expired?(%Bill{token_expires_at: expires_at}, now),
     do: DateTime.compare(now, expires_at) != :lt
 
-  defp create_attempt(bill, method, now) do
+  defp insert_attempt(bill, method, now) do
     gateway = Payments.gateway()
 
-    with {:ok, fee} <- Payments.fee_for(method, bill.amount_due) do
-      seq = last_seq(bill.id) + 1
-      external_id = "#{bill.id}-#{seq}"
-      gross = bill.amount_due + fee
-      expires_at = attempt_expiry(now, bill)
+    case Payments.fee_for(method, bill.amount_due) do
+      {:ok, fee} ->
+        seq = last_seq(bill.id) + 1
 
-      attempt =
         Repo.insert!(%PaymentAttempt{
           bill_id: bill.id,
           seq: seq,
-          external_id: external_id,
+          external_id: "#{bill.id}-#{seq}",
           provider: gateway.provider(),
           method: method,
           amount_due: bill.amount_due,
           fee: fee,
-          gross_amount: gross,
-          expires_at: expires_at
+          gross_amount: bill.amount_due + fee,
+          expires_at: attempt_expiry(now, bill)
         })
 
-      request = %{
-        external_id: external_id,
-        method: method,
-        gross_amount: gross,
-        expires_at: expires_at
-      }
-
-      case gateway.create_payment(request) do
-        {:ok, payment} ->
-          updated =
-            attempt
-            |> Ecto.Changeset.change(
-              provider_ref: payment.provider_ref,
-              action: payment.action,
-              expires_at: DateTime.truncate(payment.expires_at, :second)
-            )
-            |> Repo.update!()
-
-          {:ok, %{attempt: updated, reused: false}}
-
-        {:error, _reason} ->
-          attempt |> Ecto.Changeset.change(status: "failed") |> Repo.update!()
-          # Commit the failed row: its seq must never be handed out again.
-          {:error, :gateway_error}
-      end
-    else
-      {:error, _} -> {:error, :unsupported_method}
+      {:error, _} ->
+        Repo.rollback(:unsupported_method)
     end
+  end
+
+  # The provider data is always stored (the webhook and a later cancel job need it); only a
+  # voiding that raced the gateway call turns the answer into an error, and the payment the
+  # provider just created is cancelled again, best effort.
+  defp accept(gateway, attempt, payment) do
+    Repo.update_all(
+      from(a in PaymentAttempt, where: a.id == ^attempt.id),
+      set: [
+        provider_ref: payment.provider_ref,
+        action: payment.action,
+        expires_at: DateTime.truncate(payment.expires_at, :second),
+        updated_at: Clock.now()
+      ]
+    )
+
+    case Repo.get!(PaymentAttempt, attempt.id) do
+      %PaymentAttempt{status: "cancelled"} ->
+        _ = gateway.cancel_payment(payment.provider_ref)
+        {:error, :bill_void}
+
+      %PaymentAttempt{} = updated ->
+        {:ok, %{attempt: updated, reused: false}}
+    end
+  end
+
+  # Keep the failed row: its seq must never be handed out again.
+  defp refuse(attempt) do
+    Repo.update_all(
+      from(a in PaymentAttempt, where: a.id == ^attempt.id and a.status == "pending"),
+      set: [status: "failed", updated_at: Clock.now()]
+    )
+
+    {:error, :gateway_error}
   end
 
   defp attempt_expiry(now, bill) do

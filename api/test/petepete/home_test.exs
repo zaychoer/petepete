@@ -11,9 +11,15 @@ defmodule Petepete.HomeTest do
   @now ~U[2026-10-06 03:00:00Z]
 
   setup do
-    group = group!()
-    event = event!(group, name: "Futsal Kamis", type: "recurring")
-    %{group: group, event: event, host: member!(group, role: "host"), a: member!(group)}
+    group = group_fixture()
+    event = event_fixture(group, name: "Futsal Kamis", type: "recurring")
+
+    %{
+      group: group,
+      event: event,
+      host: member_fixture(group, role: "host"),
+      a: member_fixture(group)
+    }
   end
 
   defp add_cost(session, amount),
@@ -21,18 +27,18 @@ defmodule Petepete.HomeTest do
 
   test "next session is the earliest live one from the start of today in WIB",
        %{group: group, event: event, a: a} do
-    session!(event, starts_at: ~U[2026-10-05 12:00:00Z])
-    session!(event, starts_at: ~U[2026-10-07 12:00:00Z], status: "cancelled")
+    session_fixture(event, starts_at: ~U[2026-10-05 12:00:00Z])
+    session_fixture(event, starts_at: ~U[2026-10-07 12:00:00Z], status: "cancelled")
     # Today 00:30 WIB is still "today" even though it has begun: 2026-10-05 17:30 UTC.
-    today = session!(event, starts_at: ~U[2026-10-05 17:30:00Z])
-    session!(event, starts_at: ~U[2026-10-13 12:00:00Z])
+    today = session_fixture(event, starts_at: ~U[2026-10-05 17:30:00Z])
+    session_fixture(event, starts_at: ~U[2026-10-13 12:00:00Z])
     add_cost(today, 100_000)
     add_cost(today, 20_000)
     Repo.insert!(%Participant{session_id: today.id, member_id: a.id, attended: true})
 
     Repo.insert!(%Participant{
       session_id: today.id,
-      member_id: member!(group).id,
+      member_id: member_fixture(group).id,
       attended: false
     })
 
@@ -58,16 +64,16 @@ defmodule Petepete.HomeTest do
     event: event,
     a: a
   } do
-    older = session!(event, starts_at: ~U[2026-09-29 12:00:00Z], status: "issued")
-    newer = session!(event, starts_at: ~U[2026-10-01 12:00:00Z], status: "issued")
-    b = member!(group)
-    c = member!(group)
+    older = session_fixture(event, starts_at: ~U[2026-09-29 12:00:00Z], status: "issued")
+    newer = session_fixture(event, starts_at: ~U[2026-10-01 12:00:00Z], status: "issued")
+    b = member_fixture(group)
+    c = member_fixture(group)
 
-    newer_bill = bill!(newer, a, amount_due: 30_000)
-    older_bill = bill!(older, a, amount_due: 20_000)
-    review = bill!(newer, b, amount_due: 40_000, status: "needs_review")
-    bill!(newer, c, status: "paid", amount_due: 0)
-    bill!(older, c, status: "void")
+    newer_bill = bill_fixture(newer, a, amount_due: 30_000)
+    older_bill = bill_fixture(older, a, amount_due: 20_000)
+    review = bill_fixture(newer, b, amount_due: 40_000, status: "needs_review")
+    bill_fixture(newer, c, status: "paid", amount_due: 0)
+    bill_fixture(older, c, status: "void")
 
     home = Home.for_group(group.id, @now)
 
@@ -91,12 +97,12 @@ defmodule Petepete.HomeTest do
     {:ok, {:ok, _}} =
       Repo.transaction(fn ->
         Ledger.record(
-          {:host, user!().id},
+          {:host, user_fixture().id},
           %SessionBilled{
             idempotency_key: "k-#{uniq()}",
             group_id: group.id,
             session_id: 1,
-            shares: [{a.id, 34_000}, {host.id, 34_000}, {member!(group).id, 34_000}],
+            shares: [{a.id, 34_000}, {host.id, 34_000}, {member_fixture(group).id, 34_000}],
             fronted: [{host.id, 100_000}],
             kas_remainder: 2_000
           }

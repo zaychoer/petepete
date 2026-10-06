@@ -11,12 +11,12 @@ defmodule PetepeteWeb.ShareControllerTest do
   # A group with an issued session and two bills, one of a member with a phone.
   defp issued_group(host_user) do
     group = group_fixture(%{name: "Futsal Kamis"})
-    host = member_fixture(group, "host", host_user)
-    session = session_fixture(group, status: "issued")
+    host = member_fixture(group, role: "host", user: host_user)
+    session = session_fixture(event_fixture(group), status: "issued")
     cost_item_fixture(session, amount: 60_000, paid_by: host)
 
     member =
-      member_fixture(group, "member")
+      member_fixture(group, role: "member")
       |> Ecto.Changeset.change(phone: "6281234567890")
       |> Petepete.Repo.update!()
 
@@ -61,8 +61,8 @@ defmodule PetepeteWeb.ShareControllerTest do
 
     test "a draft session is 409", %{conn: conn, user: user} do
       group = group_fixture()
-      member_fixture(group, "host", user)
-      session = session_fixture(group)
+      member_fixture(group, role: "host", user: user)
+      session = session_fixture(event_fixture(group))
 
       for action <- ~w(bills reminder summary) do
         assert conn
@@ -74,7 +74,7 @@ defmodule PetepeteWeb.ShareControllerTest do
     test "a plain member gets 403 and an anonymous caller 401" do
       ctx = issued_group(user_fixture())
       {member_conn, member_user} = bearer_login(build_conn())
-      member_fixture(ctx.group, "member", member_user)
+      member_fixture(ctx.group, role: "member", user: member_user)
 
       for action <- ~w(bills reminder) do
         path = "/api/sessions/#{ctx.session.id}/share/#{action}"
@@ -99,7 +99,7 @@ defmodule PetepeteWeb.ShareControllerTest do
   describe "GET /api/sessions/:id/share/summary" do
     test "any member of the group reads it, without tokens or phones", %{conn: conn, user: user} do
       ctx = issued_group(user_fixture())
-      member_fixture(ctx.group, "member", user)
+      member_fixture(ctx.group, role: "member", user: user)
 
       conn = get(conn, ~p"/api/sessions/#{ctx.session.id}/share/summary")
       body = json_response(conn, 200)

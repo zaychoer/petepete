@@ -14,8 +14,9 @@ defmodule Petepete.Billing.Voiding do
        so it is the participant's credit; issuing again consumes it.
     3. The pending payment attempts of those bills become `cancelled` (status only). Telling
        the gateway to drop them is the payment side's job, so their ids are returned in
-       `cancelled_attempt_ids`; the caller enqueues `Petepete.Payments.CancelAttemptsJob`
-       for them after the commit (the void endpoint does).
+       `cancelled_attempt_ids`; `Petepete.Payments.void_issue/2` runs this function in its
+       own transaction and inserts `Petepete.Payments.CancelAttemptsJob` for them before the
+       commit. This function joins a caller's transaction.
     4. The session moves issued -> draft (`Transitions.revert_session_to_draft/1`); its
        `issue_txn_id` is left as is until the next issue overwrites it.
     5. `Petepete.Ledger.Audit.record/5` writes `session.void_issue` (subject: the new txn).

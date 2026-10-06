@@ -11,8 +11,8 @@ defmodule PetepeteWeb.MemberControllerTest do
   setup %{conn: conn} do
     group = group_fixture()
     {host_conn, host_user} = bearer_login(conn)
-    host = member_fixture(group, "host", host_user)
-    roster_entry = member_fixture(group, "member")
+    host = member_fixture(group, role: "host", user: host_user)
+    roster_entry = member_fixture(group, role: "member")
     {claimer_conn, claimer} = bearer_login(build_conn())
 
     %{
@@ -127,7 +127,7 @@ defmodule PetepeteWeb.MemberControllerTest do
     end
 
     test "someone already on the roster cannot claim another entry", ctx do
-      member_fixture(ctx.group, "member", ctx.claimer)
+      member_fixture(ctx.group, role: "member", user: ctx.claimer)
 
       assert json_response(post(ctx.claimer_conn, claim_path(ctx.entry)), 409) == %{
                "error" => "already_member"
@@ -163,7 +163,7 @@ defmodule PetepeteWeb.MemberControllerTest do
 
     test "a plain member of the group cannot approve or reject", ctx do
       {member_conn, user} = bearer_login(build_conn())
-      member_fixture(ctx.group, "member", user)
+      member_fixture(ctx.group, role: "member", user: user)
 
       assert json_response(post(member_conn, approve_path(ctx.entry)), 403) == %{
                "error" => "forbidden"
@@ -187,7 +187,7 @@ defmodule PetepeteWeb.MemberControllerTest do
 
     test "the host of another group cannot see or approve it", ctx do
       {other_host, other_user} = bearer_login(build_conn())
-      member_fixture(group_fixture(), "host", other_user)
+      member_fixture(group_fixture(), role: "host", user: other_user)
 
       assert json_response(post(other_host, approve_path(ctx.entry)), 404) == %{
                "error" => "not_found"
@@ -201,7 +201,7 @@ defmodule PetepeteWeb.MemberControllerTest do
     end
 
     test "approving without a pending claim is 409", ctx do
-      other = member_fixture(ctx.group, "guest")
+      other = member_fixture(ctx.group, role: "guest")
 
       assert json_response(post(ctx.host_conn, approve_path(other)), 409) == %{
                "error" => "no_claim"
@@ -211,7 +211,7 @@ defmodule PetepeteWeb.MemberControllerTest do
     end
 
     test "approve is 409 when the claimer joined the group meanwhile", ctx do
-      member_fixture(ctx.group, "member", ctx.claimer)
+      member_fixture(ctx.group, role: "member", user: ctx.claimer)
 
       assert json_response(post(ctx.host_conn, approve_path(ctx.entry)), 409) == %{
                "error" => "already_member"

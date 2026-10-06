@@ -11,7 +11,7 @@ defmodule PetepeteWeb.SessionControllerTest do
     {host_user, host} = host_fixture(a)
     {plain_user, plain} = plain_member_fixture(a)
     {other_user, _} = host_fixture(b)
-    session = session_fixture(a)
+    session = session_fixture(event_fixture(a))
 
     %{
       a: a,
@@ -25,25 +25,11 @@ defmodule PetepeteWeb.SessionControllerTest do
     }
   end
 
-  # Real bearer token through the OTP endpoints, a fresh client IP per login.
   defp log_in(conn, user) do
-    phone =
-      "628" <>
-        String.pad_leading("#{rem(System.unique_integer([:positive]), 1_000_000_000)}", 9, "0")
-
-    user = user |> Ecto.Changeset.change(phone: phone) |> Repo.update!()
-
-    ip =
-      {10, 7, rem(System.unique_integer([:positive]), 250),
-       rem(System.unique_integer([:positive]), 250)}
-
-    assert post(%{conn | remote_ip: ip}, ~p"/api/auth/otp", %{phone: user.phone}).status == 200
-    assert_received {:otp_sent, _, code}
-
-    %{"access_token" => token} =
-      post(conn, ~p"/api/auth/verify", %{phone: user.phone, code: code}) |> json_response(200)
-
-    put_req_header(conn, "authorization", "Bearer " <> token)
+    user
+    |> Ecto.Changeset.change(phone: valid_phone())
+    |> Repo.update!()
+    |> then(&bearer_conn(conn, &1))
   end
 
   defp cost_path(session, cid), do: ~p"/api/sessions/#{session.id}/costs/#{cid}"
@@ -61,7 +47,7 @@ defmodule PetepeteWeb.SessionControllerTest do
 
   test "spec example 'Pos subset': 10 attend, three costs, the drink is borne by its 6 only",
        %{host_conn: conn, session: session, a: a, host: host} do
-    members = [host | for(_ <- 1..9, do: member_fixture(a, "member"))]
+    members = [host | for(_ <- 1..9, do: member_fixture(a, role: "member"))]
     drinkers = members |> Enum.take(6) |> Enum.map(& &1.id)
 
     for m <- members do

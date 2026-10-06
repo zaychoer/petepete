@@ -14,8 +14,8 @@ defmodule PetepeteWeb.LedgerControllerTest do
     {host, host_m} = login_member(g, "host")
     {plain, _} = login_member(g, "member")
     {outsider, _} = login_member(other, "host")
-    andi = member_fixture(g, "member")
-    budi = member_fixture(g, "member")
+    andi = member_fixture(g, role: "member")
+    budi = member_fixture(g, role: "member")
 
     Repo.update_all(from(m in Petepete.Groups.Member, where: m.id == ^andi.id),
       set: [display_name: "Andi"]
@@ -28,9 +28,9 @@ defmodule PetepeteWeb.LedgerControllerTest do
     %{
       conn: conn,
       g: g,
-      host_conn: login(conn, host),
-      plain_conn: login(conn, plain),
-      outsider_conn: login(conn, outsider),
+      host_conn: bearer_conn(conn, host),
+      plain_conn: bearer_conn(conn, plain),
+      outsider_conn: bearer_conn(conn, outsider),
       host: host,
       host_m: host_m,
       andi: andi,
@@ -40,21 +40,8 @@ defmodule PetepeteWeb.LedgerControllerTest do
 
   # Phones must pass OTP normalization, unlike the generic fixture phones.
   defp login_member(group, role) do
-    phone =
-      "628" <> (uniq() |> rem(1_000_000_000) |> Integer.to_string() |> String.pad_leading(9, "0"))
-
-    user = user_fixture(%{phone: phone})
-    {user, member_fixture(group, role, user)}
-  end
-
-  defp login(conn, user) do
-    post(conn, ~p"/api/auth/otp", %{phone: user.phone})
-    assert_received {:otp_sent, _, code}
-
-    %{"access_token" => token} =
-      post(conn, ~p"/api/auth/verify", %{phone: user.phone, code: code}) |> json_response(200)
-
-    put_req_header(conn, "authorization", "Bearer " <> token)
+    user = user_fixture(phone: valid_phone())
+    {user, member_fixture(group, role: role, user: user)}
   end
 
   defp key, do: "k#{System.unique_integer([:positive])}"
@@ -76,7 +63,7 @@ defmodule PetepeteWeb.LedgerControllerTest do
           %Event.SessionBilled{
             idempotency_key: key(),
             group_id: g.id,
-            session_id: session_fixture(g).id,
+            session_id: session_fixture(event_fixture(g)).id,
             shares: [{member.id, amount}],
             kas_remainder: amount
           }
@@ -248,7 +235,7 @@ defmodule PetepeteWeb.LedgerControllerTest do
             Ledger.record({:host, ctx.host.id}, %Event.SessionBilled{
               idempotency_key: key(),
               group_id: ctx.g.id,
-              session_id: session_fixture(ctx.g).id,
+              session_id: session_fixture(event_fixture(ctx.g)).id,
               shares: [{ctx.andi.id, 5000}],
               kas_remainder: 5000
             })

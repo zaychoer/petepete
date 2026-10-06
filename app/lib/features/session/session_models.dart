@@ -28,12 +28,19 @@ class GroupRoster {
   const GroupRoster({
     required this.members,
     required this.youId,
+    required this.youRole,
     required this.categories,
   });
 
   final List<RosterMember> members;
   final int youId;
+
+  /// The caller's role in the group: `host` or `member` (`you.role`).
+  final String youRole;
   final List<String> categories;
+
+  /// Only the host edits costs and attendance and sees bills and pay actions.
+  bool get isHost => youRole == 'host';
 
   RosterMember? byId(int id) {
     for (final m in members) {
@@ -50,6 +57,7 @@ class GroupRoster {
         RosterMember.fromJson(m as Json),
     ],
     youId: _int((j['you'] as Json)['member_id']),
+    youRole: (j['you'] as Json)['role'] as String? ?? 'member',
     categories: [
       for (final c in (j['cost_categories'] as List? ?? const [])) c as String,
     ],
@@ -315,6 +323,9 @@ class ShareEntry {
     required this.displayName,
     required this.status,
     required this.amountDue,
+    required this.paidVia,
+    required this.paidAt,
+    required this.cashCancellable,
     required this.hasPhone,
     required this.waNumber,
     required this.text,
@@ -323,18 +334,32 @@ class ShareEntry {
 
   final int billId;
   final String displayName;
+
+  /// `unpaid`, `paid`, `needs_review` or `void` (a bill of an earlier, voided issue).
   final String status;
   final int amountDue;
+
+  /// How a paid bill was paid: `cash`, `gateway` or `credit`; null while unpaid.
+  final String? paidVia;
+  final String? paidAt;
+
+  /// The server says the cash payment can still be undone (within 24 hours).
+  final bool cashCancellable;
   final bool hasPhone;
   final String? waNumber;
   final String text;
   final String shareUrl;
+
+  bool get isVoid => status == 'void';
 
   factory ShareEntry.fromJson(Json j) => ShareEntry(
     billId: _int(j['bill_id']),
     displayName: j['display_name'] as String? ?? '',
     status: j['status'] as String,
     amountDue: _int(j['amount_due']),
+    paidVia: j['paid_via'] as String?,
+    paidAt: j['paid_at'] as String?,
+    cashCancellable: j['cash_cancellable'] == true,
     hasPhone: j['has_phone'] as bool? ?? false,
     waNumber: j['wa_number'] as String?,
     text: j['text'] as String? ?? '',

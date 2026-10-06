@@ -72,26 +72,12 @@ if config_env() == :prod do
       You can generate one by calling: mix phx.gen.secret
       """
 
-  # Production has no default OTP sender: OTP_SENDER must name an adapter module
-  # implementing Petepete.Accounts.OtpSender, otherwise the app fails to boot
-  # (Petepete.Accounts.OtpSender.fetch!/0). The dev/test fake is refused.
-  otp_sender =
-    case System.get_env("OTP_SENDER") do
-      nil ->
-        nil
+  # One policy for both adapter seams, see Petepete.AdapterPolicy and docs/deploy.md,
+  # "Adapters": no defaults, the module must load and implement the behaviour, and the
+  # fakes are refused unless ALLOW_FAKE_ADAPTERS=true (fly.staging.toml only).
+  allow_fake? = Petepete.AdapterPolicy.allow_fake?(System.get_env("ALLOW_FAKE_ADAPTERS"))
 
-      "" ->
-        nil
-
-      name ->
-        module = Module.concat([name])
-
-        if module == Petepete.Accounts.OtpSender.Fake do
-          raise "OTP_SENDER must not be the fake sender in production"
-        end
-
-        module
-    end
+  otp_sender = Petepete.AdapterPolicy.otp_sender!(System.get_env("OTP_SENDER"), allow_fake?)
 
   otp_hmac_key =
     System.get_env("OTP_HMAC_KEY") ||
@@ -106,22 +92,7 @@ if config_env() == :prod do
 
   host = System.get_env("PHX_HOST") || "example.com"
 
-  # No default on purpose: money must never flow through a gateway nobody chose.
-  # "fake" is for staging, where no real money moves. See docs/deploy.md, "Gateway adapter".
-  gateway =
-    case System.get_env("PAYMENT_GATEWAY") do
-      "fake" ->
-        Petepete.Payments.Gateway.Fake
-
-      nil ->
-        raise """
-        environment variable PAYMENT_GATEWAY is missing.
-        Set it to the payment gateway adapter to use ("fake" while no real adapter exists).
-        """
-
-      other ->
-        raise "environment variable PAYMENT_GATEWAY=#{inspect(other)} is not a known adapter"
-    end
+  gateway = Petepete.AdapterPolicy.gateway!(System.get_env("PAYMENT_GATEWAY"), allow_fake?)
 
   config :petepete, :gateway, gateway
 

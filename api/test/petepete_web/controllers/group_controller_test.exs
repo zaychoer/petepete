@@ -74,9 +74,9 @@ defmodule PetepeteWeb.GroupControllerTest do
       mine = group_fixture(%{name: "Mine", template: "Padel"})
       joined = group_fixture(%{name: "Joined"})
       other = group_fixture(%{name: "Other"})
-      member_fixture(mine, "host", user)
-      member_fixture(joined, "member", user)
-      member_fixture(other, "host", user_fixture())
+      member_fixture(mine, role: "host", user: user)
+      member_fixture(joined, role: "member", user: user)
+      member_fixture(other, role: "host", user: user_fixture())
 
       assert %{"groups" => groups} = get(conn, ~p"/api/groups") |> json_response(200)
 
@@ -91,13 +91,13 @@ defmodule PetepeteWeb.GroupControllerTest do
     setup %{conn: conn} do
       {conn, user} = bearer_login(conn)
       group = group_fixture(%{name: "Badminton Jumat", template: "Badminton"})
-      host = member_fixture(group, "host", user)
+      host = member_fixture(group, role: "host", user: user)
       %{conn: conn, user: user, group: group, host: host}
     end
 
     test "a host sees name, rounding, template, roster with roles, phones and the invite link",
          ctx do
-      guest = member_fixture(ctx.group, "guest")
+      guest = member_fixture(ctx.group, role: "guest")
       body = get(ctx.conn, ~p"/api/groups/#{ctx.group.id}") |> json_response(200)
 
       assert %{"name" => "Badminton Jumat", "rounding_unit" => 1000, "template" => "Badminton"} =
@@ -116,8 +116,8 @@ defmodule PetepeteWeb.GroupControllerTest do
     test "a plain member sees the roster by name and role but no phones, claims or invite link",
          ctx do
       {conn, user} = bearer_login(build_conn())
-      member_fixture(ctx.group, "member", user)
-      guest = member_fixture(ctx.group, "guest")
+      member_fixture(ctx.group, role: "member", user: user)
+      guest = member_fixture(ctx.group, role: "guest")
       Repo.update!(Ecto.Changeset.change(guest, phone: "628123456789"))
 
       body = get(conn, ~p"/api/groups/#{ctx.group.id}") |> json_response(200)
@@ -145,7 +145,7 @@ defmodule PetepeteWeb.GroupControllerTest do
     setup %{conn: conn} do
       {conn, user} = bearer_login(conn)
       group = group_fixture()
-      member_fixture(group, "host", user)
+      member_fixture(group, role: "host", user: user)
       %{conn: conn, group: group}
     end
 
@@ -192,9 +192,9 @@ defmodule PetepeteWeb.GroupControllerTest do
 
     test "only the host adds guests; other groups' hosts see 404", ctx do
       {member_conn, user} = bearer_login(build_conn())
-      member_fixture(ctx.group, "member", user)
+      member_fixture(ctx.group, role: "member", user: user)
       {other_host, other_user} = bearer_login(build_conn())
-      member_fixture(group_fixture(), "host", other_user)
+      member_fixture(group_fixture(), role: "host", user: other_user)
 
       path = ~p"/api/groups/#{ctx.group.id}/guests"
 
@@ -212,8 +212,8 @@ defmodule PetepeteWeb.GroupControllerTest do
       {host_conn, host} = bearer_login(conn)
       {member_conn, member} = bearer_login(build_conn())
       group = group_fixture()
-      member_fixture(group, "host", host)
-      member_fixture(group, "member", member)
+      member_fixture(group, role: "host", user: host)
+      member_fixture(group, role: "member", user: member)
       old_url = "https://petepete.test/join/" <> group.invite_token
 
       path = ~p"/api/groups/#{group.id}/invite/reset"
@@ -227,7 +227,7 @@ defmodule PetepeteWeb.GroupControllerTest do
 
     test "another group's host gets 404 and the token stays", %{conn: conn} do
       {conn, user} = bearer_login(conn)
-      member_fixture(group_fixture(), "host", user)
+      member_fixture(group_fixture(), role: "host", user: user)
       group = group_fixture()
 
       assert json_response(post(conn, ~p"/api/groups/#{group.id}/invite/reset"), 404) == %{

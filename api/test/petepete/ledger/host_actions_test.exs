@@ -7,10 +7,10 @@ defmodule Petepete.Ledger.HostActionsTest do
   alias Petepete.Ledger.Event.Settlement
 
   setup do
-    user = user!()
-    group = group!()
-    host = member!(group, user_id: user.id, role: "host")
-    a = member!(group)
+    user = user_fixture()
+    group = group_fixture()
+    host = member_fixture(group, user_id: user.id, role: "host")
+    a = member_fixture(group)
     %{g: group, user: user, host: host, a: a}
   end
 

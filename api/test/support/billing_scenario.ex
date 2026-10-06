@@ -16,9 +16,9 @@ defmodule Petepete.BillingScenario do
   def issued do
     group = group_fixture()
     {user, host} = host_fixture(group)
-    owner_account = Petepete.Fixtures.payout_account!(group, host)
-    [a, b] = for _ <- 1..2, do: member_fixture(group, "member")
-    session = session_fixture(group)
+    owner_account = Petepete.Fixtures.payout_account_fixture(group, host)
+    [a, b] = for _ <- 1..2, do: member_fixture(group, role: "member")
+    session = session_fixture(event_fixture(group))
     for m <- [host, a, b], do: attendance_fixture(session, m)
     cost_item_fixture(session, amount: 100_000, paid_by: host)
 

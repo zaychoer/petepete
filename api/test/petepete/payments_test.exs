@@ -2,7 +2,9 @@ defmodule Petepete.PaymentsTest do
   # Not async: some tests swap global application config.
   use Petepete.DataCase, async: false
 
-  alias Petepete.Groups.{Group, Member, PayoutAccount}
+  import Petepete.Fixtures
+
+  alias Petepete.Groups.PayoutAccount
   alias Petepete.Payments
   alias Petepete.Payments.Gateway.Fake
 
@@ -11,14 +13,6 @@ defmodule Petepete.PaymentsTest do
     account_number: "1234 5678 9012",
     account_holder_name: "Budi Santoso"
   }
-
-  defp uniq, do: System.unique_integer([:positive])
-
-  defp group!, do: Repo.insert!(%Group{name: "Futsal", invite_token: "inv#{uniq()}"})
-
-  defp member!(group, role) do
-    Repo.insert!(%Member{group_id: group.id, display_name: "M#{uniq()}", role: role})
-  end
 
   defp put_env!(key, value) do
     old = Application.fetch_env!(:petepete, key)
@@ -58,8 +52,8 @@ defmodule Petepete.PaymentsTest do
 
   describe "register_payout_account/3" do
     setup do
-      group = group!()
-      {:ok, group: group, host: member!(group, "host")}
+      group = group_fixture()
+      {:ok, group: group, host: member_fixture(group, role: "host")}
     end
 
     test "records a pending_kyc account with only the last four digits", %{group: g, host: h} do
@@ -107,12 +101,18 @@ defmodule Petepete.PaymentsTest do
 
     test "owner must be a host of that same group", %{group: g, host: h} do
       assert {:error, :owner_not_host} =
-               Payments.register_payout_account(g, member!(g, "member"), @bank)
+               Payments.register_payout_account(g, member_fixture(g, role: "member"), @bank)
 
       assert {:error, :owner_not_in_group} =
-               Payments.register_payout_account(g, member!(group!(), "host"), @bank)
+               Payments.register_payout_account(
+                 g,
+                 member_fixture(group_fixture(), role: "host"),
+                 @bank
+               )
 
-      assert {:error, :owner_not_in_group} = Payments.register_payout_account(group!(), h, @bank)
+      assert {:error, :owner_not_in_group} =
+               Payments.register_payout_account(group_fixture(), h, @bank)
+
       assert Repo.aggregate(PayoutAccount, :count) == 0
     end
   end
@@ -139,13 +139,13 @@ defmodule Petepete.PaymentsTest do
 
       def payout_account_status(_), do: {:ok, :active}
       def balance(_), do: {:ok, 0}
-      def withdraw(_, _), do: {:managed, "https://dashboard.example.test"}
+      def withdraw(_, _, _), do: {:managed, "https://dashboard.example.test"}
     end
 
     test "fee_for/2 and registration go through whichever adapter is configured" do
       put_env!(:gateway, OtherGateway)
-      group = group!()
-      host = member!(group, "host")
+      group = group_fixture()
+      host = member_fixture(group, role: "host")
 
       assert Payments.gateway() == OtherGateway
       assert {:ok, 450} = Payments.fee_for("qris", 45_000)
@@ -159,10 +159,10 @@ defmodule Petepete.PaymentsTest do
     test "a gateway failure creates no payout account" do
       put_env!(:gateway, OtherGateway)
       Process.put(:other_register, {:error, :provider_down})
-      group = group!()
+      group = group_fixture()
 
       assert {:error, :provider_down} =
-               Payments.register_payout_account(group, member!(group, "host"), @bank)
+               Payments.register_payout_account(group, member_fixture(group, role: "host"), @bank)
 
       assert Repo.aggregate(PayoutAccount, :count) == 0
     end

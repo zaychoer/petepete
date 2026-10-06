@@ -38,7 +38,7 @@ defmodule PetepeteWeb.BillingError do
   def render(conn, reason) when is_atom(reason), do: LedgerError.render(conn, reason)
 
   defp transition_message(:session),
-    do: "Sesi ini tidak bisa dibatalkan tagihannya dalam status sekarang."
+    do: "Status sesi ini tidak memungkinkan aksi itu. Muat ulang dulu ya."
 
   defp transition_message(:bill), do: "Status tagihan ini tidak bisa diubah dengan aksi itu."
 end

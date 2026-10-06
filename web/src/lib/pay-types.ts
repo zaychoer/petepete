@@ -59,6 +59,8 @@ export interface BillPayPage extends PageBase {
   methods: MethodOption[];
   attempt: PayAttempt | null;
   attempt_expired: boolean;
+  /** Method of the expired attempt while `attempt_expired`, else null. */
+  expired_method: Method | null;
 }
 
 export type PayPage = VoidPayPage | BillPayPage;

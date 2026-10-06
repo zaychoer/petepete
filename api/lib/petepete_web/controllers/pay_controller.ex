@@ -13,8 +13,10 @@ defmodule PetepeteWeb.PayController do
       absent for a void bill, which has no payable amount
     * `methods`: `[%{method, label, fee, gross_amount}]`, empty unless `can_pay`
     * `attempt`: the active payment (see below) or `null`, and `attempt_expired`:
-      `true` when the bill is unpaid and the last attempt has expired. The page then
-      calls `POST /pay/:token/payment` again for a new attempt.
+      `true` when the bill is unpaid and the last attempt has expired; `expired_method`
+      is that attempt's method (`qris | va | ewallet`), `null` unless `attempt_expired`.
+      The page then calls `POST /pay/:token/payment` again for a new attempt (on its own
+      only for an expired QRIS found when the page opens).
 
   `POST /api/pay/:token/payment` with `{"method": "qris" | "va" | "ewallet"}`: 201 with a
   new attempt, 200 with the still-active one of the same method (`reused: true`):
@@ -113,7 +115,8 @@ defmodule PetepeteWeb.PayController do
         methods:
           for(m <- view.methods, do: Map.put(m, :label, Map.fetch!(@method_labels, m.method))),
         attempt: view.attempt && attempt_data(view.attempt),
-        attempt_expired: view.attempt_expired
+        attempt_expired: view.attempt_expired,
+        expired_method: view.expired_method
       })
     end
   end

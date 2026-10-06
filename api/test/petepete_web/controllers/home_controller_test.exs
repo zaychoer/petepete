@@ -13,18 +13,17 @@ defmodule PetepeteWeb.HomeControllerTest do
     other = group_fixture()
 
     host = user_fixture(%{phone: valid_phone()})
-    host_member = member_fixture(group, "host", host)
+    host_member = member_fixture(group, role: "host", user: host)
     plain = user_fixture(%{phone: valid_phone()})
-    plain_member = member_fixture(group, "member", plain)
+    plain_member = member_fixture(group, role: "member", user: plain)
     outsider = user_fixture(%{phone: valid_phone()})
-    member_fixture(other, "host", outsider)
+    member_fixture(other, role: "host", user: outsider)
 
     event = event_fixture(group, %{name: "Futsal Kamis", type: "recurring"})
-    next = session_fixture(group, %{event: event, starts_at: ~U[2026-10-08 12:00:00Z]})
+    next = session_fixture(event, %{starts_at: ~U[2026-10-08 12:00:00Z]})
 
     issued =
-      session_fixture(group, %{
-        event: event,
+      session_fixture(event, %{
         starts_at: ~U[2026-10-01 12:00:00Z],
         status: "issued"
       })
@@ -34,8 +33,8 @@ defmodule PetepeteWeb.HomeControllerTest do
 
     # The other group's data must never show up.
     other_event = event_fixture(other)
-    session_fixture(other, %{event: other_event, starts_at: ~U[2026-10-07 12:00:00Z]})
-    bill_fixture(session_fixture(other, %{event: other_event}), member_fixture(other, "member"))
+    session_fixture(other_event, %{starts_at: ~U[2026-10-07 12:00:00Z]})
+    bill_fixture(session_fixture(other_event), member_fixture(other, role: "member"))
 
     %{conn: conn, group: group, host: host, plain: plain, outsider: outsider, next: next}
   end

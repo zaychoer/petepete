@@ -18,7 +18,7 @@ Spec and tickets: [`docs/spec.md`](docs/spec.md).
 - Erlang/Elixir and Node versions from `.tool-versions` (asdf)
 - pnpm
 - Docker (local Postgres on port 55432, to avoid clashing with other local Postgres instances)
-- Flutter 3.35.3 (same version CI pins)
+- Flutter 3.47.6 (same version CI pins, `.github/workflows/ci.yml`)
 
 ## Run locally
 
@@ -39,14 +39,14 @@ Local secrets live in `.env` at the repo root (gitignored). `.env.example` is th
 ## Tests
 
 ```sh
-(cd api && mix test)
-(cd web && pnpm lint && pnpm build)
-(cd app && flutter analyze)
+(cd api && mix precommit)                   # warnings as errors, unlock unused deps, format, mix test
+(cd web && pnpm lint && pnpm test && pnpm build)
+(cd app && flutter analyze && flutter test)
 ```
 
-The Flutter app has no tests yet; add `flutter test` here and in CI with the first one.
+`mix test` alone is enough while iterating. API tests need the local Postgres (`bin/dev` or `docker compose up -d`). The web tests (`pnpm test`, Vitest) cover the pay page state machine and helpers; the app tests (`flutter test`) are widget and unit tests against fake API servers, not a real device.
 
-CI runs the same commands on every push to `main` and on pull requests (`.github/workflows/ci.yml`), and also builds the API Docker image (`api/Dockerfile`).
+CI runs the same checks (`mix format --check-formatted` instead of rewriting files) on every push to `main` and on pull requests (`.github/workflows/ci.yml`), and also builds the API Docker image (`api/Dockerfile`).
 
 ## Deploy
 

@@ -45,28 +45,33 @@ export function shouldPoll(phase: Phase): boolean {
   return phase !== "paid" && phase !== "void" && phase !== "link_expired";
 }
 
-export interface RegenerationContext {
-  /** The method the payer used last on this page, if any. */
-  lastMethod: Method | null;
-  /** A POST is already running. */
-  inFlight: boolean;
-  /** The last automatic POST failed: wait for the payer instead of hammering the gateway. */
-  failed: boolean;
+/**
+ * The method to request a new attempt for when the page is opened, or null (PAY-06): only an
+ * expired QRIS is replaced automatically, and only for the page as first loaded. An expired
+ * VA or e-wallet, and any expiry that happens while the page stays open, wait for the payer
+ * to press the pay button.
+ */
+export function openRegenerationMethod(page: PayPage): Method | null {
+  if (phaseOf(page) !== "expired") return null;
+  const { methods, expired_method } = page as BillPayPage;
+  if (expired_method !== "qris") return null;
+  return methods.some((m) => m.method === "qris") ? "qris" : null;
 }
 
 /**
- * The method to request a new attempt for, or null. An expired attempt is replaced
- * automatically with the same method (QRIS when the page was just opened).
+ * One-shot automatic regeneration, decided from the page as first loaded. `claim()` hands
+ * out the method once, then null for good, so a later expiry while the page stays open (or
+ * a failed POST) never triggers another automatic request.
  */
-export function regenerationMethod(
-  page: PayPage,
-  ctx: RegenerationContext,
-): Method | null {
-  if (phaseOf(page) !== "expired" || ctx.inFlight || ctx.failed) return null;
-  const { methods } = page as BillPayPage;
-  const wanted = ctx.lastMethod ?? DEFAULT_METHOD;
-  if (methods.some((m) => m.method === wanted)) return wanted;
-  return methods[0]?.method ?? null;
+export function createOpenRegeneration(initialPage: PayPage): { claim(): Method | null } {
+  let pending = openRegenerationMethod(initialPage);
+  return {
+    claim() {
+      const method = pending;
+      pending = null;
+      return method;
+    },
+  };
 }
 
 /** The page after a successful `POST /payment`: the new attempt is the active one. */

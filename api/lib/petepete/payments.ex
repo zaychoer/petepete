@@ -93,6 +93,36 @@ defmodule Petepete.Payments do
     end
   end
 
+  @doc """
+  `Billing.void_issue/2` plus the gateway cancellation of the attempts it cancelled, in one
+  transaction: the `Petepete.Payments.CancelAttemptsJob` row is inserted before the commit
+  (Oban runs it after), so a void that committed always has its job. A replay (same
+  `Idempotency-Key`) cancels no attempt and enqueues nothing. Returns what
+  `Billing.void_issue/2` returns; any error rolls everything back, the job included.
+  """
+  @spec void_issue(pos_integer(), keyword()) :: {:ok, map()} | {:error, term()}
+  def void_issue(session_id, opts) do
+    Repo.transaction(fn ->
+      case Petepete.Billing.void_issue(session_id, opts) do
+        {:ok, result} ->
+          enqueue_cancellation(result.cancelled_attempt_ids)
+          result
+
+        {:error, reason} ->
+          Repo.rollback(reason)
+      end
+    end)
+  end
+
+  defp enqueue_cancellation([]), do: :ok
+
+  defp enqueue_cancellation(ids) do
+    {:ok, _job} =
+      %{"attempt_ids" => ids} |> Petepete.Payments.CancelAttemptsJob.new() |> Oban.insert()
+
+    :ok
+  end
+
   ## Pay link (unauthenticated, addressed by `bills.pay_token`); see `Petepete.Payments.PayLink`
 
   defdelegate pay_page(token), to: Petepete.Payments.PayLink, as: :show

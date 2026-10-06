@@ -14,7 +14,7 @@ The beta starts when the full money path works end to end on staging: bill → p
 
 ### Reading the MVP metrics during the beta
 
-PP-REL-02 records four events on the server (table `metric_events`, no phone numbers or names): session build duration (first cost or attendance edit → issue), bills sent, time to paid (issue → paid by gateway or cash) and paid without install (gateway payment by a member with no linked account).
+PP-REL-02 records four events on the server (table `metric_events`, no phone numbers or names): session build duration (first cost or attendance edit → issue), bills sent, time to paid (issue → paid by gateway, cash or credit) and paid without install (gateway payment by a member with no linked account).
 
 ```sh
 # Against staging or production, with the secret:
@@ -23,7 +23,7 @@ curl -H "authorization: Bearer $METRICS_TOKEN" https://<host>/api/admin/metrics
 cd api && mix petepete.metrics
 ```
 
-The endpoint answers 404 while `METRICS_TOKEN` is unset and 401 on a wrong token. It reports the last 30 WIB days, as totals and per day: sessions billed, median / p90 build duration, bills sent, median / p90 time to paid, bills paid, bills paid without install and their share of paid bills. A bill paid by credit at issue is not a paid bill here; a bill whose cash is cancelled and taken again counts once.
+The endpoint answers 404 while `METRICS_TOKEN` is unset and 401 on a wrong token. It reports the last 30 WIB days, as totals and per day: sessions billed, median / p90 build duration, bills sent, median / p90 time to paid, bills paid, bills paid without install and their share of paid bills. A bill paid by credit at issue counts as paid with a time to paid of 0 (and is never "paid without install"); a bill whose cash is cancelled and taken again counts once.
 
 ## Play Store listing (all human)
 
@@ -46,8 +46,9 @@ Authoritative source: `api/config/runtime.exs`. `.env.example` lists every varia
 | `SECRET_KEY_BASE` | Fly secret | yes | `mix phx.gen.secret` |
 | `PHX_HOST` | `api/fly.*.toml` `[env]` | defaults to `example.com` | public hostname |
 | `OTP_HMAC_KEY` | Fly secret | yes | ≥ 32 bytes; keys OTP hashes; rotating voids pending codes |
-| `OTP_SENDER` | Fly secret or `[env]` | to log anyone in | module name implementing `Petepete.Accounts.OtpSender`, e.g. `Elixir.Petepete.Accounts.OtpSender.<Provider>`; the fake is refused in prod; boot fails without it |
-| `PAYMENT_GATEWAY` | `api/fly.*.toml` `[env]` | yes, no default | only `fake` exists; staging sets it, production leaves it unset on purpose |
+| `OTP_SENDER` | Fly secret or `[env]` | to log anyone in | module name that loads and implements `Petepete.Accounts.OtpSender`, e.g. `Elixir.Petepete.Accounts.OtpSender.<Provider>`; the fake is refused unless `ALLOW_FAKE_ADAPTERS=true`; boot fails without it |
+| `PAYMENT_GATEWAY` | `api/fly.*.toml` `[env]` | yes, no default | only `fake` exists (refused unless `ALLOW_FAKE_ADAPTERS=true`); staging sets it, production leaves it unset on purpose |
+| `ALLOW_FAKE_ADAPTERS` | `api/fly.staging.toml` `[env]` only | no | `true` lets the fake OTP sender and fake gateway boot; never set on production (`docs/deploy.md`, "Adapters") |
 | `WEB_BASE_URL` | Fly secret or `[env]` | yes | origin of the web app; invite links are `<WEB_BASE_URL>/join/<token>` |
 | `METRICS_TOKEN` | Fly secret | no | bearer secret of `GET /api/admin/metrics`; unset = the endpoint is 404. Generate with `openssl rand -base64 32` |
 | `SENTRY_DSN` | Fly secret | no | unset or blank disables Sentry |

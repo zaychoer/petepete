@@ -20,10 +20,10 @@ defmodule Petepete.Billing.InvoicingTest do
   defp example1(group_attrs \\ %{}) do
     group = group_fixture(group_attrs)
     {user, host} = host_fixture(group)
-    payer = member_fixture(group, "member")
-    drinkers = [payer | for(_ <- 1..5, do: member_fixture(group, "member"))]
-    others = for _ <- 1..3, do: member_fixture(group, "member")
-    session = session_fixture(group)
+    payer = member_fixture(group, role: "member")
+    drinkers = [payer | for(_ <- 1..5, do: member_fixture(group, role: "member"))]
+    others = for _ <- 1..3, do: member_fixture(group, role: "member")
+    session = session_fixture(event_fixture(group))
 
     for m <- [host | drinkers ++ others], do: attendance_fixture(session, m)
 
@@ -53,8 +53,8 @@ defmodule Petepete.Billing.InvoicingTest do
   defp rounding_example do
     group = group_fixture()
     {user, host} = host_fixture(group)
-    [m2, m3] = for _ <- 1..2, do: member_fixture(group, "member")
-    session = session_fixture(group)
+    [m2, m3] = for _ <- 1..2, do: member_fixture(group, role: "member")
+    session = session_fixture(event_fixture(group))
     for m <- [host, m2, m3], do: attendance_fixture(session, m)
     cost_item_fixture(session, amount: 100_000, paid_by: host)
     %{group: group, host: host, members: [host, m2, m3], session: session, user: user}
@@ -122,7 +122,7 @@ defmodule Petepete.Billing.InvoicingTest do
 
     test "only members marked attended are billed" do
       ctx = rounding_example()
-      absent = member_fixture(ctx.group, "member")
+      absent = member_fixture(ctx.group, role: "member")
       attendance_fixture(ctx.session, absent, attended: false)
 
       assert {:ok, preview} = Billing.preview(ctx.session.id)
@@ -224,6 +224,20 @@ defmodule Petepete.Billing.InvoicingTest do
       assert txn_id == result.txn.id
       assert [%{id: ^txn_id}] = Ledger.txns(ctx.group.id)
       assert length(result.bills) == 10
+    end
+
+    test "writes one session.issue audit row for the host, none on a replay" do
+      ctx = example1()
+      result = issue!(ctx)
+      issue!(ctx)
+
+      assert [row] =
+               Repo.all(from a in Petepete.Ledger.AuditLog, where: a.action == "session.issue")
+
+      assert row.subject_type == "session" and row.subject_id == ctx.session.id
+      assert row.group_id == ctx.group.id and row.actor_user_id == ctx.user.id
+      assert row.metadata["txn_id"] == result.txn.id
+      assert length(row.metadata["bill_ids"]) == 10
     end
 
     test "rounding remainder goes to the kas" do
@@ -347,7 +361,7 @@ defmodule Petepete.Billing.InvoicingTest do
 
     test "an attendee who bears nothing gets no bill" do
       ctx = rounding_example()
-      extra = member_fixture(ctx.group, "member")
+      extra = member_fixture(ctx.group, role: "member")
       attendance_fixture(ctx.session, extra)
       Repo.delete_all(Billing.CostItem)
       cost_item_fixture(ctx.session, amount: 90_000, paid_by: ctx.host, members: ctx.members)

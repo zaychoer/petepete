@@ -68,11 +68,11 @@ defmodule PetepeteWeb.MeControllerTest do
       national = String.replace_prefix(phone, "62", "")
 
       [g1, g2, g3, other_group] = for _ <- 1..4, do: group_fixture()
-      m1 = member!(g1, phone: "0" <> national, role: "guest")
-      m2 = member!(g2, phone: "+62 " <> national, role: "member")
-      m3 = member!(g3, phone: phone, role: "guest")
-      stranger = member!(other_group, phone: "628" <> String.duplicate("1", 9))
-      no_phone = member!(other_group)
+      m1 = member_fixture(g1, phone: "0" <> national, role: "guest")
+      m2 = member_fixture(g2, phone: "+62 " <> national, role: "member")
+      m3 = member_fixture(g3, phone: phone, role: "guest")
+      stranger = member_fixture(other_group, phone: "628" <> String.duplicate("1", 9))
+      no_phone = member_fixture(other_group)
 
       %{"new_user" => true, "user" => %{"id" => id}} = login(conn, phone)
 
@@ -84,7 +84,7 @@ defmodule PetepeteWeb.MeControllerTest do
 
     test "linking is idempotent across logins", %{conn: conn} do
       phone = unique_phone()
-      member = member!(group_fixture(), phone: phone)
+      member = member_fixture(group_fixture(), phone: phone)
 
       %{"user" => %{"id" => id}} = login(conn, phone)
       %{"user" => %{"id" => ^id}} = login(conn, phone)
@@ -97,13 +97,13 @@ defmodule PetepeteWeb.MeControllerTest do
       phone = unique_phone()
       national = String.replace_prefix(phone, "62", "")
       group = group_fixture()
-      first = member!(group, phone: phone, role: "guest")
-      second = member!(group, phone: "0" <> national, role: "guest")
+      first = member_fixture(group, phone: phone, role: "guest")
+      second = member_fixture(group, phone: "0" <> national, role: "guest")
 
       joined_group = group_fixture()
       user = Repo.insert!(%User{phone: phone, display_name: "Sudah ada"})
-      own = member!(joined_group, user_id: user.id)
-      duplicate = member!(joined_group, phone: phone, role: "guest")
+      own = member_fixture(joined_group, user_id: user.id)
+      duplicate = member_fixture(joined_group, phone: phone, role: "guest")
 
       assert %{"user" => %{"id" => id}} = login(conn, phone)
       assert id == user.id
@@ -116,8 +116,8 @@ defmodule PetepeteWeb.MeControllerTest do
       owner = user_fixture()
       claimer = user_fixture()
       [g1, g2] = [group_fixture(), group_fixture()]
-      held = member!(g1, phone: phone, user_id: owner.id)
-      claimed = member!(g2, phone: phone, claim_user_id: claimer.id)
+      held = member_fixture(g1, phone: phone, user_id: owner.id)
+      claimed = member_fixture(g2, phone: phone, claim_user_id: claimer.id)
 
       %{"user" => %{"id" => id}} = login(conn, phone)
 
@@ -129,7 +129,7 @@ defmodule PetepeteWeb.MeControllerTest do
     test "entries added after login link on PATCH /me", %{conn: conn} do
       phone = unique_phone()
       %{"access_token" => token, "user" => %{"id" => id}} = login(conn, phone)
-      late = member!(group_fixture(), phone: "0" <> String.replace_prefix(phone, "62", ""))
+      late = member_fixture(group_fixture(), phone: "0" <> String.replace_prefix(phone, "62", ""))
       assert user_ids([late]) == [nil]
 
       conn |> authed(token) |> patch(~p"/api/me", %{display_name: "Sari"}) |> json_response(200)
@@ -143,13 +143,15 @@ defmodule PetepeteWeb.MeControllerTest do
       phone = unique_phone()
       group = group_fixture()
       {host_user, host} = host_fixture(group)
-      leaver = member!(group, phone: phone, display_name: "Budi", role: "member")
+      leaver = member_fixture(group, phone: phone, display_name: "Budi", role: "member")
 
       %{"access_token" => access, "refresh_token" => refresh, "user" => %{"id" => id}} =
         login(conn, phone)
 
       assert user_ids([leaver]) == [id]
-      other = member!(group, display_name: "Citra", phone: "6281" <> String.duplicate("9", 8))
+
+      other =
+        member_fixture(group, display_name: "Citra", phone: "6281" <> String.duplicate("9", 8))
 
       txn = settle(host_user, group, payer: leaver, payee: host, amount: 15_000)
       entries_before = entries(group)
@@ -198,40 +200,40 @@ defmodule PetepeteWeb.MeControllerTest do
     end
 
     test "is refused while hosting a group with other members", %{conn: conn} do
-      {token, id} = login_as_host(conn, group = group_fixture())
-      member!(group, role: "guest")
+      {conn, id} = login_as_host(conn, group = group_fixture())
+      member_fixture(group, role: "guest")
 
-      assert conn |> authed(token) |> delete(~p"/api/me") |> json_response(422) ==
+      assert conn |> delete(~p"/api/me") |> json_response(422) ==
                %{"error" => "still_host"}
 
       assert %{deleted_at: nil, display_name: "Host"} = Repo.get!(User, id)
-      assert conn |> authed(token) |> get(~p"/api/me") |> json_response(200)
+      assert conn |> get(~p"/api/me") |> json_response(200)
     end
 
     test "is refused while hosting a group with a live session", %{conn: conn} do
-      {token, _id} = login_as_host(conn, group = group_fixture())
-      session_fixture(group, status: "cancelled")
-      session_fixture(group, status: "issued", starts_at: ~U[2026-10-07 03:00:00Z])
+      {conn, _id} = login_as_host(conn, group = group_fixture())
+      session_fixture(event_fixture(group), status: "cancelled")
+      session_fixture(event_fixture(group), status: "issued", starts_at: ~U[2026-10-07 03:00:00Z])
 
-      assert conn |> authed(token) |> delete(~p"/api/me") |> json_response(422) ==
+      assert conn |> delete(~p"/api/me") |> json_response(422) ==
                %{"error" => "still_host"}
     end
 
     test "is accepted for a host whose group is empty or only has cancelled sessions",
          %{conn: conn} do
-      {token, id} = login_as_host(conn, group = group_fixture())
-      session_fixture(group, status: "cancelled")
+      {conn, id} = login_as_host(conn, group = group_fixture())
+      session_fixture(event_fixture(group), status: "cancelled")
 
-      assert conn |> authed(token) |> delete(~p"/api/me") |> json_response(200)
+      assert conn |> delete(~p"/api/me") |> json_response(200)
       assert Repo.get!(User, id).deleted_at
     end
 
     test "is accepted for a member of someone else's active group", %{conn: conn} do
       group = group_fixture()
       host_fixture(group)
-      session_fixture(group, status: "issued")
+      session_fixture(event_fixture(group), status: "issued")
       phone = unique_phone()
-      member = member!(group, phone: phone)
+      member = member_fixture(group, phone: phone)
       %{"access_token" => token} = login(conn, phone)
 
       assert conn |> authed(token) |> delete(~p"/api/me") |> json_response(200)
@@ -240,11 +242,10 @@ defmodule PetepeteWeb.MeControllerTest do
   end
 
   defp login_as_host(conn, group) do
-    phone = unique_phone()
-    %{"access_token" => token, "user" => %{"id" => id}} = login(conn, phone)
-    Repo.update_all(from(u in User, where: u.id == ^id), set: [display_name: "Host"])
-    member_fixture(group, "host", %User{id: id})
-    {token, id}
+    {conn, user} = bearer_login(conn)
+    Repo.update_all(from(u in User, where: u.id == ^user.id), set: [display_name: "Host"])
+    member_fixture(group, role: "host", user: user)
+    {conn, user.id}
   end
 
   defp settle(host_user, group, opts) do

@@ -68,6 +68,7 @@ class GroupDetail {
     required this.costCategories,
     required this.members,
     required this.isHost,
+    required this.memberId,
     this.inviteUrl,
   });
 
@@ -83,6 +84,7 @@ class GroupDetail {
         RosterMember.fromJson(m as Json),
     ],
     isHost: (json['you'] as Json)['role'] == 'host',
+    memberId: _int((json['you'] as Json)['member_id']),
     inviteUrl: json['invite_url'] as String?,
   );
 
@@ -92,6 +94,9 @@ class GroupDetail {
   final List<String> costCategories;
   final List<RosterMember> members;
   final bool isHost;
+
+  /// The caller's own member id in this group (`you.member_id`).
+  final int memberId;
 
   /// Only the host gets the invite link.
   final String? inviteUrl;

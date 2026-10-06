@@ -6,28 +6,34 @@ defmodule Petepete.Sessions.CostTemplate do
 
       %{"items" => [
         %{"category" => "lapangan", "label" => nil, "amount" => 350_000,
-          "scope" => "all", "paid_by_member_id" => nil, "member_ids" => []}
+          "scope" => "all", "paid_by_member_id" => 12, "member_ids" => []}
       ]}
 
   `amount` is integer rupiah (a float or string is rejected), `scope` is `"all"` or
   `"subset"`; a subset item needs `member_ids`. `paid_by_member_id` and every member id
-  must be on the event's group roster. An empty template (`%{}`) is valid.
+  must be on the event's group roster. An item without `paid_by_member_id` is paid by the
+  host who creates the event (the default payer). An empty template (`%{}`) is valid.
   """
   import Ecto.Query, only: [from: 2]
 
   alias Petepete.Groups.Member
   alias Petepete.Repo
 
-  @doc "Validates and normalises a template for `group_id`. Errors are human-readable messages."
-  @spec cast(term(), pos_integer()) :: {:ok, map()} | {:error, [String.t()]}
-  def cast(nil, _group_id), do: {:ok, %{"items" => []}}
-  def cast(template, _group_id) when template == %{}, do: {:ok, %{"items" => []}}
+  @doc """
+  Validates and normalises a template for `group_id`; an item that names no payer is paid
+  by `default_payer_id`. Errors are human-readable messages.
+  """
+  @spec cast(term(), pos_integer(), pos_integer()) :: {:ok, map()} | {:error, [String.t()]}
+  def cast(nil, _group_id, _default_payer_id), do: {:ok, %{"items" => []}}
 
-  def cast(%{"items" => items}, group_id) when is_list(items) do
+  def cast(template, _group_id, _default_payer_id) when template == %{},
+    do: {:ok, %{"items" => []}}
+
+  def cast(%{"items" => items}, group_id, default_payer_id) when is_list(items) do
     {normalised, errors} =
       items
       |> Enum.with_index(1)
-      |> Enum.map(fn {item, n} -> cast_item(item, n) end)
+      |> Enum.map(fn {item, n} -> cast_item(item, n, default_payer_id) end)
       |> Enum.split_with(&match?({:ok, _}, &1))
 
     errors = Enum.flat_map(errors, fn {:error, messages} -> messages end)
@@ -41,14 +47,14 @@ defmodule Petepete.Sessions.CostTemplate do
     end
   end
 
-  def cast(_other, _group_id),
+  def cast(_other, _group_id, _default_payer_id),
     do: {:error, ["must look like {\"items\": [{category, amount, …}]}"]}
 
-  defp cast_item(%{} = item, n) do
+  defp cast_item(%{} = item, n, default_payer_id) do
     category = item["category"]
     amount = item["amount"]
     scope = Map.get(item, "scope", "all")
-    paid_by = item["paid_by_member_id"]
+    paid_by = Map.get(item, "paid_by_member_id") || default_payer_id
     member_ids = Map.get(item, "member_ids") || []
     label = item["label"]
 
@@ -87,7 +93,7 @@ defmodule Petepete.Sessions.CostTemplate do
     end
   end
 
-  defp cast_item(_other, n), do: {:error, ["item #{n}: must be an object"]}
+  defp cast_item(_other, n, _default_payer_id), do: {:error, ["item #{n}: must be an object"]}
 
   defp roster_errors([], _group_id), do: []
 

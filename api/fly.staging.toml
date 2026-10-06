@@ -9,7 +9,9 @@ kill_signal = "SIGTERM"
 
 [env]
   PHX_HOST = "petepete-staging.fly.dev"
+  ALLOW_FAKE_ADAPTERS = "true"
   PAYMENT_GATEWAY = "fake"
+  OTP_SENDER = "Elixir.Petepete.Accounts.OtpSender.Fake"
   PORT = "8080"
   ECTO_IPV6 = "true"
   ERL_AFLAGS = "-proto_dist inet6_tcp"

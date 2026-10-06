@@ -4,17 +4,17 @@ defmodule Petepete.Sessions.SessionSchedulerTest do
 
   @moduletag :capture_log
 
-  import Petepete.Fixtures, only: [group!: 0]
+  import Petepete.Fixtures, only: [group_fixture: 0, member_fixture: 2]
 
   alias Petepete.{Clock, Sessions}
   alias Petepete.Billing.Session
   alias Petepete.Sessions.{Event, SessionScheduler}
 
   setup do
-    group = group!()
+    group = group_fixture()
 
     {:ok, %{event: event}} =
-      Sessions.create_event(group.id, %{
+      Sessions.create_event(member_fixture(group, role: "host"), %{
         "type" => "recurring",
         "rrule" => "FREQ=WEEKLY;BYDAY=TH",
         "time" => "19:00"
@@ -31,6 +31,29 @@ defmodule Petepete.Sessions.SessionSchedulerTest do
 
     assert [%Session{status: "draft", starts_at: ~U[2026-10-08 12:00:00Z]}] =
              Repo.all(from s in Session, where: s.event_id == ^event.id)
+  end
+
+  test "a template item without a payer is paid by the host, so the scheduled draft bills" do
+    group = group_fixture()
+    host = member_fixture(group, role: "host")
+    guest = member_fixture(group, role: "member")
+
+    {:ok, %{event: event}} =
+      Sessions.create_event(host, %{
+        "type" => "recurring",
+        "rrule" => "FREQ=WEEKLY;BYDAY=TH",
+        "time" => "19:00",
+        "cost_template" => %{
+          "items" => [%{"category" => "lapangan", "amount" => 100_000, "scope" => "all"}]
+        }
+      })
+
+    assert :ok = perform_job(SessionScheduler, %{})
+    session = Repo.one!(from s in Session, where: s.event_id == ^event.id)
+    for m <- [host, guest], do: Petepete.Fixtures.attendance_fixture(session, m)
+
+    assert {:ok, %{total_cost: 100_000, total_billed: 100_000}} =
+             Petepete.Billing.preview(session.id)
   end
 
   test "reports an error when a session could not be created, so Oban retries", %{event: event} do

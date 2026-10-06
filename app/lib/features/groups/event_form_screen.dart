@@ -55,6 +55,7 @@ class EventFormScreen extends StatelessWidget {
           api: api,
           groupId: groupId,
           categories: group.costCategories,
+          hostMemberId: group.memberId,
         ),
       ),
     );
@@ -66,11 +67,15 @@ class _EventForm extends StatefulWidget {
     required this.api,
     required this.groupId,
     required this.categories,
+    required this.hostMemberId,
   });
 
   final GroupsApi api;
   final int groupId;
   final List<String> categories;
+
+  /// The creating host's member id: the payer of every template item.
+  final int hostMemberId;
 
   @override
   State<_EventForm> createState() => _EventFormState();
@@ -160,6 +165,7 @@ class _EventFormState extends State<_EventForm> {
               'category': row.category.text.trim(),
               'amount': int.parse(row.amount.text.trim()),
               'scope': 'all',
+              'paid_by_member_id': widget.hostMemberId,
             },
         ],
       },

@@ -67,7 +67,11 @@ defmodule Petepete.Payments.Gateway do
 
   @doc """
   Asks the provider for a payment the payer can complete. `gross_amount` is
-  `amount_due + fee`; `external_id` is `<bill_id>-<seq>` and is never reused.
+  `amount_due + fee`; `external_id` is `<bill_id>-<seq>` and is never reused for another
+  request. It is also the idempotency key: the call happens after the attempt row is
+  committed and is repeated with the same `external_id` if the first outcome was never
+  stored, so a repeated `external_id` MUST return the same payment (or fail), never create
+  a second one.
   """
   @callback create_payment(payment_request()) :: {:ok, payment()} | {:error, term()}
 
@@ -104,10 +108,16 @@ defmodule Petepete.Payments.Gateway do
 
   @doc """
   Withdraws `amount` from the sub-account to its registered bank account, for PAY-07.
+  `reference` identifies the request (`withdrawal-<id>`, stable across retries): the adapter
+  passes it to the provider as the idempotency key so a repeated call cannot withdraw twice.
   `{:managed, url}` means the provider offers no API and the host withdraws on the
   provider's dashboard at `url`.
   """
-  @callback withdraw(provider_account_id :: String.t(), amount :: pos_integer()) ::
+  @callback withdraw(
+              provider_account_id :: String.t(),
+              amount :: pos_integer(),
+              reference :: String.t()
+            ) ::
               {:ok, %{provider_ref: String.t()}}
               | {:managed, dashboard_url :: String.t()}
               | {:error, term()}

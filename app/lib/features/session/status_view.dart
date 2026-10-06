@@ -171,7 +171,10 @@ class _StatusViewState extends State<StatusView> {
     if (!mounted) return;
     await _shareSheet(
       title: 'Bagikan tagihan',
-      entries: bills,
+      entries: [
+        for (final b in bills)
+          if (!b.isVoid) b,
+      ],
       groupAction: null,
     );
   }
@@ -278,6 +281,9 @@ class _StatusViewState extends State<StatusView> {
     final detail = widget.detail;
     final bills = _bills;
     final review = [...?bills?.where((b) => b.status == 'needs_review')];
+    // Void bills of an earlier issue are listed as Dibatalkan; sharing and
+    // Batalkan tagihan only make sense while a live bill exists.
+    final hasLiveBills = bills?.any((b) => !b.isVoid) ?? false;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -320,42 +326,46 @@ class _StatusViewState extends State<StatusView> {
           const SizedBox(height: 16),
           Text('Tagihan', style: theme.textTheme.titleMedium),
           for (final b in bills) _billTile(b, keyPrefix: 'bill'),
-          const SizedBox(height: 16),
-          Text('Bagikan ke WhatsApp', style: theme.textTheme.titleMedium),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              FilledButton.icon(
-                style: FilledButton.styleFrom(minimumSize: const Size(48, 48)),
-                key: const Key('share-bills'),
-                onPressed: _shareBills,
-                icon: const Icon(Icons.share_outlined),
-                label: const Text('Bagikan tagihan'),
-              ),
-              OutlinedButton(
-                key: const Key('share-reminder'),
-                onPressed: _shareReminder,
-                child: const Text('Kirim pengingat'),
-              ),
-              OutlinedButton(
-                key: const Key('share-summary'),
-                onPressed: _shareSummary,
-                child: const Text('Kirim ringkasan'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          OutlinedButton(
-            key: const Key('void-issue'),
-            onPressed: _voidIssue,
-            child: const Text('Batalkan tagihan'),
-          ),
+          if (hasLiveBills) ..._shareAndVoid(theme),
         ],
       ],
     );
   }
+
+  List<Widget> _shareAndVoid(ThemeData theme) => [
+    const SizedBox(height: 16),
+    Text('Bagikan ke WhatsApp', style: theme.textTheme.titleMedium),
+    const SizedBox(height: 8),
+    Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        FilledButton.icon(
+          style: FilledButton.styleFrom(minimumSize: const Size(48, 48)),
+          key: const Key('share-bills'),
+          onPressed: _shareBills,
+          icon: const Icon(Icons.share_outlined),
+          label: const Text('Bagikan tagihan'),
+        ),
+        OutlinedButton(
+          key: const Key('share-reminder'),
+          onPressed: _shareReminder,
+          child: const Text('Kirim pengingat'),
+        ),
+        OutlinedButton(
+          key: const Key('share-summary'),
+          onPressed: _shareSummary,
+          child: const Text('Kirim ringkasan'),
+        ),
+      ],
+    ),
+    const SizedBox(height: 24),
+    OutlinedButton(
+      key: const Key('void-issue'),
+      onPressed: _voidIssue,
+      child: const Text('Batalkan tagihan'),
+    ),
+  ];
 
   Widget _billTile(ShareEntry b, {required String keyPrefix}) {
     final canMarkPaid = b.status == 'unpaid' || b.status == 'needs_review';
@@ -377,7 +387,7 @@ class _StatusViewState extends State<StatusView> {
               onPressed: () => _markPaid(b),
               child: const Text('Tandai lunas'),
             ),
-          if (b.status == 'paid')
+          if (b.status == 'paid' && b.cashCancellable)
             TextButton(
               key: Key('$keyPrefix-cancel-${b.billId}'),
               onPressed: () => _cancelCash(b),

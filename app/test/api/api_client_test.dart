@@ -71,7 +71,7 @@ void main() {
       final key = newIdempotencyKey();
 
       await api.post(
-        '/api/groups/g1/kas-spends',
+        '/api/groups/1/kas-spends',
         body: {'amount': 45000},
         idempotencyKey: key,
       );

@@ -23,6 +23,7 @@ defmodule Petepete.Billing.Invoicing do
   alias Petepete.Clock
   alias Petepete.Groups.{Group, Member}
   alias Petepete.Ledger
+  alias Petepete.Ledger.Audit
   alias Petepete.Ledger.Event.SessionBilled
   alias Petepete.Ledger.Txn
   alias Petepete.Metrics
@@ -109,6 +110,7 @@ defmodule Petepete.Billing.Invoicing do
       {:ok, issued} = Transitions.issue_session(session, result.txn.id)
       bills = for m <- final.members, m.share > 0, do: insert_bill(session, m)
       record_metrics(session, bills)
+      record_audit(session, actor, result.txn, bills)
 
       {:ok, %{session: issued, txn: result.txn, bills: load_members(bills), replayed: false}}
     end
@@ -148,9 +150,23 @@ defmodule Petepete.Billing.Invoicing do
         session_id: session.id,
         bill_id: bill.id
       )
+
+      # Credit paid it in full at issue: counts as a zero-duration time to paid.
+      if bill.status == "paid" do
+        Metrics.record_paid(bill, session.group_id, bill.paid_at, :credit)
+      end
     end
 
     :ok
+  end
+
+  # Host action that changes money: in the issue transaction, so a replay writes no second row.
+  defp record_audit(session, {:host, user_id}, txn, bills) do
+    Audit.record(session.group_id, user_id, "session.issue", {"session", session.id}, %{
+      "txn_id" => txn.id,
+      "bill_ids" => Enum.map(bills, & &1.id),
+      "total_billed" => bills |> Enum.map(& &1.share) |> Enum.sum()
+    })
   end
 
   # The earliest cost item or attendance row the host created for the draft.

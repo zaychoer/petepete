@@ -7,14 +7,14 @@ defmodule PetepeteWeb.SessionBillingController do
   `POST /api/sessions/:id/issue` needs an `Idempotency-Key` header and returns the bills
   and `txn_id`; a repeated key returns the same bills with `replayed: true`.
   `POST /api/sessions/:id/void` (Batalkan tagihan, body `reason`, `Idempotency-Key` header)
-  calls `Billing.void_issue/2` and returns the reversing `txn_id` (201, or 200 with
+  calls `Payments.void_issue/2` (`Billing.void_issue/2` plus the gateway cancellation job, in one
+  transaction) and returns the reversing `txn_id` (201, or 200 with
   `replayed: true` for a repeat), the `voided_bill_ids` and `cancelled_attempt_ids`.
   """
   use PetepeteWeb, :controller
 
-  alias Petepete.Billing
-  alias Petepete.Billing.TransitionError
-  alias PetepeteWeb.{BillingError, FallbackController, LedgerError}
+  alias Petepete.{Billing, Payments}
+  alias PetepeteWeb.{BillingError, LedgerError}
 
   plug PetepeteWeb.Plugs.SessionAccess, role: :host
   plug PetepeteWeb.Plugs.IdempotencyKey when action == :void
@@ -53,10 +53,8 @@ defmodule PetepeteWeb.SessionBillingController do
       reason: reason
     ]
 
-    case Billing.void_issue(conn.assigns.session_id, opts) do
+    case Payments.void_issue(conn.assigns.session_id, opts) do
       {:ok, result} ->
-        enqueue_cancellations(result)
-
         conn
         |> put_status(if result.replayed, do: 200, else: 201)
         |> json(%{
@@ -73,16 +71,6 @@ defmodule PetepeteWeb.SessionBillingController do
   end
 
   def void(conn, _params), do: LedgerError.render(conn, :reason_required)
-
-  # After the void committed: tell the gateway to drop the attempts the void cancelled.
-  # A replay cancelled nothing new, so it enqueues nothing.
-  defp enqueue_cancellations(%{replayed: true}), do: :ok
-  defp enqueue_cancellations(%{cancelled_attempt_ids: []}), do: :ok
-
-  defp enqueue_cancellations(%{cancelled_attempt_ids: ids}) do
-    {:ok, _job} = Oban.insert(Petepete.Payments.CancelAttemptsJob.new(%{"attempt_ids" => ids}))
-    :ok
-  end
 
   defp encodable(preview) do
     Map.update!(preview, :fronted, fn fronted ->
@@ -105,22 +93,13 @@ defmodule PetepeteWeb.SessionBillingController do
     }
   end
 
-  defp error(conn, :not_found), do: FallbackController.call(conn, {:error, :not_found})
-
-  defp error(conn, %TransitionError{}),
-    do: FallbackController.respond(conn, 409, "session_not_draft")
-
   defp error(conn, {:invalid, errors}) do
     conn
     |> put_status(422)
     |> json(%{error: "invalid_session", problems: Enum.map(errors, &problem/1)})
   end
 
-  defp error(conn, :idempotency_key_required),
-    do: FallbackController.respond(conn, 400, "idempotency_key_required")
-
-  defp error(conn, :idempotency_key_conflict),
-    do: FallbackController.respond(conn, 409, "idempotency_key_conflict")
+  defp error(conn, reason), do: BillingError.render(conn, reason)
 
   defp problem({code, id}), do: %{code: code, id: id}
   defp problem(code), do: %{code: code}

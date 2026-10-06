@@ -22,8 +22,8 @@ defmodule Petepete.Billing.InvoicingConcurrencyTest do
 
     group = group_fixture()
     {user, host} = host_fixture(group)
-    others = for _ <- 1..3, do: member_fixture(group, "member")
-    session = session_fixture(group)
+    others = for _ <- 1..3, do: member_fixture(group, role: "member")
+    session = session_fixture(event_fixture(group))
     for m <- [host | others], do: attendance_fixture(session, m)
     cost_item_fixture(session, amount: 120_000, paid_by: host)
 

@@ -48,10 +48,9 @@ fly secrets set -a petepete-staging --stage SECRET_KEY_BASE="$(openssl rand -bas
 
 ```sh
 fly secrets set -a petepete-staging --stage OTP_HMAC_KEY="$(openssl rand -base64 48 | tr -d '\n')"
-fly secrets set -a petepete-staging --stage OTP_SENDER=Elixir.Petepete.Accounts.OtpSender.<Provider>
 ```
 
-`OTP_HMAC_KEY` keys the hashes of OTP codes and phones (at least 32 bytes). `OTP_SENDER` names the module that delivers OTP codes over WhatsApp. **The app refuses to boot in production without both**, and refuses `OtpSender.Fake` as the sender, so that no login code is ever dropped silently. The provider adapter is not written yet (the choice of WhatsApp provider is an open question in the spec); until it exists a production release does not start.
+`OTP_HMAC_KEY` keys the hashes of OTP codes and phones (at least 32 bytes). `OTP_SENDER` names the module that delivers OTP codes over WhatsApp; staging sets it in `api/fly.staging.toml` (the fake sender, see "Adapters" below), production sets it to the real provider's adapter once one exists (`fly secrets set -a petepete-production --stage OTP_SENDER=Elixir.Petepete.Accounts.OtpSender.<Provider>`). **The app refuses to boot in production without both.** The provider adapter is not written yet (the choice of WhatsApp provider is an open question in the spec); until it exists a production release does not start.
 
 ### 4c. Set the web origin for invite links
 
@@ -62,6 +61,13 @@ fly secrets set -a petepete-staging --stage WEB_BASE_URL=https://<web-app-host>
 `WEB_BASE_URL` is the public origin of the web app. Group invite links are `<WEB_BASE_URL>/join/<token>`. **The app refuses to boot in production without it.**
 
 The web app needs the opposite link: set the Vercel project env var `NEXT_PUBLIC_API_BASE_URL` to the API's public origin (e.g. `https://petepete-staging.fly.dev`, no trailing slash) and redeploy, because it is baked in at build time. The pay page (`/pay/<token>`) and join page (`/join/<token>`) call the API from the browser; the API answers CORS only for the `WEB_BASE_URL` origin, so the two values must name the same site.
+
+### 4d. Link from the web join page into the app (Android App Links)
+
+After joining on the web, the "Buka di aplikasi" button opens `<web origin>/join/<token>?claim=<memberId>`, an https link. The app claims the roster entry created on the web with that `claim` id. Two ways reach the app:
+
+- **App Links** (https link opens the app directly): the web site must serve `https://<web-host>/.well-known/assetlinks.json` listing the app's package name and the SHA-256 fingerprint of the signing certificate. **Human-only:** the fingerprint comes from the Play App Signing key (Play Console, Setup, App signing) and the debug/upload keys used for testing; the file is not in the repo. Until it is served and verified the https link opens in the browser.
+- **Custom scheme** `petepete://join/<token>?claim=<memberId>`: registered by the app's Android manifest and mapped to the same join/claim route. It needs no verification, so it works before assetlinks is set up; the web page does not emit it by default, use it to test the app side on a device (`adb shell am start -a android.intent.action.VIEW -d "petepete://join/<token>?claim=<memberId>"`).
 
 ### 5. Give GitHub a deploy token
 
@@ -86,17 +92,27 @@ gh secret list -R zaychoer/petepete --env staging                          # FLY
 
 Then push to `main` or re-run the latest CI run from the Actions tab. For production, run "Deploy production" from the Actions tab.
 
+## Adapters
+
+One policy for the two adapter seams (`OTP_SENDER` for `Petepete.Accounts.OtpSender`, `PAYMENT_GATEWAY` for `Petepete.Payments.Gateway`), enforced at boot by `Petepete.AdapterPolicy` from `api/config/runtime.exs` (the release command `/app/bin/migrate` too):
+
+- Neither has a default. Missing or blank: the release does not boot.
+- `OTP_SENDER` must name a module that can be loaded and implements `Petepete.Accounts.OtpSender`. A typo or a module that is not an adapter fails at boot, not at the first login. `PAYMENT_GATEWAY` must be a name on the allowlist in `Petepete.AdapterPolicy` (today only `fake`).
+- The fake adapters (`OtpSender.Fake`, `Gateway.Fake`) move no money and deliver no code. They are refused unless `ALLOW_FAKE_ADAPTERS=true`. Only `api/fly.staging.toml` sets it (together with `PAYMENT_GATEWAY = "fake"` and `OTP_SENDER = "Elixir.Petepete.Accounts.OtpSender.Fake"`, which logs each code at info level so a tester can read it with `fly logs`). **Never set it on production**: `api/fly.production.toml` leaves all three unset, so production stays undeployable until real adapters exist.
+
+Tests: `api/test/petepete/adapter_policy_test.exs` reads `config/runtime.exs` for `prod` with fabricated environments.
+
 ## Gateway adapter
 
 Everything provider-shaped (create a payment, verify and normalize webhooks, per-method fees, sub-account registration, withdrawals) sits behind the `Petepete.Payments.Gateway` behaviour. The adapter comes from `config :petepete, :gateway`: dev and test set `Petepete.Payments.Gateway.Fake` in `config/dev.exs` and `config/test.exs`.
 
-In prod the app reads `PAYMENT_GATEWAY` in `api/config/runtime.exs` and **refuses to boot (and so does the release command `/app/bin/migrate`) when it is missing or unknown**. This is deliberate: money must never flow through a gateway nobody chose. The only adapter that exists today is `fake`, which moves no money. `fly.staging.toml` sets `PAYMENT_GATEWAY = "fake"`; `fly.production.toml` leaves it unset, so production cannot deploy until a real adapter exists. Choosing Xendit or Midtrans, obtaining sandbox credentials and completing KYC for a real sub-account are human steps that come first.
+In prod the app reads `PAYMENT_GATEWAY` in `api/config/runtime.exs` and **refuses to boot (and so does the release command `/app/bin/migrate`) when it is missing, unknown, or the fake without `ALLOW_FAKE_ADAPTERS=true`** (see "Adapters"). This is deliberate: money must never flow through a gateway nobody chose. The only adapter that exists today is `fake`, which moves no money. `fly.staging.toml` sets `PAYMENT_GATEWAY = "fake"` and `ALLOW_FAKE_ADAPTERS = "true"`; `fly.production.toml` leaves both unset, so production cannot deploy until a real adapter exists. Choosing Xendit or Midtrans, obtaining sandbox credentials and completing KYC for a real sub-account are human steps that come first.
 
 To add a real adapter (say `Petepete.Payments.Gateway.Xendit`):
 
-1. Create `api/lib/petepete/payments/gateway/xendit.ex` with `@behaviour Petepete.Payments.Gateway` and implement every callback; the module doc of the behaviour lists the types. Return `{:error, :unsupported}` from `cancel_payment/1` and `{:managed, dashboard_url}` from `withdraw/2` if the provider has no such API. Adapters do no database writes.
+1. Create `api/lib/petepete/payments/gateway/xendit.ex` with `@behaviour Petepete.Payments.Gateway` and implement every callback; the module doc of the behaviour lists the types. Return `{:error, :unsupported}` from `cancel_payment/1` and `{:managed, dashboard_url}` from `withdraw/3` if the provider has no such API. Adapters do no database writes. `create_payment/1` and `withdraw/3` are called after the attempt or withdrawal is committed and are repeated with the same `external_id` / `reference` when the first outcome was never stored, so the adapter must pass them to the provider as its idempotency key: the same value must never create a second payment or a second withdrawal.
 2. Put the provider's per-method fee table in config (`config :petepete, Petepete.Payments.Gateway.Xendit, fees: %{...}`) and implement `fee_for/2` with `Petepete.Payments.Gateway.FeeTable`, so net to the host equals `amount_due`. Figures include PPN.
-3. Add its name to the `case` on `PAYMENT_GATEWAY` in `api/config/runtime.exs`, map it to the module, and put credentials in `fly secrets set` plus matching `System.get_env` lines in the same file. Add each new variable to `.env.example`.
+3. Add its name and module to the allowlist in `Petepete.AdapterPolicy` (`api/lib/petepete/adapter_policy.ex`), and put credentials in `fly secrets set` plus matching `System.get_env` lines in the same file. Add each new variable to `.env.example`.
 4. Set `PAYMENT_GATEWAY=<name>` in the matching `fly.*.toml`, then write adapter tests like `api/test/petepete/payments/gateway/fake_test.exs` (signed and forged webhooks, normalization, fees netting exactly `amount_due`) before deploying.
 
 ## Rotating a deploy token
@@ -174,6 +190,14 @@ Check the restored data with `fly mpg connect <new-cluster-id>`, then either poi
 
 Do this restore test once on `staging` before launch and note the date here: PP-FND-04 is not done until a person has restored a backup and read the data back.
 
+**Restore test: belum dijalankan (not run).** Nobody has restored a backup of any cluster yet; no date can be recorded. Checklist for the person who does it (all human, needs the Fly account and a staging cluster with data):
+
+- [ ] The "Backup database" workflow has run on `staging` at least once and `fly mpg backup list <cluster-id>` shows the backup.
+- [ ] `fly mpg restore <cluster-id> --backup-id <backup-id> --name petepete-staging-db-restore` finished.
+- [ ] `fly mpg connect <new-cluster-id>` and read the data back: `SELECT count(*) FROM users, groups, ledger_txns;` (adapt to the table names) match what staging had when the backup was taken; one known group's ledger balances equal the live ones.
+- [ ] The test cluster is destroyed (`fly mpg destroy <new-cluster-id>`).
+- [ ] Date, backup id and the person who ran it are written here: _not recorded yet_.
+
 ## Troubleshooting
 
 **`failed to fetch public key: HTTP 404: Not Found (…/environments/<name>/secrets/public-key)`**
@@ -183,4 +207,4 @@ The GitHub environment `<name>` does not exist, often because of a typo when cre
 Step 5 has not been done for `staging`, or the secret was added as a repository secret instead of an environment secret.
 
 **Deploy fails after the token check**
-The app is missing its database (step 3), `SECRET_KEY_BASE` (step 4) or the OTP secrets (step 4b). `fly secrets list -a petepete-staging` should show `DATABASE_URL`, `SECRET_KEY_BASE`, `OTP_HMAC_KEY` and `OTP_SENDER`.
+The app is missing its database (step 3), `SECRET_KEY_BASE` (step 4) or the OTP secrets (step 4b). `fly secrets list -a petepete-staging` should show `DATABASE_URL`, `SECRET_KEY_BASE` and `OTP_HMAC_KEY`; `api/fly.staging.toml` supplies `PAYMENT_GATEWAY`, `OTP_SENDER` and `ALLOW_FAKE_ADAPTERS`. A boot error naming one of those three says which rule failed ("Adapters").

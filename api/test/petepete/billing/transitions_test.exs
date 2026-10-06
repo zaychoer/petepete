@@ -88,7 +88,7 @@ defmodule Petepete.Billing.TransitionsTest do
 
   describe "session persistence" do
     setup do
-      {group, event, session} = session_with_group!()
+      {group, event, session} = group_event_session_fixture()
       {:ok, group: group, event: event, session: session}
     end
 
@@ -139,13 +139,13 @@ defmodule Petepete.Billing.TransitionsTest do
 
   describe "bill persistence" do
     setup do
-      {group, event, session} = session_with_group!()
-      member = member!(group)
+      {group, event, session} = group_event_session_fixture()
+      member = member_fixture(group)
       {:ok, group: group, member: member, session: session, event: event}
     end
 
     test "unpaid -> paid stores how it was paid; paid -> unpaid clears it", ctx do
-      bill = bill!(ctx.session, ctx.member)
+      bill = bill_fixture(ctx.session, ctx.member)
       paid_at = ~U[2026-10-09 10:00:00Z]
 
       assert {:ok, %Bill{status: "paid", paid_via: "cash", paid_at: ^paid_at} = paid} =
@@ -160,7 +160,7 @@ defmodule Petepete.Billing.TransitionsTest do
     end
 
     test "unpaid -> needs_review -> paid", ctx do
-      bill = bill!(ctx.session, ctx.member)
+      bill = bill_fixture(ctx.session, ctx.member)
 
       assert {:ok, %Bill{status: "needs_review"} = review} =
                Transitions.transition_bill(bill, "needs_review", :gateway_amount_mismatch)
@@ -170,7 +170,7 @@ defmodule Petepete.Billing.TransitionsTest do
     end
 
     test "illegal changes leave the row untouched", ctx do
-      bill = bill!(ctx.session, ctx.member)
+      bill = bill_fixture(ctx.session, ctx.member)
 
       assert {:error, %TransitionError{from: "unpaid", to: "unpaid"}} =
                Transitions.transition_bill(bill, "unpaid", :cancel_cash)
@@ -182,7 +182,7 @@ defmodule Petepete.Billing.TransitionsTest do
     end
 
     test "void is unreachable through transition_bill, whatever the trigger", ctx do
-      bill = bill!(ctx.session, ctx.member)
+      bill = bill_fixture(ctx.session, ctx.member)
 
       for trigger <- Transitions.bill_triggers() do
         assert {:error, %TransitionError{to: "void"}} =
@@ -193,10 +193,10 @@ defmodule Petepete.Billing.TransitionsTest do
     end
 
     test "void_bill voids unpaid, needs_review and paid bills, and void is terminal", ctx do
-      members = for _ <- 1..3, do: member!(ctx.group)
+      members = for _ <- 1..3, do: member_fixture(ctx.group)
 
       for {status, member} <- Enum.zip(~w(unpaid needs_review paid), members) do
-        bill = bill!(ctx.session, member, status: status)
+        bill = bill_fixture(ctx.session, member, status: status)
         assert {:ok, %Bill{status: "void"} = voided} = Transitions.void_bill(bill)
         assert {:error, _} = Transitions.void_bill(voided)
         assert {:error, _} = Transitions.transition_bill(voided, "unpaid", :cancel_cash)

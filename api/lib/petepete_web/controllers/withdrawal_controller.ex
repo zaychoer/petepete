@@ -8,8 +8,11 @@ defmodule PetepeteWeb.WithdrawalController do
       `status`, `bank_name`, `account_last4`, `owner` (the caller owns the account) and
       `can_withdraw` (owner and the account is active).
     * `POST /groups/:group_id/withdrawals` `{"amount": rupiah}` with `Idempotency-Key`:
-      `withdrawal_id`, `status` (`submitted | managed`), `status_label`, `managed_url`
+      `withdrawal_id`, `status` (`pending | submitted | managed | failed`), `status_label`, `managed_url`
       (set when the gateway only offers its dashboard), `replayed`; 201 or 200 on replay.
+      The same key returns the stored withdrawal without asking the gateway again, except
+      after `failed` (502 `gateway_error`), which is attempted again. `pending` means the
+      outcome is not stored yet (the request is never repeated automatically).
     * `GET /groups/:group_id/withdrawals`: history, newest first.
   """
   use PetepeteWeb, :controller
@@ -23,6 +26,8 @@ defmodule PetepeteWeb.WithdrawalController do
   plug IdempotencyKey when action == :create
 
   @status_labels %{
+    "pending" => "Penarikan lagi diproses",
+    "failed" => "Penarikan gagal. Coba lagi.",
     "submitted" => "Penarikan diajukan",
     "managed" => "Selesaikan di dashboard gateway"
   }

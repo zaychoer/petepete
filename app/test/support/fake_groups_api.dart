@@ -72,6 +72,14 @@ class FakeGroupsApi {
       if (s.route == route) s,
   ];
 
+  /// `you.member_id`: the first roster entry with the caller's role, else 1.
+  int _viewerId(int groupId, String role) =>
+      (members[groupId] ?? const []).firstWhere(
+            (m) => m['role'] == role,
+            orElse: () => {'id': 1},
+          )['id']
+          as int;
+
   Map<String, dynamic> _group(int id) =>
       groups.firstWhere((g) => g['id'] == id);
 
@@ -93,16 +101,12 @@ class FakeGroupsApi {
         'token_type': 'Bearer',
         'expires_in': 900,
         'new_user': false,
-        'user': {'id': 'u1', 'display_name': 'Budi'},
+        'user': {'id': 1, 'display_name': 'Budi'},
       });
     }
     if (route == 'POST /api/auth/logout') return _json({'ok': true});
     if (route == 'GET /api/me') {
-      return _json({
-        'id': 'u1',
-        'display_name': 'Budi',
-        'phone': '6281200000000',
-      });
+      return _json({'id': 1, 'display_name': 'Budi', 'phone': '6281200000000'});
     }
     if (route == 'DELETE /api/me') {
       final error = deleteAccountError;
@@ -140,7 +144,10 @@ class FakeGroupsApi {
         'cost_categories': ['Sewa lapangan', 'Air minum'],
         'invite_url': host ? inviteUrl(id) : null,
         'members': members[id] ?? [],
-        'you': {'member_id': 1, 'role': g['role']},
+        'you': {
+          'member_id': _viewerId(id, g['role'] as String),
+          'role': g['role'],
+        },
       });
     }
     if (m(r'GET /api/groups/(\d+)/home') case final match?) {

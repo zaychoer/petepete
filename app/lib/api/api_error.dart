@@ -83,7 +83,6 @@ const _messages = <String, String>{
   'gateway_error': 'Gateway sedang bermasalah. Coba lagi nanti.',
   'session_not_editable':
       'Sesi ini sudah ditagih. Batalkan tagihan dulu kalau mau ubah biaya atau kehadiran.',
-  'session_not_draft': 'Sesi ini sudah ditagih atau dibatalkan.',
   'session_not_issued': 'Sesi ini belum ditagih.',
   'invalid_session':
       'Sesi belum bisa ditagih. Cek pos biaya dan kehadiran dulu ya.',
