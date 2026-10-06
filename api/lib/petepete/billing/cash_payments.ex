@@ -25,6 +25,7 @@ defmodule Petepete.Billing.CashPayments do
   alias Petepete.{Clock, Groups, Ledger}
   alias Petepete.Ledger.Audit
   alias Petepete.Ledger.Event.{CashPaymentCancelled, CashReceived}
+  alias Petepete.Metrics
   alias Petepete.Repo
 
   @type result ::
@@ -98,6 +99,7 @@ defmodule Petepete.Billing.CashPayments do
         "previous_status" => bill.status
       })
 
+      Metrics.record_paid(bill, group_id, at, :cash)
       {:ok, %{bill: paid, txn: txn, replayed: false}}
     end
   end

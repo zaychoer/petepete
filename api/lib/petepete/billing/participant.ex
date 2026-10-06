@@ -8,5 +8,7 @@ defmodule Petepete.Billing.Participant do
     belongs_to :member, Petepete.Groups.Member, primary_key: true
     field :attended, :boolean, default: false
     field :weight, :integer, default: 1000
+
+    timestamps(type: :utc_datetime, updated_at: false)
   end
 end

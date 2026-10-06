@@ -38,6 +38,7 @@ defmodule Petepete.Billing.GatewayPayments do
   alias Petepete.Billing.{Bill, Locks, Transitions}
   alias Petepete.{Clock, Groups, Ledger}
   alias Petepete.Ledger.Event.GatewayPaymentReceived
+  alias Petepete.Metrics
   alias Petepete.Payments.PaymentAttempt
   alias Petepete.Repo
 
@@ -100,12 +101,15 @@ defmodule Petepete.Billing.GatewayPayments do
       if replayed do
         {:ok, outcome_of_replay(bill, txn)}
       else
+        paid_at = Clock.now()
+
         with {:ok, _} <-
                Transitions.transition_bill(bill, "paid", :gateway_payment,
                  paid_via: "gateway",
                  paid_txn_id: txn.id,
-                 paid_at: Clock.now()
+                 paid_at: paid_at
                ) do
+          Metrics.record_paid(bill, Groups.group_id_for(:bill, bill.id), paid_at, :gateway)
           {:ok, :paid}
         end
       end

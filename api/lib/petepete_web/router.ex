@@ -39,6 +39,17 @@ defmodule PetepeteWeb.Router do
     post "/webhooks/:provider", WebhookController, :create
   end
 
+  # The beta dashboard: a shared secret (METRICS_TOKEN) instead of a login; 404 when unset.
+  pipeline :metrics_admin do
+    plug PetepeteWeb.Plugs.MetricsToken
+  end
+
+  scope "/api/admin", PetepeteWeb do
+    pipe_through [:api, :metrics_admin]
+
+    get "/metrics", AdminMetricsController, :show
+  end
+
   scope "/api", PetepeteWeb do
     pipe_through [:api, :optionally_authenticated]
 
