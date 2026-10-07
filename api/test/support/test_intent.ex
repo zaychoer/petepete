@@ -37,7 +37,11 @@ defmodule Petepete.TestIntent do
   end
 
   def stop do
-    if Process.whereis(__MODULE__), do: Agent.stop(__MODULE__)
+    try do
+      if Process.whereis(__MODULE__), do: Agent.stop(__MODULE__)
+    catch
+      :exit, _ -> :ok
+    end
   end
 
   def configure(new_opts) do
