@@ -1,0 +1,14 @@
+{
+  "error": "invalid",
+  "errors": {
+    "name": [
+      "wajib diisi"
+    ]
+  },
+  "fields": {
+    "name": [
+      "wajib diisi"
+    ]
+  },
+  "message": "Ada isian yang belum benar. Cek lagi ya."
+}

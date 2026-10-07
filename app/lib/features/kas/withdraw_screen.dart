@@ -317,10 +317,7 @@ class _WithdrawalTile extends StatelessWidget {
               spacing: 8,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                StatusChip(
-                  label: withdrawal.statusLabel,
-                  tone: tone,
-                ),
+                StatusChip(label: withdrawal.statusLabel, tone: tone),
                 if (onOpenDashboard != null)
                   TextButton(
                     onPressed: onOpenDashboard,

@@ -1,0 +1,10 @@
+{
+  "participant": {
+    "attended": true,
+    "display_name": "Member 1250",
+    "member_id": 1780,
+    "role": "member",
+    "role_label": "Anggota",
+    "weight": 1000
+  }
+}

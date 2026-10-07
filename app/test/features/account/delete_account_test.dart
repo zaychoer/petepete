@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/fake_groups_api.dart';
+import '../../support/sample.dart';
 
 FakeGroupsApi _fake() {
   final fake = FakeGroupsApi();
@@ -47,9 +48,7 @@ void main() {
 
     expect(fake.calls('DELETE /api/me'), hasLength(1));
     expect(
-      find.text(
-        'Kamu masih jadi host grup aktif. Serahkan atau tutup grupnya dulu.',
-      ),
+      find.text(Sample.error('still_host').json['message'] as String),
       findsOneWidget,
     );
     expect(find.text('Hapus akun saya'), findsOneWidget);

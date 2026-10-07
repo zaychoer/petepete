@@ -93,18 +93,14 @@ class LoadErrorView extends StatelessWidget {
   }
 }
 
-/// The label chip of a ledger kind.
-StatusChip kindChip(String kind) {
-  final (label, tone) = switch (kind) {
-    'session_billed' => ('Tagihan sesi', StatusTone.info),
-    'gateway_payment_received' => ('Bayar online', StatusTone.success),
-    'cash_received' => ('Bayar tunai', StatusTone.success),
-    'settlement' => ('Pelunasan', StatusTone.info),
-    'kas_spend' => ('Belanja kas', StatusTone.info),
-    'session_bills_cancelled' => ('Tagihan dibatalkan', StatusTone.neutral),
-    'cash_payment_cancelled' => ('Tunai dibatalkan', StatusTone.neutral),
-    'correction' => ('Koreksi', StatusTone.warning),
-    _ => (kind, StatusTone.neutral),
+/// The chip of a ledger kind: the server's [label] (`kind_label`) with a tone
+/// picked here; a kind the app does not know gets the neutral tone.
+StatusChip kindChip(String kind, {required String label}) {
+  final tone = switch (kind) {
+    'session_billed' || 'settlement' || 'kas_spend' => StatusTone.info,
+    'gateway_payment_received' || 'cash_received' => StatusTone.success,
+    'correction' => StatusTone.warning,
+    _ => StatusTone.neutral,
   };
   return StatusChip(label: label, tone: tone);
 }

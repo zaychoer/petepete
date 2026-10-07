@@ -199,7 +199,7 @@ class _EventFormState extends State<_EventForm> {
         context.go(GroupRoutes.groupHomePath(widget.groupId));
       }
     } on ApiError catch (e) {
-      if (mounted) setState(() => _apiError = groupErrorMessage(e));
+      if (mounted) setState(() => _apiError = e.message);
     } finally {
       if (mounted) setState(() => _busy = false);
     }

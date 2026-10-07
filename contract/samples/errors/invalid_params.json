@@ -1,0 +1,7 @@
+{
+  "details": {
+    "amount": "harus angka bulat dalam rupiah"
+  },
+  "error": "invalid_params",
+  "message": "Data yang dikirim belum lengkap atau salah format."
+}

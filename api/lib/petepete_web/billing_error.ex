@@ -11,6 +11,10 @@ defmodule PetepeteWeb.BillingError do
   alias Petepete.Billing.TransitionError
   alias PetepeteWeb.{FallbackController, LedgerError}
 
+  @doc "Codes rendered here itself; the rest come from `LedgerError` and `FallbackController`."
+  @spec codes() :: [String.t()]
+  def codes, do: ["invalid_transition", "not_cash_payment"]
+
   @doc "Sends the error response and returns the conn."
   @spec render(Plug.Conn.t(), term()) :: Plug.Conn.t()
   def render(conn, :not_found), do: FallbackController.call(conn, {:error, :not_found})
@@ -22,6 +26,7 @@ defmodule PetepeteWeb.BillingError do
       error: "invalid_transition",
       entity: Atom.to_string(entity),
       status: from,
+      status_label: status_label(entity, from),
       message: transition_message(entity)
     })
   end
@@ -36,6 +41,9 @@ defmodule PetepeteWeb.BillingError do
   end
 
   def render(conn, reason) when is_atom(reason), do: LedgerError.render(conn, reason)
+
+  defp status_label(:session, status), do: PetepeteWeb.Labels.session(status)
+  defp status_label(:bill, status), do: PetepeteWeb.Labels.bill(status)
 
   defp transition_message(:session),
     do: "Status sesi ini tidak memungkinkan aksi itu. Muat ulang dulu ya."

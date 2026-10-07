@@ -58,7 +58,9 @@ defmodule PetepeteWeb.SessionVoidControllerTest do
   test "voids the session: reversing txn, voided bills, draft session, cancelled attempts", ctx do
     attempt = attempt!(ctx.bill)
 
-    body = void(ctx.host_conn, ctx.session, "void-1", "salah hitung") |> json_response(201)
+    conn = void(ctx.host_conn, ctx.session, "void-1", "salah hitung")
+    body = json_response(conn, 201)
+    Petepete.Contract.check!("void.voided", conn)
 
     assert %{
              "txn_id" => txn_id,
@@ -123,13 +125,11 @@ defmodule PetepeteWeb.SessionVoidControllerTest do
   end
 
   test "only the host of the session's group", ctx do
-    assert void(ctx.plain_conn, ctx.session, "k1", "x") |> json_response(403) == %{
-             "error" => "forbidden"
-           }
+    assert %{"error" => "forbidden"} =
+             void(ctx.plain_conn, ctx.session, "k1", "x") |> json_response(403)
 
-    assert void(ctx.stranger_conn, ctx.session, "k2", "x") |> json_response(404) == %{
-             "error" => "not_found"
-           }
+    assert %{"error" => "not_found"} =
+             void(ctx.stranger_conn, ctx.session, "k2", "x") |> json_response(404)
 
     assert void(ctx.host_conn, %{id: 0}, "k3", "x") |> json_response(404)
 

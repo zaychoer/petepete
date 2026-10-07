@@ -4,7 +4,7 @@ defmodule PetepeteWeb.LedgerControllerTest do
   import Petepete.Fixtures
   import Ecto.Query
 
-  alias Petepete.Ledger
+  alias Petepete.{BillingScenario, Billing, Contract, Ledger}
   alias Petepete.Ledger.{AuditLog, Event, Txn}
   alias Petepete.Repo
 
@@ -85,6 +85,9 @@ defmodule PetepeteWeb.LedgerControllerTest do
 
       conn = ctx.host_conn |> keyed(key()) |> post(~p"/api/groups/#{ctx.g.id}/settlements", body)
 
+      # 201 here and 200 on a replay (`replayed: true`) share this one sample.
+      Contract.check!("settlement.recorded", conn)
+
       assert %{"txn_id" => id, "replayed" => false} = json_response(conn, 201)
       assert %Txn{kind: "settlement", reason: "talangan"} = Repo.get!(Txn, id)
 
@@ -104,7 +107,25 @@ defmodule PetepeteWeb.LedgerControllerTest do
           amount: 1000
         })
 
+      Contract.check!("errors/same_member", conn)
       assert %{"error" => "same_member"} = json_response(conn, 422)
+      assert audit_rows(ctx.g.id, "settlement.record") == []
+    end
+
+    test "a member of another group is rejected as member_not_in_group", ctx do
+      {_, other_member} = login_member(group_fixture(), "member")
+
+      conn =
+        ctx.host_conn
+        |> keyed(key())
+        |> post(~p"/api/groups/#{ctx.g.id}/settlements", %{
+          from_member_id: other_member.id,
+          to_member_id: ctx.andi.id,
+          amount: 1000
+        })
+
+      Contract.check!("errors/member_not_in_group", conn)
+      assert %{"error" => "member_not_in_group"} = json_response(conn, 422)
       assert audit_rows(ctx.g.id, "settlement.record") == []
     end
 
@@ -130,6 +151,14 @@ defmodule PetepeteWeb.LedgerControllerTest do
       assert ctx.conn |> keyed(key()) |> post(path, body) |> json_response(401)
       assert txn_count(ctx.g.id) == 0
     end
+
+    test "the Idempotency-Key header is required", ctx do
+      body = %{from_member_id: ctx.andi.id, to_member_id: ctx.budi.id, amount: 1000}
+      conn = post(ctx.host_conn, ~p"/api/groups/#{ctx.g.id}/settlements", body)
+
+      Contract.check!("errors/idempotency_key_required", conn)
+      assert %{"error" => "idempotency_key_required"} = json_response(conn, 422)
+    end
   end
 
   describe "POST kas-spends" do
@@ -141,12 +170,14 @@ defmodule PetepeteWeb.LedgerControllerTest do
 
       c1 = ctx.host_conn |> keyed(k) |> post(path, body)
       c2 = ctx.host_conn |> keyed(k) |> post(path, body)
+      Contract.check!("kas_spend.recorded", c1)
       assert %{"txn_id" => id} = json_response(c1, 201)
       assert %{"txn_id" => ^id, "replayed" => true} = json_response(c2, 200)
       assert Ledger.balances(ctx.g.id).kas == 40_000
       assert length(audit_rows(ctx.g.id, "kas_spend.record")) == 1
 
       over = ctx.host_conn |> keyed(key()) |> post(path, %{body | amount: 40_001})
+      Contract.check!("errors/insufficient_kas", over)
       assert %{"error" => "insufficient_kas"} = json_response(over, 422)
       assert Ledger.balances(ctx.g.id).kas == 40_000
       assert length(audit_rows(ctx.g.id, "kas_spend.record")) == 1
@@ -167,6 +198,7 @@ defmodule PetepeteWeb.LedgerControllerTest do
       c1 = ctx.host_conn |> keyed(k) |> post(path, %{reason: "salah orang"})
       c2 = ctx.host_conn |> keyed(k) |> post(path, %{reason: "salah orang"})
 
+      Contract.check!("correction.recorded", c1)
       assert %{"txn_id" => cid, "replayed" => false} = json_response(c1, 201)
       assert %{"txn_id" => ^cid, "replayed" => true} = json_response(c2, 200)
       assert txn_count(ctx.g.id) == 2
@@ -190,6 +222,7 @@ defmodule PetepeteWeb.LedgerControllerTest do
       conn =
         ctx.host_conn |> keyed(key()) |> post(~p"/api/txns/#{ctx.settlement_id}/correction", %{})
 
+      Contract.check!("errors/reason_required", conn)
       assert %{"error" => "reason_required"} = json_response(conn, 422)
       assert audit_rows(ctx.g.id, "txn.correct") == []
     end
@@ -198,6 +231,7 @@ defmodule PetepeteWeb.LedgerControllerTest do
       path = ~p"/api/txns/#{ctx.settlement_id}/correction"
       assert ctx.host_conn |> keyed(key()) |> post(path, %{reason: "x"}) |> json_response(201)
       conn = ctx.host_conn |> keyed(key()) |> post(path, %{reason: "lagi"})
+      Contract.check!("errors/already_reversed", conn)
       assert %{"error" => "already_reversed"} = json_response(conn, 422)
     end
 
@@ -221,6 +255,7 @@ defmodule PetepeteWeb.LedgerControllerTest do
         |> keyed(key())
         |> post(~p"/api/txns/#{billed.id}/correction", %{reason: "x"})
 
+      Contract.check!("errors/not_undoable", conn)
       assert %{"error" => "not_undoable"} = json_response(conn, 422)
     end
 
@@ -240,7 +275,9 @@ defmodule PetepeteWeb.LedgerControllerTest do
     test "any member reads balances; outsiders get 404", ctx do
       fund_kas(ctx.g, ctx.host_m, ctx.andi, 20_000)
 
-      body = ctx.plain_conn |> get(~p"/api/groups/#{ctx.g.id}/balances") |> json_response(200)
+      conn = get(ctx.plain_conn, ~p"/api/groups/#{ctx.g.id}/balances")
+      Contract.check!("balances.members", conn)
+      body = json_response(conn, 200)
       assert body["kas"] == 20_000
 
       assert %{"member_id" => _, "display_name" => "Andi", "balance" => -20_000} =
@@ -249,9 +286,78 @@ defmodule PetepeteWeb.LedgerControllerTest do
       assert ctx.outsider_conn |> get(~p"/api/groups/#{ctx.g.id}/balances") |> json_response(404)
     end
 
+    test "history labels every one of the eight ledger kinds in Indonesian", %{conn: conn} do
+      ctx = BillingScenario.issued()
+      [bill_a, bill_b] = for m <- [ctx.a, ctx.b], do: ctx.bills[m.id]
+
+      # cash_received + cash_payment_cancelled, gateway_payment_received
+      {:ok, _} = Billing.mark_paid_cash(bill_a.id, BillingScenario.opts(ctx))
+      {:ok, _} = Billing.cancel_cash(bill_a.id, BillingScenario.opts(ctx, reason: "salah"))
+      {:ok, _} = Billing.mark_paid_cash(bill_a.id, BillingScenario.opts(ctx))
+      BillingScenario.gateway_payment!(ctx, bill_b, bill_b.amount_due)
+
+      # session_billed + session_bills_cancelled on a second session
+      second = session_fixture(event_fixture(ctx.group))
+      for m <- [ctx.host, ctx.a], do: attendance_fixture(second, m)
+      cost_item_fixture(second, amount: 20_000, paid_by: ctx.host)
+      BillingScenario.issue(%{ctx | session: second})
+
+      assert {:ok, _} =
+               Petepete.Payments.void_issue(second.id, BillingScenario.opts(ctx, reason: "batal"))
+
+      user = ctx.user |> Ecto.Changeset.change(phone: valid_phone()) |> Repo.update!()
+      host_conn = bearer_conn(conn, user)
+
+      # settlement, kas_spend, correction
+      body = %{from_member_id: ctx.a.id, to_member_id: ctx.b.id, amount: 5_000}
+
+      settled =
+        host_conn |> keyed(key()) |> post(~p"/api/groups/#{ctx.group.id}/settlements", body)
+
+      %{"txn_id" => settlement_id} = json_response(settled, 201)
+
+      host_conn
+      |> keyed(key())
+      |> post(~p"/api/groups/#{ctx.group.id}/kas-spends", %{member_id: ctx.a.id, amount: 1_000})
+      |> json_response(201)
+
+      host_conn
+      |> keyed(key())
+      |> post(~p"/api/txns/#{settlement_id}/correction", %{reason: "salah"})
+      |> json_response(201)
+
+      %{"txns" => txns} =
+        host_conn |> get(~p"/api/groups/#{ctx.group.id}/txns") |> json_response(200)
+
+      # The recorded sample holds one real txn of each kind (the clients pick their fake's
+      # txns and `kind_label`s from it).
+      Contract.check!("txns.history", %{"txns" => Enum.uniq_by(txns, & &1["kind"])},
+        route: "GET /api/groups/:group_id/txns"
+      )
+
+      kinds = txns |> Enum.map(&{&1["kind"], &1["kind_label"]}) |> Enum.uniq() |> Enum.sort()
+
+      assert kinds == [
+               {"cash_payment_cancelled", "Tunai dibatalkan"},
+               {"cash_received", "Bayar tunai"},
+               {"correction", "Koreksi"},
+               {"gateway_payment_received", "Bayar online"},
+               {"kas_spend", "Belanja kas"},
+               {"session_billed", "Tagihan sesi"},
+               {"session_bills_cancelled", "Tagihan dibatalkan"},
+               {"settlement", "Pelunasan"}
+             ]
+    end
+
     test "history is visible to plain members, describes txns in casual text, filters by member",
          ctx do
-      body = %{from_member_id: ctx.andi.id, to_member_id: ctx.budi.id, amount: 1_245_000}
+      body = %{
+        from_member_id: ctx.andi.id,
+        to_member_id: ctx.budi.id,
+        amount: 1_245_000,
+        note: "talangan"
+      }
+
       ctx.host_conn |> keyed(key()) |> post(~p"/api/groups/#{ctx.g.id}/settlements", body)
 
       ctx.host_conn
@@ -265,14 +371,22 @@ defmodule PetepeteWeb.LedgerControllerTest do
       path = ~p"/api/groups/#{ctx.g.id}/txns"
       all = ctx.plain_conn |> get(path) |> json_response(200)
 
-      assert [%{"description" => "Andi bayar Rp1.245.000 ke Budi", "entries" => [_, _]}, _] =
+      assert [
+               %{
+                 "description" => "Andi bayar Rp1.245.000 ke Budi (talangan)",
+                 "entries" => [_, _]
+               },
+               _
+             ] =
                all["txns"]
 
       filtered = ctx.plain_conn |> get(path, %{member_id: ctx.andi.id}) |> json_response(200)
-      assert [%{"description" => "Andi bayar Rp1.245.000 ke Budi"}] = filtered["txns"]
+      assert [%{"description" => "Andi bayar Rp1.245.000 ke Budi (talangan)"}] = filtered["txns"]
 
       assert ctx.outsider_conn |> get(path) |> json_response(404)
-      assert ctx.plain_conn |> get(path, %{member_id: "abc"}) |> json_response(422)
+
+      assert %{"error" => "invalid_params", "message" => _} =
+               ctx.plain_conn |> get(path, %{member_id: "abc"}) |> json_response(422)
     end
   end
 end

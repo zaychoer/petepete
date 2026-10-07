@@ -1,0 +1,114 @@
+# Wire contract
+
+What the API sends and what the app and web client rely on, as recorded real responses
+([ADR-0004](../docs/adr/0004-wire-contract-is-recorded-samples.md)). There is no hand-written
+schema: the samples are the contract.
+
+- `samples/<resource>.<variant>.json`: a real, pretty-printed response body of one client-facing
+  route, e.g. `pay_page.unpaid.json`. Use non-empty arrays so the element shape is recorded: the
+  audit rejects an empty array unless `@allowed_empty` in `api/test/support/contract.ex` lists its
+  path with the reason (e.g. `pay_page.paid` has no payment `methods`).
+- `samples/errors/<code>.json`: one per error `code` a client can see:
+  `{"error": code, "message": "...", ...}`. `message` is required (the server owns user-facing text).
+- `manifest.json`: `{"routes": {"GET /api/pay/:token": ["pay_page.unpaid", ...]}, "errors": ["not_found", ...]}`
+  with sorted keys. Server-only routes (webhook, metrics) are not listed.
+- `rupiah.json`: `[{"amount": 1245000, "text": "Rp1.245.000"}, ...]`, run by the Elixir, Dart and
+  TypeScript test suites.
+
+## Checked and recorded by the API tests
+
+A controller test passes the response it already asserts on to `Petepete.Contract.check!/3`
+(`api/test/support/contract.ex`):
+
+```elixir
+conn = get(conn, ~p"/api/pay/#{bill.pay_token}")
+Contract.check!("pay_page.unpaid", conn)          # route derived from the conn
+Contract.check!("errors/not_found", conn)         # error samples need "error" and "message"
+```
+
+The check compares shape only: same object keys, same JSON type per value (an integer is not a
+float), arrays by the sample's first element, `null` on either side matches anything. Values,
+ids, timestamps and tokens are free. A mismatch lists the JSON path of each difference.
+
+When an API change is intended, re-record and commit the changed samples, then follow with the
+app and web in the same PR:
+
+```sh
+cd api && CONTRACT_RECORD=1 mix test test/path/to_controller_test.exs
+```
+
+Recording rewrites the sample and adds it to `manifest.json`. A new route needs a
+classification in `api/test/petepete_web/router_classification_test.exs`; that test fails on
+an unrecorded `:client` route, a manifest entry without its file, and a sample file the
+manifest does not list.
+
+### Every sample is exercised, every error has one
+
+- A bare `mix test` (and so `mix precommit`) runs the whole suite and then fails the run, listing
+  them, when a sample in `manifest.json` was not compared by any `Contract.check!` call. A run with
+  arguments (a path, `file:line`, `--only`, ...) skips the check, because it may select fewer
+  tests. So a sample whose controller test is deleted or stops reaching its route cannot go stale.
+- `api/test/petepete_web/error_inventory_test.exs` lists the error codes the API renders from the
+  tables that render them (`FallbackController.codes/0`, `LedgerError.codes/0`,
+  `BillingError.codes/0`, `PayController.codes/0`, `SessionBillingController.codes/0`,
+  `ErrorJSON.codes/0`) and fails when a code a client can receive has no `errors/<code>` sample, when
+  a manifest error is no longer produced, or when a controller or plug renders a code literal that is
+  in none of the tables. A code no client can receive (e.g. webhook-only codes, Ledger checks on
+  server-built events) goes on the test's `@not_client` list with its reason.
+- Phoenix's own errors (unknown route, malformed JSON body, a crash) are rendered by
+  `PetepeteWeb.ErrorJSON` as `{"error": "not_found" | "bad_request" | "server_error", "message": ...}`,
+  not Phoenix's default `{"errors": {"detail": ...}}`, so clients treat them like every other error.
+
+A route whose success response has no body (`DELETE /api/sessions/:id/costs/:cid`, 204) is
+classified `:no_body` in the classification test: it needs no sample and is not in the
+manifest. Its error responses still have `errors/<code>` samples.
+
+## Used by the clients
+
+Fakes and tests load `samples/` and `manifest.json` instead of typing payloads. An override may
+change values but not a value's JSON type.
+
+## Web tests
+
+`web/src/test/sample.ts` loads the files for vitest (import it relatively, there is no `@/` alias in the vitest run):
+
+```ts
+import { loadError, loadSample, readContractFile } from "../test/sample";
+
+const page = loadSample<BillPayPage>("pay_page.unpaid") // contract/samples/pay_page.unpaid.json
+  .with({ amount_due: 50_000, "lines.0.label": "Konsumsi", attempt: { /* ... */ } })
+  .withItems("methods", [{ fee: 1 }, {}])               // one element per entry, built from the first
+  .json;                                                // fresh deep copy; .encode() gives the JSON string
+const error = loadError("bill_void").json;              // contract/samples/errors/bill_void.json
+const cases = readContractFile("rupiah.json");          // any other file under contract/
+```
+
+`with` and `withItems` follow the server's comparer: an override may change values but throws
+`SampleOverrideError` when it changes a JSON type, adds or drops an object key, or names a path
+the sample lacks (`null` on either side is free; JSON numbers are one type here, so
+integer-vs-float is only enforced by the API and the app). `rupiah.test.ts` runs
+`rupiah.json`; `pay-types.test.ts` runs every recorded pay page through `parsePayPage`, so a
+shape change fails a web test with the JSON path. `api.test.ts` checks that each recorded error
+reaches the UI as the server's `message`.
+
+## App tests
+
+`app/test/support/sample.dart` loads samples for Flutter tests (found by walking up from the
+working directory, so it works under `flutter test` from `app/`):
+
+```dart
+final page = Sample.load('pay_page.unpaid')              // contract/samples/pay_page.unpaid.json
+    .patch({'amount_due': 50000, 'attempt': {'status': 'pending'}})
+    .withItems('lines', [{'label': 'Konsumsi'}, {}]);
+page.json;      // Map<String, dynamic>, a fresh deep copy
+page.encode();  // JSON string for a fake HTTP response
+
+Sample.error('idempotency_key_required').json   // contract/samples/errors/<code>.json
+```
+
+`patch` takes field names or dotted paths (`'lines.0.amount'`); a nested map merges into the
+object. It throws `SampleOverrideError` when a value changes the sample's JSON type (int, double,
+string, bool, list, map), adds or drops an object key, or names a path the sample does not have;
+`null` on either side is free. `withItems(path, [...])` builds a list from the sample's first
+element, one element per entry with its own overrides. `contract/rupiah.json` runs in
+`app/test/contract/rupiah_contract_test.dart`.

@@ -1,0 +1,11 @@
+{
+  "claim": {
+    "claimable": true,
+    "path": "/api/members/1584/claim"
+  },
+  "group": {
+    "id": 640,
+    "name": "Futsal Kamis"
+  },
+  "member_id": 1584
+}

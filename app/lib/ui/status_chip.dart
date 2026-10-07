@@ -18,33 +18,37 @@ enum StatusTone {
 
 /// A small pill with an icon and a status word, e.g. "Lunas".
 ///
-/// Use [StatusChip.bill] and [StatusChip.session] for the spec's labels; use the
-/// plain constructor for anything else, always with a text [label].
+/// The text is always the server's label (`status_label`, `progress_label`,
+/// ADR-0004); the app only picks icon and tone. Use [StatusChip.bill] and
+/// [StatusChip.session] for statuses the app knows a tone for, the plain
+/// constructor for anything else.
 class StatusChip extends StatelessWidget {
   const StatusChip({super.key, required this.label, required this.tone});
 
-  /// Bill status from the API: `unpaid`, `paid`, `needs_review`, `void`.
-  factory StatusChip.bill(String status, {Key? key}) {
-    final (label, tone) = switch (status) {
-      'unpaid' => ('Belum bayar', StatusTone.warning),
-      'paid' => ('Lunas', StatusTone.success),
-      'needs_review' => ('Perlu dicek', StatusTone.danger),
-      'void' => ('Dibatalkan', StatusTone.neutral),
-      _ => (status, StatusTone.neutral),
+  /// Bill status from the API (`unpaid`, `paid`, `needs_review`, `void`) with the
+  /// server's [label]; an unknown status gets the neutral tone.
+  factory StatusChip.bill(String status, {required String label, Key? key}) {
+    final tone = switch (status) {
+      'unpaid' => StatusTone.warning,
+      'paid' => StatusTone.success,
+      'needs_review' => StatusTone.danger,
+      _ => StatusTone.neutral,
     };
     return StatusChip(key: key, label: label, tone: tone);
   }
 
-  /// Session status from the API: `draft`, `issued`, `cancelled`. Pass
-  /// [settled] for an issued session whose non-void bills are all paid
-  /// ("Selesai" is derived, never stored).
-  factory StatusChip.session(String status, {bool settled = false, Key? key}) {
-    final (label, tone) = switch (status) {
-      'draft' => ('Draft', StatusTone.neutral),
-      'issued' when settled => ('Selesai', StatusTone.success),
-      'issued' => ('Ditagih', StatusTone.info),
-      'cancelled' => ('Batal', StatusTone.neutral),
-      _ => (status, StatusTone.neutral),
+  /// Session progress from the API (`draft`, `issued`, `settled`, `cancelled`;
+  /// `settled` is the derived "Selesai") with the server's [label]; an unknown
+  /// progress gets the neutral tone.
+  factory StatusChip.session(
+    String progress, {
+    required String label,
+    Key? key,
+  }) {
+    final tone = switch (progress) {
+      'issued' => StatusTone.info,
+      'settled' => StatusTone.success,
+      _ => StatusTone.neutral,
     };
     return StatusChip(key: key, label: label, tone: tone);
   }

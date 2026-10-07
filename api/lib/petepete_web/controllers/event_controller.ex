@@ -7,6 +7,7 @@ defmodule PetepeteWeb.EventController do
 
   alias Petepete.Sessions
   alias Petepete.Sessions.Event
+  alias PetepeteWeb.{FallbackController, FieldErrors}
 
   plug PetepeteWeb.Plugs.GroupAccess, role: :host
 
@@ -22,9 +23,9 @@ defmodule PetepeteWeb.EventController do
         })
 
       {:error, %Ecto.Changeset{} = changeset} ->
-        conn
-        |> put_status(:unprocessable_entity)
-        |> json(%{error: "invalid_event", details: errors(changeset)})
+        FallbackController.respond(conn, 422, "invalid_event", %{
+          details: FieldErrors.changeset_errors(changeset)
+        })
     end
   end
 
@@ -40,13 +41,5 @@ defmodule PetepeteWeb.EventController do
       :split_rule,
       :active
     ])
-  end
-
-  defp errors(changeset) do
-    Ecto.Changeset.traverse_errors(changeset, fn {message, opts} ->
-      Regex.replace(~r"%{(\w+)}", message, fn _, key ->
-        opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
-      end)
-    end)
   end
 end

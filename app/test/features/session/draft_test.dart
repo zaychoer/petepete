@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/fake_session_server.dart';
+import '../../support/sample.dart';
 
 FakeSessionServer _server() {
   final s = FakeSessionServer();
@@ -9,6 +10,11 @@ FakeSessionServer _server() {
   s.participants[2] = {'attended': true, 'weight': 1000};
   return s;
 }
+
+/// The `message` of the recorded `invalid_session` problem.
+String _problemMessage() =>
+    (Sample.error('invalid_session').json['problems'] as List).first['message']
+        as String;
 
 void main() {
   late FakeLauncher launcher;
@@ -104,16 +110,22 @@ void main() {
     ) async {
       final server = _server();
       await pumpSession(tester, server, launcher);
-      server.failures['PUT /api/sessions/10/costs/new'] = (
+      server.fail(
+        'PUT /api/sessions/10/costs/new',
         409,
-        {'error': 'session_not_editable', 'status': 'issued'},
+        'session_not_editable',
       );
       await tester.tap(find.byKey(const Key('chip-Lapangan')));
       await tester.pumpAndSettle();
       await tester.enterText(find.byKey(const Key('cost-amount')), '1000');
       await tester.tap(find.byKey(const Key('cost-save')));
       await tester.pumpAndSettle();
-      expect(find.textContaining('Batalkan tagihan dulu'), findsOneWidget);
+      expect(
+        find.text(
+          Sample.error('session_not_editable').json['message'] as String,
+        ),
+        findsOneWidget,
+      );
       expect(find.byKey(const Key('cost-save')), findsOneWidget);
     });
   });
@@ -162,22 +174,20 @@ void main() {
       await tester.tap(find.byKey(const Key('open-preview')));
       await tester.pumpAndSettle();
       expect(find.text('Tagihan belum bisa dikirim'), findsOneWidget);
-      expect(
-        find.textContaining('Pos "Minum" belum ada peserta hadir'),
-        findsOneWidget,
-      );
+      // The server's text of the problem, not one the app writes.
+      expect(find.text(_problemMessage()), findsOneWidget);
       expect(find.text('Kirim tagihan'), findsNothing);
 
       // Andi checks in: the preview no longer has a problem.
-      server.previewJson = {
-        'total_cost': 60000,
-        'total_billed': 60000,
-        'kas_remainder': 0,
-        'credit_used': 0,
-        'total_due': 60000,
-        'items': [],
-        'members': [],
-      };
+      server.previewJson = previewBody(
+        totals: {
+          'total_cost': 60000,
+          'total_billed': 60000,
+          'kas_remainder': 0,
+          'credit_used': 0,
+          'total_due': 60000,
+        },
+      );
       await tester.tap(find.text('Kembali dan perbaiki'));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('attend-3')));
@@ -187,6 +197,27 @@ void main() {
         findsNothing,
       );
     });
+    testWidgets(
+      'a problem code the app has never seen still shows the server message',
+      (tester) async {
+        final server = _server()..problemCode = 'something_new';
+        await pumpSession(tester, server, launcher);
+        await tester.tap(find.byKey(const Key('chip-Minum')));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byKey(const Key('cost-amount')), '60000');
+        await tester.tap(find.byKey(const Key('subset-switch')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('subset-3')));
+        await tester.tap(find.byKey(const Key('cost-save')));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const Key('open-preview')));
+        await tester.pumpAndSettle();
+
+        expect(find.text(_problemMessage()), findsOneWidget);
+        expect(find.textContaining('something_new'), findsNothing);
+      },
+    );
   });
 
   group('attendance', () {

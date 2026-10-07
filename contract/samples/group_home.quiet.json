@@ -1,0 +1,12 @@
+{
+  "group": {
+    "id": 1011,
+    "name": "Group 7810"
+  },
+  "kas_balance": 0,
+  "needs_review_bills": [],
+  "next_session": null,
+  "role": "host",
+  "role_label": "Host",
+  "unpaid_bills": []
+}

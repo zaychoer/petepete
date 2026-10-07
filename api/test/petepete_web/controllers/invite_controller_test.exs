@@ -5,7 +5,7 @@ defmodule PetepeteWeb.InviteControllerTest do
   import Petepete.Fixtures
 
   alias Petepete.Groups.{Group, Member}
-  alias Petepete.Repo
+  alias Petepete.{Contract, Repo}
 
   setup do
     group = group_fixture(%{name: "Futsal Kamis"})
@@ -20,12 +20,14 @@ defmodule PetepeteWeb.InviteControllerTest do
       conn: conn,
       group: group
     } do
-      body =
+      joined =
         post(conn, join_path(group.invite_token), %{
           display_name: "  Andi ",
           phone: "0812 3456 7890"
         })
-        |> json_response(201)
+
+      body = json_response(joined, 201)
+      Contract.check!("invite_join.anonymous", joined)
 
       assert %{"member_id" => id, "group" => %{"id" => gid, "name" => "Futsal Kamis"}} = body
       assert gid == group.id
@@ -46,9 +48,8 @@ defmodule PetepeteWeb.InviteControllerTest do
                post(conn, join_path(group.invite_token), %{display_name: "Budi"})
                |> json_response(201)
 
-      assert %{"fields" => %{"display_name" => _}} =
-               post(conn, join_path(group.invite_token), %{phone: "081234567890"})
-               |> json_response(422)
+      invalid = post(conn, join_path(group.invite_token), %{phone: "081234567890"})
+      assert %{"fields" => %{"display_name" => _}} = json_response(invalid, 422)
 
       assert %{"fields" => %{"phone" => _}} =
                post(conn, join_path(group.invite_token), %{display_name: "Budi", phone: "12"})
@@ -75,10 +76,11 @@ defmodule PetepeteWeb.InviteControllerTest do
     test "links the entry to the caller's account and phone", %{conn: conn, group: group} do
       {conn, user} = bearer_login(conn)
 
-      body =
+      joined =
         post(conn, join_path(group.invite_token), %{display_name: "Citra", phone: "081200000000"})
-        |> json_response(201)
 
+      body = json_response(joined, 201)
+      Contract.check!("invite_join.account", joined)
       assert body["claim"] == %{"claimable" => false}
       member = Repo.get!(Member, body["member_id"])
       assert member.user_id == user.id
@@ -101,8 +103,8 @@ defmodule PetepeteWeb.InviteControllerTest do
     test "a bad token in the header is 401, not an anonymous join", %{conn: conn, group: group} do
       conn = put_req_header(conn, "authorization", "Bearer garbage")
 
-      assert json_response(post(conn, join_path(group.invite_token), %{display_name: "X"}), 401) ==
-               %{"error" => "unauthenticated"}
+      assert %{"error" => "unauthenticated"} =
+               json_response(post(conn, join_path(group.invite_token), %{display_name: "X"}), 401)
 
       assert Repo.aggregate(from(m in Member, where: m.group_id == ^group.id), :count) == 1
     end
@@ -110,19 +112,25 @@ defmodule PetepeteWeb.InviteControllerTest do
 
   describe "looking up an invite" do
     test "shows only the group name, with no login", %{conn: conn, group: group} do
-      assert json_response(get(conn, ~p"/api/invites/#{group.invite_token}"), 200) ==
-               %{"group_name" => "Futsal Kamis"}
+      shown = get(conn, ~p"/api/invites/#{group.invite_token}")
+      assert json_response(shown, 200) == %{"group_name" => "Futsal Kamis"}
+      Contract.check!("invite.preview", shown)
     end
 
     test "an unknown or reset token is 404", %{conn: conn, group: group} do
-      assert json_response(get(conn, ~p"/api/invites/nope"), 404) == %{"error" => "not_found"}
+      unknown = get(conn, ~p"/api/invites/nope")
+
+      assert %{"error" => "invite_not_found", "message" => "Link undangan" <> _} =
+               json_response(unknown, 404)
+
+      Contract.check!("errors/invite_not_found", unknown)
 
       {host_conn, host_user} = bearer_login(build_conn())
       member_fixture(group, role: "host", user: host_user)
       post(host_conn, ~p"/api/groups/#{group.id}/invite/reset") |> json_response(200)
 
-      assert json_response(get(conn, ~p"/api/invites/#{group.invite_token}"), 404) ==
-               %{"error" => "not_found"}
+      assert %{"error" => "invite_not_found"} =
+               json_response(get(conn, ~p"/api/invites/#{group.invite_token}"), 404)
     end
   end
 
@@ -130,9 +138,8 @@ defmodule PetepeteWeb.InviteControllerTest do
     test "an unknown token is 404 and creates nothing", %{conn: conn} do
       before = Repo.aggregate(Member, :count)
 
-      assert json_response(post(conn, join_path("nope"), %{display_name: "X"}), 404) == %{
-               "error" => "not_found"
-             }
+      assert %{"error" => "invite_not_found"} =
+               json_response(post(conn, join_path("nope"), %{display_name: "X"}), 404)
 
       assert Repo.aggregate(Member, :count) == before
     end
@@ -149,15 +156,15 @@ defmodule PetepeteWeb.InviteControllerTest do
       {host_conn, host_user} = bearer_login(build_conn())
       member_fixture(group, role: "host", user: host_user)
 
-      %{"invite_url" => url} =
-        post(host_conn, ~p"/api/groups/#{group.id}/invite/reset") |> json_response(200)
+      reset = post(host_conn, ~p"/api/groups/#{group.id}/invite/reset")
+      %{"invite_url" => url} = json_response(reset, 200)
+      Contract.check!("invite_reset.ok", reset)
 
       new = String.replace_prefix(url, "https://petepete.test/join/", "")
       assert new != old
 
-      assert json_response(post(conn, join_path(old), %{display_name: "Sesudah"}), 404) == %{
-               "error" => "not_found"
-             }
+      assert %{"error" => "invite_not_found"} =
+               json_response(post(conn, join_path(old), %{display_name: "Sesudah"}), 404)
 
       assert %{"member_id" => _} =
                post(conn, join_path(new), %{display_name: "Sesudah"}) |> json_response(201)

@@ -1,0 +1,10 @@
+{
+  "kas_remainder": 0,
+  "paid_count": 1,
+  "session_id": 17,
+  "share_url": "https://wa.me/?text=Ringkasan%20Event%2010182%20%28Futsal%20Kamis%29%0AKamis%2C%208%20Okt%202026%0A%0ATagihan%20per%20orang%3A%0A-%20Member%2010214%3A%20Rp30.000%20%28Belum%20bayar%29%0A-%20Member%2010150%3A%20Rp30.000%20%28Lunas%29%0A%0ATotal%20biaya%3A%20Rp60.000%0ATotal%20tagihan%3A%20Rp60.000%0AMasuk%20kas%3A%20Rp0%0ALunas%201%20orang%2C%20belum%20lunas%201%20orang",
+  "text": "Ringkasan Event 10182 (Futsal Kamis)\nKamis, 8 Okt 2026\n\nTagihan per orang:\n- Member 10214: Rp30.000 (Belum bayar)\n- Member 10150: Rp30.000 (Lunas)\n\nTotal biaya: Rp60.000\nTotal tagihan: Rp60.000\nMasuk kas: Rp0\nLunas 1 orang, belum lunas 1 orang",
+  "total_billed": 60000,
+  "total_cost": 60000,
+  "unpaid_count": 1
+}

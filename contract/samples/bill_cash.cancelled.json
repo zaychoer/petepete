@@ -1,0 +1,13 @@
+{
+  "bill": {
+    "amount_due": 50000,
+    "id": 59,
+    "paid_at": null,
+    "paid_via": null,
+    "paid_via_label": null,
+    "status": "unpaid",
+    "status_label": "Belum bayar"
+  },
+  "replayed": false,
+  "txn_id": 32
+}

@@ -138,6 +138,11 @@ defmodule Petepete.PaymentsTest do
       errors = errors_on(changeset)
       assert errors.account_holder_name == ["can't be blank"]
       assert errors.account_number == ["must be digits only"]
+
+      assert PetepeteWeb.FieldErrors.changeset_errors(changeset).account_number == [
+               "harus angka saja, minimal 6 digit"
+             ]
+
       assert Repo.aggregate(PayoutAccount, :count) == 0
       assert Repo.aggregate(AuditLog, :count) == 0
     end

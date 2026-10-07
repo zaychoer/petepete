@@ -34,10 +34,11 @@ defmodule Petepete.Sessions.RRuleTest do
             {"BYDAY=TH", "FREQ=WEEKLY"},
             {"FREQ=WEEKLY;BYDAY=TH;BYHOUR=24", "BYHOUR"},
             {"FREQ=WEEKLY;BYDAY=TH;BYMINUTE=30", "BYHOUR"},
-            {"FREQ=WEEKLY;BYDAY=TH;BYDAY=FR", "repeats"},
-            {"", "empty"}
+            {"FREQ=WEEKLY;BYDAY=TH;BYDAY=FR", "diulang"},
+            {"", "kosong"}
           ] do
-        assert {:error, message} = RRule.parse(rrule)
+        assert {:error, {kind, opts}} = RRule.parse(rrule)
+        message = PetepeteWeb.FieldErrors.message(kind, opts)
         assert message =~ fragment, "#{inspect(rrule)} gave #{inspect(message)}"
       end
 
@@ -50,11 +51,11 @@ defmodule Petepete.Sessions.RRuleTest do
       {:ok, rule} = RRule.parse("FREQ=WEEKLY;BYDAY=TH")
 
       assert {:ok, %RRule{time: ~T[19:00:00]}} = RRule.put_time(rule, "19:00")
-      assert {:error, "time must" <> _} = RRule.put_time(rule, "25:00")
-      assert {:error, "time must" <> _} = RRule.put_time(rule, "7pm")
+      assert {:error, {:time_format, []}} = RRule.put_time(rule, "25:00")
+      assert {:error, {:time_format, []}} = RRule.put_time(rule, "7pm")
 
       {:ok, timed} = RRule.put_time(rule, "19:00")
-      assert {:error, "time conflicts" <> _} = RRule.put_time(timed, "20:00")
+      assert {:error, {:time_conflict, []}} = RRule.put_time(timed, "20:00")
     end
   end
 

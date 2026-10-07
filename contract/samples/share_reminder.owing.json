@@ -1,0 +1,26 @@
+{
+  "bills": [
+    {
+      "amount_due": 30000,
+      "bill_id": 28,
+      "cash_cancellable": false,
+      "display_name": "Member 9191",
+      "has_phone": true,
+      "member_id": 62,
+      "paid_at": null,
+      "paid_via": null,
+      "paid_via_label": null,
+      "pay_url": "https://petepete.test/pay/tok9319",
+      "share_url": "https://wa.me/?text=Halo%20Member%209191%2C%20mau%20ngingetin%20tagihan%20Event%209031%20%28Futsal%20Kamis%29%20%28Kamis%2C%208%20Okt%202026%29%20Rp30.000%20belum%20masuk%20nih.%0ABayar%20lewat%20link%20ini%20ya%3A%20https%3A%2F%2Fpetepete.test%2Fpay%2Ftok9319%0AMakasih%21",
+      "status": "unpaid",
+      "status_label": "Belum bayar",
+      "text": "Halo Member 9191, mau ngingetin tagihan Event 9031 (Futsal Kamis) (Kamis, 8 Okt 2026) Rp30.000 belum masuk nih.\nBayar lewat link ini ya: https://petepete.test/pay/tok9319\nMakasih!",
+      "token_expires_at": "2026-11-08T12:00:00Z",
+      "wa_number": "6281234567890"
+    }
+  ],
+  "count": 1,
+  "group_text": "Halo semua! Pengingat tagihan Event 9031 (Futsal Kamis) (Kamis, 8 Okt 2026). Yang belum bayar:\n\n- Member 9191: Rp30.000\n  https://petepete.test/pay/tok9319\n\nYuk bayar lewat link masing-masing. Makasih!",
+  "session_id": 20,
+  "share_url": "https://wa.me/?text=Halo%20semua%21%20Pengingat%20tagihan%20Event%209031%20%28Futsal%20Kamis%29%20%28Kamis%2C%208%20Okt%202026%29.%20Yang%20belum%20bayar%3A%0A%0A-%20Member%209191%3A%20Rp30.000%0A%20%20https%3A%2F%2Fpetepete.test%2Fpay%2Ftok9319%0A%0AYuk%20bayar%20lewat%20link%20masing-masing.%20Makasih%21"
+}

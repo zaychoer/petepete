@@ -50,13 +50,7 @@ class _JoinScreenState extends State<JoinScreen> {
     try {
       await action(GroupsApi(AppScope.of(context).api));
     } on ApiError catch (e) {
-      if (mounted) {
-        setState(
-          () => _error = e.code == 'not_found'
-              ? 'Link undangan ini sudah tidak berlaku. Minta link baru ke host.'
-              : groupErrorMessage(e),
-        );
-      }
+      if (mounted) setState(() => _error = e.message);
     } finally {
       if (mounted) setState(() => _busy = false);
     }

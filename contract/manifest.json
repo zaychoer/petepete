@@ -1,0 +1,189 @@
+{
+  "errors": [
+    "already_member",
+    "already_reversed",
+    "amount_not_positive",
+    "bad_request",
+    "bill_needs_review",
+    "bill_paid",
+    "bill_void",
+    "claim_pending",
+    "delivery_failed",
+    "forbidden",
+    "gateway_error",
+    "idempotency_key_conflict",
+    "idempotency_key_required",
+    "insufficient_balance",
+    "insufficient_kas",
+    "invalid",
+    "invalid_code",
+    "invalid_display_name",
+    "invalid_event",
+    "invalid_params",
+    "invalid_phone",
+    "invalid_session",
+    "invalid_token",
+    "invalid_transition",
+    "invite_not_found",
+    "member_not_in_group",
+    "no_claim",
+    "no_payout_account",
+    "not_cash_payment",
+    "not_claimable",
+    "not_found",
+    "not_undoable",
+    "payout_account_not_active",
+    "rate_limited",
+    "reason_required",
+    "same_member",
+    "server_error",
+    "session_not_editable",
+    "session_not_issued",
+    "still_host",
+    "token_expired",
+    "unauthenticated",
+    "undo_window_expired",
+    "unsupported_method"
+  ],
+  "routes": {
+    "DELETE /api/me": [
+      "me.deleted"
+    ],
+    "GET /api/groups": [
+      "group_list.groups"
+    ],
+    "GET /api/groups/:group_id": [
+      "group_detail.host",
+      "group_detail.member"
+    ],
+    "GET /api/groups/:group_id/balances": [
+      "balances.members"
+    ],
+    "GET /api/groups/:group_id/home": [
+      "group_home.quiet",
+      "group_home.with_session"
+    ],
+    "GET /api/groups/:group_id/payout-account/balance": [
+      "payout_balance.active"
+    ],
+    "GET /api/groups/:group_id/txns": [
+      "txns.history"
+    ],
+    "GET /api/groups/:group_id/withdrawals": [
+      "withdrawals.history"
+    ],
+    "GET /api/invites/:token": [
+      "invite.preview"
+    ],
+    "GET /api/me": [
+      "me.show"
+    ],
+    "GET /api/pay/:token": [
+      "pay_page.attempt",
+      "pay_page.attempt_expired",
+      "pay_page.needs_review",
+      "pay_page.paid",
+      "pay_page.unpaid",
+      "pay_page.void"
+    ],
+    "GET /api/sessions/:id": [
+      "session.cancelled",
+      "session.draft",
+      "session.issued",
+      "session.settled"
+    ],
+    "GET /api/sessions/:id/preview": [
+      "preview.ok"
+    ],
+    "GET /api/sessions/:id/share/bills": [
+      "share_bills.issued"
+    ],
+    "GET /api/sessions/:id/share/reminder": [
+      "share_reminder.owing"
+    ],
+    "GET /api/sessions/:id/share/summary": [
+      "share_summary.issued"
+    ],
+    "PATCH /api/me": [
+      "me.updated"
+    ],
+    "POST /api/auth/logout": [
+      "auth_logout.ok"
+    ],
+    "POST /api/auth/otp": [
+      "auth_otp.ok"
+    ],
+    "POST /api/auth/refresh": [
+      "auth_refresh.ok"
+    ],
+    "POST /api/auth/verify": [
+      "auth_verify.ok"
+    ],
+    "POST /api/bills/:id/cash": [
+      "bill_cash.paid"
+    ],
+    "POST /api/bills/:id/cash/cancel": [
+      "bill_cash.cancelled"
+    ],
+    "POST /api/groups": [
+      "group_created.ok"
+    ],
+    "POST /api/groups/:group_id/events": [
+      "event.one_off",
+      "event.recurring"
+    ],
+    "POST /api/groups/:group_id/guests": [
+      "guest.created"
+    ],
+    "POST /api/groups/:group_id/invite/reset": [
+      "invite_reset.ok"
+    ],
+    "POST /api/groups/:group_id/kas-spends": [
+      "kas_spend.recorded"
+    ],
+    "POST /api/groups/:group_id/payout-account": [
+      "payout_account.pending_kyc"
+    ],
+    "POST /api/groups/:group_id/settlements": [
+      "settlement.recorded"
+    ],
+    "POST /api/groups/:group_id/withdrawals": [
+      "withdrawal.managed",
+      "withdrawal.pending",
+      "withdrawal.submitted"
+    ],
+    "POST /api/invites/:token/join": [
+      "invite_join.account",
+      "invite_join.anonymous"
+    ],
+    "POST /api/members/:id/claim": [
+      "member_claim.ok"
+    ],
+    "POST /api/members/:id/claim/approve": [
+      "member_claim.approved"
+    ],
+    "POST /api/members/:id/claim/reject": [
+      "member_claim.rejected"
+    ],
+    "POST /api/pay/:token/payment": [
+      "payment_attempt.ewallet",
+      "payment_attempt.qris",
+      "payment_attempt.va"
+    ],
+    "POST /api/sessions/:id/issue": [
+      "issue.issued"
+    ],
+    "POST /api/sessions/:id/void": [
+      "void.voided"
+    ],
+    "POST /api/txns/:id/correction": [
+      "correction.recorded"
+    ],
+    "PUT /api/sessions/:id/attendance": [
+      "participant.saved"
+    ],
+    "PUT /api/sessions/:id/costs/:cid": [
+      "cost_item.saved"
+    ]
+  }
+}

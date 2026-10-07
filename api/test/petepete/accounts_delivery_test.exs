@@ -4,7 +4,7 @@ defmodule Petepete.AccountsDeliveryTest do
 
   import ExUnit.CaptureLog
 
-  alias Petepete.Repo
+  alias Petepete.{Contract, Repo}
   alias Petepete.Accounts.OtpChallenge
 
   defmodule FailingSender do
@@ -30,7 +30,8 @@ defmodule Petepete.AccountsDeliveryTest do
       capture_log(fn ->
         for _ <- 1..6 do
           conn = post(conn, ~p"/api/auth/otp", %{phone: "628123400001"})
-          assert json_response(conn, 502) == %{"error" => "delivery_failed"}
+          assert %{"error" => "delivery_failed"} = json_response(conn, 502)
+          Contract.check!("errors/delivery_failed", conn)
         end
       end)
 

@@ -1,0 +1,56 @@
+{
+  "amount_due": 34000,
+  "attempt": {
+    "action": {
+      "qr_string": "FAKEQRIS|188-1|34268",
+      "type": "qr_string"
+    },
+    "amount_due": 34000,
+    "expires_at": "2026-10-06T04:00:00Z",
+    "fee": 268,
+    "gross_amount": 34268,
+    "method": "qris"
+  },
+  "attempt_expired": false,
+  "can_pay": true,
+  "credit_applied": 0,
+  "event_name": "Event 18658",
+  "expired_method": null,
+  "group_name": "Futsal Kamis",
+  "lines": [
+    {
+      "amount": 33333,
+      "category": "lapangan",
+      "label": "Sewa lapangan"
+    }
+  ],
+  "message": null,
+  "methods": [
+    {
+      "fee": 268,
+      "gross_amount": 34268,
+      "label": "QRIS",
+      "method": "qris"
+    },
+    {
+      "fee": 4440,
+      "gross_amount": 38440,
+      "label": "Virtual Account",
+      "method": "va"
+    },
+    {
+      "fee": 578,
+      "gross_amount": 34578,
+      "label": "E-wallet",
+      "method": "ewallet"
+    }
+  ],
+  "paid_at": null,
+  "rounding": 667,
+  "session_date": "2026-10-06",
+  "session_starts_at": "2026-10-06T03:00:00Z",
+  "share": 34000,
+  "status": "unpaid",
+  "status_label": "Belum bayar",
+  "token_expired": false
+}

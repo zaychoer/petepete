@@ -3,11 +3,14 @@ defmodule Petepete.Ledger.DescriptionTest do
 
   alias Petepete.Ledger.{Description, Entry, Txn}
 
-  test "rupiah uses dot thousands separators" do
-    assert Description.rupiah(0) == "Rp0"
-    assert Description.rupiah(999) == "Rp999"
-    assert Description.rupiah(45_000) == "Rp45.000"
-    assert Description.rupiah(1_234_567) == "Rp1.234.567"
+  # The cases are shared with the Dart and TypeScript suites: contract/rupiah.json.
+  @rupiah_file Path.expand("../../../../contract/rupiah.json", __DIR__)
+  @external_resource @rupiah_file
+
+  for %{"amount" => amount, "text" => text} <- @rupiah_file |> File.read!() |> Jason.decode!() do
+    test "rupiah(#{amount}) is #{text}" do
+      assert Description.rupiah(unquote(amount)) == unquote(text)
+    end
   end
 
   test "cash and gateway payments read as '<name> bayar <amount>'" do

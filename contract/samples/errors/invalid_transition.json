@@ -1,0 +1,7 @@
+{
+  "entity": "session",
+  "error": "invalid_transition",
+  "message": "Status sesi ini tidak memungkinkan aksi itu. Muat ulang dulu ya.",
+  "status": "issued",
+  "status_label": "Ditagih"
+}

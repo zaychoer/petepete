@@ -35,6 +35,7 @@ defmodule Petepete.Share do
   alias Petepete.Groups.{Group, Member}
   alias Petepete.Ledger.Description
   alias Petepete.{Clock, Ledger, Repo, Wib}
+  alias PetepeteWeb.Labels
 
   @days ~w(Senin Selasa Rabu Kamis Jumat Sabtu Minggu)
   @months ~w(Jan Feb Mar Apr Mei Jun Jul Agu Sep Okt Nov Des)
@@ -183,8 +184,10 @@ defmodule Petepete.Share do
       member_id: member.id,
       display_name: member.display_name,
       status: bill.status,
+      status_label: Labels.bill(bill.status),
       amount_due: bill.amount_due,
       paid_via: bill.paid_via,
+      paid_via_label: Labels.paid_via(bill.paid_via),
       paid_at: bill.paid_at,
       cash_cancellable: cash_cancellable?(bill),
       has_phone: number != "",
@@ -261,12 +264,7 @@ defmodule Petepete.Share do
   end
 
   defp summary_line(bill, member),
-    do: "- #{member.display_name}: #{rupiah(bill.share)} (#{status_text(bill.status)})"
-
-  defp status_text("paid"), do: "Lunas"
-  defp status_text("unpaid"), do: "Belum bayar"
-  defp status_text("needs_review"), do: "Perlu dicek"
-  defp status_text("void"), do: "Dibatalkan"
+    do: "- #{member.display_name}: #{rupiah(bill.share)} (#{Labels.bill(bill.status)})"
 
   defp title(%{group: group, event: event}) do
     if event.name in [nil, "", group.name],

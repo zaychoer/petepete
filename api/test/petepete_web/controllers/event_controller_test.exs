@@ -4,7 +4,7 @@ defmodule PetepeteWeb.EventControllerTest do
   import Petepete.Fixtures
 
   alias Petepete.Billing.Session
-  alias Petepete.Repo
+  alias Petepete.{Contract, Repo}
   alias Petepete.Sessions.Event
 
   setup %{conn: conn} do
@@ -12,13 +12,21 @@ defmodule PetepeteWeb.EventControllerTest do
     other = group_fixture()
 
     host = user_fixture(%{phone: valid_phone()})
-    member_fixture(group, role: "host", user: host)
+    host_member = member_fixture(group, role: "host", user: host)
     plain = user_fixture(%{phone: valid_phone()})
     member_fixture(group, role: "member", user: plain)
     outsider_host = user_fixture(%{phone: valid_phone()})
     member_fixture(other, role: "host", user: outsider_host)
 
-    %{conn: conn, group: group, other: other, host: host, plain: plain, outsider: outsider_host}
+    %{
+      conn: conn,
+      group: group,
+      other: other,
+      host: host,
+      host_member: host_member,
+      plain: plain,
+      outsider: outsider_host
+    }
   end
 
   defp create(conn, user, group, params),
@@ -32,8 +40,33 @@ defmodule PetepeteWeb.EventControllerTest do
     "split_rule" => "equal"
   }
 
+  # A subset item first: the recorded samples take their array shapes from the first item, so
+  # it must be the one with `member_ids`.
+  defp subset_template(ctx) do
+    %{
+      "items" => [
+        %{
+          "category" => "minum",
+          "amount" => 60_000,
+          "scope" => "subset",
+          "member_ids" => [ctx.host_member.id]
+        },
+        %{"category" => "lapangan", "amount" => 350_000}
+      ]
+    }
+  end
+
   test "a host creates a recurring event and gets no session", ctx do
-    body = create(ctx.conn, ctx.host, ctx.group, @recurring) |> json_response(201)
+    created =
+      create(
+        ctx.conn,
+        ctx.host,
+        ctx.group,
+        Map.put(@recurring, "cost_template", subset_template(ctx))
+      )
+
+    body = json_response(created, 201)
+    Contract.check!("event.recurring", created)
 
     assert %{"event_id" => id, "session_id" => nil, "event" => event} = body
     assert event["rrule"] == "FREQ=WEEKLY;BYDAY=TH;BYHOUR=19;BYMINUTE=0"
@@ -45,11 +78,12 @@ defmodule PetepeteWeb.EventControllerTest do
     params = %{
       "type" => "one_off",
       "starts_at" => "2026-10-08T19:00:00+07:00",
-      "cost_template" => @recurring["cost_template"]
+      "cost_template" => subset_template(ctx)
     }
 
-    assert %{"event_id" => event_id, "session_id" => session_id} =
-             create(ctx.conn, ctx.host, ctx.group, params) |> json_response(201)
+    created = create(ctx.conn, ctx.host, ctx.group, params)
+    assert %{"event_id" => event_id, "session_id" => session_id} = json_response(created, 201)
+    Contract.check!("event.one_off", created)
 
     assert %Session{status: "draft", event_id: ^event_id, starts_at: ~U[2026-10-08 12:00:00Z]} =
              Repo.get!(Session, session_id)
@@ -58,16 +92,21 @@ defmodule PetepeteWeb.EventControllerTest do
   test "an unsupported rrule is a 422 saying which part", ctx do
     params = Map.put(@recurring, "rrule", "FREQ=WEEKLY;INTERVAL=2;BYDAY=TH")
 
-    assert %{"error" => "invalid_event", "details" => %{"rrule" => [message]}} =
-             create(ctx.conn, ctx.host, ctx.group, params) |> json_response(422)
+    invalid = create(ctx.conn, ctx.host, ctx.group, params)
 
-    assert message =~ "INTERVAL"
+    assert %{"error" => "invalid_event", "details" => %{"rrule" => [message]}} =
+             json_response(invalid, 422)
+
+    Contract.check!("errors/invalid_event", invalid)
+
+    assert message =~ "INTERVAL belum didukung"
     assert Repo.aggregate(Event, :count) == 0
   end
 
   test "only hosts of the group may create events", ctx do
-    assert %{"error" => "forbidden"} =
-             create(ctx.conn, ctx.plain, ctx.group, @recurring) |> json_response(403)
+    forbidden = create(ctx.conn, ctx.plain, ctx.group, @recurring)
+    assert %{"error" => "forbidden"} = json_response(forbidden, 403)
+    Contract.check!("errors/forbidden", forbidden)
 
     # A host of another group learns nothing about this group.
     assert %{"error" => "not_found"} =

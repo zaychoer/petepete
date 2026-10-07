@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:petepete/ui/status_chip.dart';
 
 import '../../support/fake_kas_api.dart';
+import '../../support/sample.dart';
+
+String _serverMessage(String code) =>
+    Sample.error(code).json['message'] as String;
 
 /// Budi (1, signed in), Andi (2), Citra (3). Andi fronted the court, Citra owes.
 FakeKasApi _seeded({bool host = true}) {
@@ -50,6 +55,27 @@ void main() {
       expect(find.text('Pelunasan'), findsOneWidget); // kind label as text
     });
 
+    testWidgets('the kind chip shows the server kind_label, tone by kind', (
+      tester,
+    ) async {
+      final fake = _seeded();
+      fake.seed('settlement', 'Andi bayar Rp5.000 ke Citra', [
+        (2, 5000),
+        (3, -5000),
+      ], kindLabel: 'Label dari server');
+      fake.seed('jenis_baru', 'Sesuatu yang baru', [
+        (2, 1000),
+        (3, -1000),
+      ], kindLabel: 'Jenis baru');
+      await pumpKas(tester, fake);
+
+      StatusChip chip(String label) =>
+          tester.widget<StatusChip>(find.widgetWithText(StatusChip, label));
+      expect(chip('Label dari server').tone, StatusTone.info);
+      expect(chip('Jenis baru').tone, StatusTone.neutral);
+      expect(find.textContaining('jenis_baru'), findsNothing);
+    });
+
     testWidgets('a negative kas says so in words', (tester) async {
       final fake = _seeded()..kas = -5000;
       await pumpKas(tester, fake);
@@ -96,7 +122,7 @@ void main() {
       final fake = _seeded();
       await pumpKas(tester, fake, location: '/groups/9/kas');
 
-      expect(find.text('Data tidak ditemukan.'), findsOneWidget);
+      expect(find.text(_serverMessage('not_found')), findsOneWidget);
       expect(find.text('Coba lagi'), findsOneWidget);
     });
   });
@@ -200,7 +226,7 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'Koreksi'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Catatan ini sudah pernah dikoreksi.'), findsOneWidget);
+      expect(find.text(_serverMessage('already_reversed')), findsOneWidget);
       expect(find.text('Koreksi catatan'), findsOneWidget); // dialog stays open
     });
 

@@ -377,10 +377,18 @@ class _StatusViewState extends State<StatusView> {
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [Text(b.displayName), Text(formatRupiah(b.amountDue))],
+              children: [
+                Text(b.displayName),
+                Text(formatRupiah(b.amountDue)),
+                if (b.paidViaLabel != null)
+                  Text(
+                    b.paidViaLabel!,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+              ],
             ),
           ),
-          StatusChip.bill(b.status),
+          StatusChip.bill(b.status, label: b.statusLabel),
           if (canMarkPaid)
             TextButton(
               key: Key('$keyPrefix-paid-${b.billId}'),

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ApiError, apiFetch } from "@/lib/api";
-import type { PayPage } from "@/lib/pay-types";
+import { parsePayPage, type PayPage } from "@/lib/pay-types";
 import { PayView } from "./pay-view";
 
 // The link is the credential: keep it out of search results and Referer headers.
@@ -16,7 +16,9 @@ export default async function PayRoute({ params }: PageProps<"/pay/[token]">) {
 
   let initialPage: PayPage;
   try {
-    initialPage = await apiFetch<PayPage>(`/api/pay/${encodeURIComponent(token)}`);
+    initialPage = parsePayPage(
+      await apiFetch<unknown>(`/api/pay/${encodeURIComponent(token)}`),
+    );
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) notFound();
     throw error;

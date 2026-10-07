@@ -11,7 +11,7 @@ defmodule PetepeteWeb.LedgerController do
   alias Petepete.{Ledger, Repo}
   alias Petepete.Groups.Member
   alias Petepete.Ledger.{Description, HostActions}
-  alias PetepeteWeb.LedgerError
+  alias PetepeteWeb.{FieldErrors, Labels, LedgerError}
   alias PetepeteWeb.Plugs.{GroupAccess, IdempotencyKey, TxnAccess}
 
   import Ecto.Query, only: [from: 2]
@@ -114,7 +114,7 @@ defmodule PetepeteWeb.LedgerController do
   defp member_filter(%{"member_id" => raw}) do
     case Integer.parse(to_string(raw)) do
       {id, ""} -> {:ok, [member_id: id]}
-      _ -> {:error, %{"member_id" => "harus angka"}}
+      _ -> {:error, %{"member_id" => FieldErrors.message(:cast, type: :integer)}}
     end
   end
 
@@ -124,6 +124,7 @@ defmodule PetepeteWeb.LedgerController do
     %{
       id: txn.id,
       kind: txn.kind,
+      kind_label: Labels.txn_kind(txn.kind),
       description: Description.of(txn, names, all),
       reason: txn.reason,
       reverses_txn_id: txn.reverses_txn_id,
@@ -148,7 +149,7 @@ defmodule PetepeteWeb.LedgerController do
         case cast(type, Map.get(params, field)) do
           {:ok, nil} -> {ok, errors}
           {:ok, value} -> {Map.put(ok, key, value), errors}
-          :error -> {ok, Map.put(errors, field, "tidak valid")}
+          :error -> {ok, Map.put(errors, field, FieldErrors.message(:invalid))}
         end
       end)
 
@@ -156,7 +157,9 @@ defmodule PetepeteWeb.LedgerController do
 
     errors =
       Enum.reduce(required, errors, fn {field, key}, errs ->
-        if Map.has_key?(ok, key), do: errs, else: Map.put_new(errs, field, "wajib diisi")
+        if Map.has_key?(ok, key),
+          do: errs,
+          else: Map.put_new(errs, field, FieldErrors.message(:required))
       end)
 
     if errors == %{}, do: {:ok, ok}, else: {:error, errors}

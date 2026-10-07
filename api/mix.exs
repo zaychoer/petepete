@@ -67,8 +67,16 @@ defmodule Petepete.MixProject do
       setup: ["deps.get", "ecto.setup"],
       "ecto.setup": ["ecto.create", "ecto.migrate", "run priv/repo/seeds.exs"],
       "ecto.reset": ["ecto.drop", "ecto.setup"],
-      test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],
+      test: ["ecto.create --quiet", "ecto.migrate --quiet", &run_tests/1],
       precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"]
     ]
+  end
+
+  # A bare `mix test` (also from `mix precommit`) is the full suite: the contract check then
+  # fails the run for any recorded sample no test compared (see `Petepete.Contract`). Any
+  # argument (a path, a line, a tag filter, a flag) may select fewer tests, so it skips that.
+  defp run_tests(args) do
+    if args == [], do: System.put_env("PETEPETE_FULL_SUITE", "1")
+    Mix.Task.run("test", args)
   end
 end

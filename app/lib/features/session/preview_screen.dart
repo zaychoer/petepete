@@ -33,7 +33,6 @@ class PreviewScreen extends StatefulWidget {
 class _PreviewScreenState extends State<PreviewScreen> {
   SessionApi? _api;
   GroupRoster? _roster;
-  SessionDetail? _detail;
   Preview? _preview;
   List<String> _problems = const [];
   String? _error;
@@ -60,16 +59,14 @@ class _PreviewScreenState extends State<PreviewScreen> {
     });
     try {
       final roster = await _api!.roster(widget.groupId);
-      final detail = await _api!.session(widget.sessionId);
       if (!mounted) return;
       _roster = roster;
-      _detail = detail;
       final preview = await _api!.preview(widget.sessionId);
       if (mounted) setState(() => _preview = preview);
     } on ApiError catch (e) {
       if (!mounted) return;
       if (e.code == 'invalid_session' && e.details is List) {
-        setState(() => _problems = _describeProblems(e.details as List));
+        setState(() => _problems = _problemMessages(e.details as List));
       } else {
         setState(() => _error = e.message);
       }
@@ -78,31 +75,10 @@ class _PreviewScreenState extends State<PreviewScreen> {
     }
   }
 
-  List<String> _describeProblems(List problems) {
-    String itemName(Object? id) {
-      for (final i in _detail?.costItems ?? const <CostItem>[]) {
-        if (i.id == id) return i.label;
-      }
-      return 'pos biaya';
-    }
-
-    return [
-      for (final p in problems)
-        switch ((p as Map)['code']) {
-          'item_without_bearers' =>
-            'Pos "${itemName(p['id'])}" belum ada peserta hadir yang menanggung. Centang kehadiran atau ubah "Hanya untuk…".',
-          'item_without_payer' =>
-            'Pos "${itemName(p['id'])}" belum ada yang menalangi. Pilih penalangnya.',
-          'invalid_amount' =>
-            'Nominal pos "${itemName(p['id'])}" harus lebih dari Rp0.',
-          'invalid_weight' =>
-            'Ada peserta dengan bobot tidak valid. Bobot harus lebih dari 0.',
-          'total_cost_not_positive' =>
-            'Total biaya harus lebih dari Rp0. Tambah pos biaya dulu.',
-          final code => 'Masalah di sesi ini: $code.',
-        },
-    ];
-  }
+  /// The server's own text of each `invalid_session` problem (`message`).
+  List<String> _problemMessages(List problems) => [
+    for (final p in problems) (p as Map)['message'] as String,
+  ];
 
   Future<void> _issue() async {
     final key = _issueKey ??= newIdempotencyKey();

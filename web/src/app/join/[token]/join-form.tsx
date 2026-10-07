@@ -1,27 +1,12 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { ApiError, apiFetch } from "@/lib/api";
+import { ApiError, apiFetch, errorMessage } from "@/lib/api";
 import { appInviteUrl } from "@/lib/invite-url";
 
 interface JoinResult {
   member_id: number;
   group: { id: number; name: string };
-}
-
-/** The API's field messages are English changeset text; the page speaks Indonesian. */
-const FIELD_MESSAGES: Record<string, string> = {
-  display_name: "Isi namamu dulu ya.",
-  phone: "Nomor WhatsApp-nya kurang pas. Contoh: 0812 3456 7890, atau kosongkan saja.",
-};
-
-function localizeFields(fields: Record<string, string>): Record<string, string> {
-  return Object.fromEntries(
-    Object.entries(fields).map(([key, message]) => [
-      key,
-      FIELD_MESSAGES[key] ?? message,
-    ]),
-  );
 }
 
 export function JoinForm({
@@ -42,18 +27,12 @@ export function JoinForm({
     event.preventDefault();
     if (submitting) return;
 
-    const name = displayName.trim();
-    if (!name) {
-      setFieldErrors({ display_name: FIELD_MESSAGES.display_name });
-      return;
-    }
-
     setSubmitting(true);
     setFieldErrors({});
     setFormError(null);
     try {
       const body: { display_name: string; phone?: string } = {
-        display_name: name,
+        display_name: displayName.trim(),
       };
       if (phone.trim()) body.phone = phone.trim();
       setJoined(
@@ -63,19 +42,11 @@ export function JoinForm({
         }),
       );
     } catch (error) {
-      if (error instanceof ApiError && error.status === 422) {
-        setFieldErrors(localizeFields(error.fields));
-        if (Object.keys(error.fields).length === 0) setFormError(error.message);
-      } else if (error instanceof ApiError && error.status === 404) {
-        setFormError(
-          "Link undangan ini sudah nggak berlaku. Minta link baru ke host.",
-        );
+      if (error instanceof ApiError && Object.keys(error.fields).length > 0) {
+        // Each field shows the server's own text for it.
+        setFieldErrors(error.fields);
       } else {
-        setFormError(
-          error instanceof ApiError
-            ? error.message
-            : "Ada yang salah. Coba lagi ya.",
-        );
+        setFormError(errorMessage(error));
       }
     } finally {
       setSubmitting(false);

@@ -141,6 +141,8 @@ class SessionDetail {
     required this.startsAt,
     required this.status,
     required this.progress,
+    required this.statusLabel,
+    required this.progressLabel,
     required this.costItems,
     required this.participants,
   });
@@ -154,6 +156,10 @@ class SessionDetail {
 
   /// `draft`, `issued`, `settled`, `cancelled` (derived by the server).
   final String progress;
+
+  /// The server's text for [status] and [progress] ("Draft", "Ditagih", "Selesai").
+  final String statusLabel;
+  final String progressLabel;
   final List<CostItem> costItems;
   final List<Participant> participants;
 
@@ -181,7 +187,9 @@ class SessionDetail {
       groupId: _int(s['group_id']),
       startsAt: s['starts_at'] as String?,
       status: s['status'] as String,
-      progress: s['progress'] as String? ?? s['status'] as String,
+      progress: s['progress'] as String,
+      statusLabel: s['status_label'] as String,
+      progressLabel: s['progress_label'] as String,
       costItems: [
         for (final i in (j['cost_items'] as List? ?? const []))
           CostItem.fromJson(i as Json),
@@ -322,8 +330,10 @@ class ShareEntry {
     required this.billId,
     required this.displayName,
     required this.status,
+    required this.statusLabel,
     required this.amountDue,
     required this.paidVia,
+    required this.paidViaLabel,
     required this.paidAt,
     required this.cashCancellable,
     required this.hasPhone,
@@ -337,10 +347,16 @@ class ShareEntry {
 
   /// `unpaid`, `paid`, `needs_review` or `void` (a bill of an earlier, voided issue).
   final String status;
+
+  /// The server's text for [status].
+  final String statusLabel;
   final int amountDue;
 
   /// How a paid bill was paid: `cash`, `gateway` or `credit`; null while unpaid.
   final String? paidVia;
+
+  /// The server's text for [paidVia] ("Cash", "Online", "Saldo").
+  final String? paidViaLabel;
   final String? paidAt;
 
   /// The server says the cash payment can still be undone (within 24 hours).
@@ -356,8 +372,10 @@ class ShareEntry {
     billId: _int(j['bill_id']),
     displayName: j['display_name'] as String? ?? '',
     status: j['status'] as String,
+    statusLabel: j['status_label'] as String,
     amountDue: _int(j['amount_due']),
     paidVia: j['paid_via'] as String?,
+    paidViaLabel: j['paid_via_label'] as String?,
     paidAt: j['paid_at'] as String?,
     cashCancellable: j['cash_cancellable'] == true,
     hasPhone: j['has_phone'] as bool? ?? false,

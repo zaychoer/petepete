@@ -4,7 +4,7 @@ defmodule PetepeteWeb.SessionBillingControllerTest do
   import Ecto.Query, only: [from: 2]
   import Petepete.Fixtures
 
-  alias Petepete.{Clock, Ledger, Repo}
+  alias Petepete.{Clock, Contract, Ledger, Repo}
 
   setup do
     Clock.freeze(~U[2026-10-06 03:00:00Z])
@@ -31,7 +31,9 @@ defmodule PetepeteWeb.SessionBillingControllerTest do
     test "returns the breakdown the preview screen needs", %{conn: conn, user: user} do
       ctx = group_with_session(user)
 
-      body = conn |> get(~p"/api/sessions/#{ctx.session.id}/preview") |> json_response(200)
+      conn = get(conn, ~p"/api/sessions/#{ctx.session.id}/preview")
+      body = json_response(conn, 200)
+      Contract.check!("preview.ok", conn)
 
       assert %{
                "total_cost" => 100_000,
@@ -63,14 +65,17 @@ defmodule PetepeteWeb.SessionBillingControllerTest do
       member_fixture(ctx.group, role: "member", user: member_user)
       {stranger_conn, _} = bearer_login(build_conn())
 
-      assert get(member_conn, ~p"/api/sessions/#{ctx.session.id}/preview")
-             |> json_response(403) == %{"error" => "forbidden"}
+      assert %{"error" => "forbidden"} =
+               get(member_conn, ~p"/api/sessions/#{ctx.session.id}/preview")
+               |> json_response(403)
 
-      assert get(stranger_conn, ~p"/api/sessions/#{ctx.session.id}/preview")
-             |> json_response(404) == %{"error" => "not_found"}
+      assert %{"error" => "not_found"} =
+               get(stranger_conn, ~p"/api/sessions/#{ctx.session.id}/preview")
+               |> json_response(404)
 
-      assert get(conn, ~p"/api/sessions/#{other.session.id}/preview")
-             |> json_response(404) == %{"error" => "not_found"}
+      assert %{"error" => "not_found"} =
+               get(conn, ~p"/api/sessions/#{other.session.id}/preview")
+               |> json_response(404)
 
       assert get(conn, ~p"/api/sessions/0/preview") |> json_response(404)
     end
@@ -83,8 +88,59 @@ defmodule PetepeteWeb.SessionBillingControllerTest do
       ctx = group_with_session(user)
       Repo.update_all(Petepete.Billing.Participant, set: [attended: false])
 
-      assert %{"error" => "invalid_session", "problems" => [%{"code" => "item_without_bearers"}]} =
-               conn |> get(~p"/api/sessions/#{ctx.session.id}/preview") |> json_response(422)
+      response = get(conn, ~p"/api/sessions/#{ctx.session.id}/preview")
+
+      assert %{
+               "error" => "invalid_session",
+               "problems" => [
+                 %{"code" => "item_without_bearers", "message" => message, "id" => id}
+               ]
+             } = json_response(response, 422)
+
+      assert message =~ ~s(Pos "lapangan" belum ada peserta hadir)
+      assert is_integer(id)
+
+      Contract.check!("errors/invalid_session", response)
+    end
+  end
+
+  describe "invalid_session problem messages" do
+    test "every problem code has server text naming the item or the member", %{user: user} do
+      ctx = group_with_session(user)
+      [item] = Petepete.Billing.list_cost_items(ctx.session.id)
+      Repo.update_all(Petepete.Billing.CostItem, set: [label: "Minum"])
+
+      assert [
+               %{code: "item_without_bearers", id: id, message: bearers},
+               %{code: "item_without_payer", message: payer},
+               %{code: "invalid_amount", message: amount},
+               %{code: "invalid_weight", id: member_id, message: weight},
+               %{code: "invalid_rounding_unit", id: nil, message: rounding},
+               %{code: "total_cost_not_positive", id: nil, message: total}
+             ] =
+               PetepeteWeb.SessionProblems.render(
+                 [
+                   {:item_without_bearers, item.id},
+                   {:item_without_payer, item.id},
+                   {:invalid_amount, item.id},
+                   {:invalid_weight, ctx.host.id},
+                   :invalid_rounding_unit,
+                   :total_cost_not_positive
+                 ],
+                 ctx.session.id
+               )
+
+      assert {id, member_id} == {item.id, ctx.host.id}
+
+      rendered = ~w(item_without_bearers item_without_payer invalid_amount invalid_weight
+                    invalid_rounding_unit total_cost_not_positive)
+
+      assert Enum.sort(rendered) == PetepeteWeb.SessionProblems.codes()
+      assert bearers =~ ~s(Pos "Minum")
+      assert payer =~ ~s(Pos "Minum")
+      assert amount =~ ~s(pos "Minum")
+      assert weight =~ ctx.host.display_name
+      assert Enum.all?([rounding, total], &(is_binary(&1) and &1 != ""))
     end
   end
 
@@ -98,7 +154,9 @@ defmodule PetepeteWeb.SessionBillingControllerTest do
     test "issues bills and returns them with the txn id", %{conn: conn, user: user} do
       ctx = group_with_session(user)
 
-      body = issue(conn, ctx.session.id, "key-1") |> json_response(200)
+      conn = issue(conn, ctx.session.id, "key-1")
+      body = json_response(conn, 200)
+      Contract.check!("issue.issued", conn)
 
       assert %{"replayed" => false, "txn_id" => txn_id, "bills" => bills} = body
       assert [%{id: ^txn_id}] = Ledger.txns(ctx.group.id)
@@ -135,8 +193,16 @@ defmodule PetepeteWeb.SessionBillingControllerTest do
       ctx = group_with_session(user)
       issue(conn, ctx.session.id, "one") |> json_response(200)
 
-      assert %{"error" => "invalid_transition", "entity" => "session", "status" => "issued"} =
-               issue(conn, ctx.session.id, "two") |> json_response(409)
+      conflict = issue(conn, ctx.session.id, "two")
+
+      assert %{
+               "error" => "invalid_transition",
+               "entity" => "session",
+               "status" => "issued",
+               "status_label" => "Ditagih"
+             } = json_response(conflict, 409)
+
+      Contract.check!("errors/invalid_transition", conflict)
 
       assert %{"error" => "idempotency_key_required"} =
                post(conn, ~p"/api/sessions/#{ctx.session.id}/issue") |> json_response(422)

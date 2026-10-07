@@ -63,13 +63,13 @@ defmodule Petepete.Sessions.Event do
     case get_field(changeset, :type) do
       "recurring" ->
         changeset
-        |> reject_param(params, :starts_at, "is for one-off events; give rrule and time")
+        |> reject_param(params, :starts_at, :one_off_only)
         |> put_rrule(params)
 
       "one_off" ->
         changeset
-        |> reject_param(params, :rrule, "is for recurring events; give starts_at")
-        |> reject_param(params, :time, "is for recurring events; give starts_at")
+        |> reject_param(params, :rrule, :recurring_only)
+        |> reject_param(params, :time, :recurring_only)
         |> put_starts_at(params)
 
       _ ->
@@ -77,10 +77,10 @@ defmodule Petepete.Sessions.Event do
     end
   end
 
-  defp reject_param(changeset, params, field, message) do
+  defp reject_param(changeset, params, field, kind) do
     if is_nil(params[Atom.to_string(field)]),
       do: changeset,
-      else: add_error(changeset, field, message)
+      else: add_error(changeset, field, Atom.to_string(kind), validation: kind)
   end
 
   defp put_rrule(changeset, params) do
@@ -89,15 +89,11 @@ defmodule Petepete.Sessions.Event do
       put_change(changeset, :rrule, RRule.to_string(rule))
     else
       {:error, :time_required} ->
-        add_error(
-          changeset,
-          :time,
-          "is required (HH:MM in WIB), or give BYHOUR/BYMINUTE in rrule"
-        )
+        add_error(changeset, :time, "time_required", validation: :time_required)
 
-      {:error, message} when is_binary(message) ->
-        field = if String.starts_with?(message, "time "), do: :time, else: :rrule
-        add_error(changeset, field, message)
+      {:error, {kind, opts}} ->
+        field = if kind in [:time_format, :time_conflict], do: :time, else: :rrule
+        add_error(changeset, field, Atom.to_string(kind), [validation: kind] ++ opts)
     end
   end
 
@@ -111,17 +107,13 @@ defmodule Petepete.Sessions.Event do
       put_change(changeset, :starts_at, DateTime.truncate(utc, :second))
     else
       nil ->
-        add_error(changeset, :starts_at, "is required for a one-off event")
+        add_error(changeset, :starts_at, "starts_at_required", validation: :starts_at_required)
 
       {:error, :missing_offset} ->
-        add_error(changeset, :starts_at, "needs a UTC offset, e.g. 2026-10-08T19:00:00+07:00")
+        add_error(changeset, :starts_at, "starts_at_offset", validation: :starts_at_offset)
 
       _ ->
-        add_error(
-          changeset,
-          :starts_at,
-          "must be an ISO 8601 date and time, e.g. 2026-10-08T19:00:00+07:00"
-        )
+        add_error(changeset, :starts_at, "starts_at_format", validation: :starts_at_format)
     end
   end
 
@@ -131,7 +123,9 @@ defmodule Petepete.Sessions.Event do
         put_change(changeset, :cost_template, template)
 
       {:error, messages} ->
-        Enum.reduce(messages, changeset, &add_error(&2, :cost_template, &1))
+        Enum.reduce(messages, changeset, fn {kind, opts}, acc ->
+          add_error(acc, :cost_template, Atom.to_string(kind), [validation: kind] ++ opts)
+        end)
     end
   end
 end

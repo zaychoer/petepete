@@ -9,6 +9,7 @@ import 'package:petepete/api/idempotency_key.dart';
 import 'package:petepete/auth/token_store.dart';
 
 import '../support/fake_api.dart';
+import '../support/sample.dart';
 
 void main() {
   const phone = '6281234567890';
@@ -133,10 +134,9 @@ void main() {
           httpClient: MockClient((request) async => answer(request)),
         );
 
-    test('carry the server code with an Indonesian message', () async {
-      final api = clientAnswering(
-        (_) => http.Response('{"error":"rate_limited"}', 429),
-      );
+    test('carry the server code and its own message', () async {
+      final sample = Sample.error('rate_limited');
+      final api = clientAnswering((_) => http.Response(sample.encode(), 429));
 
       await expectLater(
         api.post(
@@ -149,39 +149,53 @@ void main() {
               .having((e) => e.statusCode, 'status', 429)
               .having((e) => e.code, 'code', 'rate_limited')
               .having((e) => e.isRateLimited, 'isRateLimited', isTrue)
-              .having((e) => e.message, 'message', contains('terlalu sering')),
+              .having((e) => e.message, 'message', sample.json['message']),
         ),
       );
     });
 
-    test('prefer the server message and keep details', () async {
-      final api = clientAnswering(
-        (_) => http.Response(
-          '{"error":"invalid_params","message":"Data belum lengkap.","details":{"amount":["wajib"]}}',
-          422,
-        ),
-      );
+    test('keep details next to the message', () async {
+      final sample = Sample.error('invalid_params');
+      final api = clientAnswering((_) => http.Response(sample.encode(), 422));
 
       await expectLater(
         api.get('/api/x', authenticated: false),
         throwsA(
           isA<ApiError>()
-              .having((e) => e.message, 'message', 'Data belum lengkap.')
-              .having((e) => e.details, 'details', {
-                'amount': ['wajib'],
-              }),
+              .having((e) => e.message, 'message', sample.json['message'])
+              .having((e) => e.details, 'details', sample.json['details']),
         ),
       );
     });
 
-    test('a non-JSON failure becomes server_error', () async {
-      final api = clientAnswering(
-        (_) => http.Response('<html>Bad Gateway</html>', 502),
-      );
+    test(
+      'a non-JSON failure becomes server_error with the local text',
+      () async {
+        final api = clientAnswering(
+          (_) => http.Response('<html>Bad Gateway</html>', 502),
+        );
+
+        await expectLater(
+          api.get('/api/x', authenticated: false),
+          throwsA(
+            isA<ApiError>()
+                .having((e) => e.code, 'code', 'server_error')
+                .having((e) => e.message, 'message', contains('Server lagi')),
+          ),
+        );
+      },
+    );
+
+    test('an offline phone gets the local network text', () async {
+      final api = clientAnswering((_) => throw http.ClientException('offline'));
 
       await expectLater(
         api.get('/api/x', authenticated: false),
-        throwsA(isA<ApiError>().having((e) => e.code, 'code', 'server_error')),
+        throwsA(
+          isA<ApiError>()
+              .having((e) => e.isNetwork, 'isNetwork', isTrue)
+              .having((e) => e.message, 'message', contains('Tidak bisa')),
+        ),
       );
     });
 

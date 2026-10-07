@@ -5,6 +5,7 @@ defmodule PetepeteWeb.WithdrawalControllerTest do
   import Ecto.Query
   import Petepete.Fixtures
 
+  alias Petepete.Contract
   alias Petepete.Ledger.{AuditLog, Entry, Txn}
   alias Petepete.Payments.Gateway.Fake
   alias Petepete.Payments.Withdrawal
@@ -50,8 +51,15 @@ defmodule PetepeteWeb.WithdrawalControllerTest do
        ctx do
     before = ledger_rows()
 
-    assert %{"withdrawal_id" => id, "status" => "submitted", "managed_url" => nil} =
-             ctx.owner |> withdraw(ctx.g, 200_000) |> json_response(201)
+    conn = withdraw(ctx.owner, ctx.g, 200_000)
+    Contract.check!("withdrawal.submitted", conn)
+
+    assert %{
+             "withdrawal_id" => id,
+             "status" => "submitted",
+             "status_label" => "Penarikan diajukan",
+             "managed_url" => nil
+           } = json_response(conn, 201)
 
     assert %Withdrawal{amount: 200_000, provider_ref: "fake-withdrawal-" <> _} =
              Repo.get!(Withdrawal, id)
@@ -62,7 +70,7 @@ defmodule PetepeteWeb.WithdrawalControllerTest do
     assert %{"withdrawals" => [%{"id" => ^id, "amount" => 200_000, "status_label" => label}]} =
              ctx.owner |> get(~p"/api/groups/#{ctx.g.id}/withdrawals") |> json_response(200)
 
-    assert is_binary(label)
+    assert label == "Penarikan diajukan"
     assert ledger_rows() == before
   end
 
@@ -73,8 +81,9 @@ defmodule PetepeteWeb.WithdrawalControllerTest do
     assert %{"replayed" => true, "withdrawal_id" => ^id} =
              ctx.owner |> withdraw(ctx.g, 100_000, "same") |> json_response(200)
 
-    assert %{"error" => "idempotency_key_conflict"} =
-             ctx.owner |> withdraw(ctx.g, 150_000, "same") |> json_response(422)
+    conflict = withdraw(ctx.owner, ctx.g, 150_000, "same")
+    Contract.check!("errors/idempotency_key_conflict", conflict)
+    assert %{"error" => "idempotency_key_conflict"} = json_response(conflict, 422)
 
     assert Repo.aggregate(Withdrawal, :count) == 1
 
@@ -83,8 +92,9 @@ defmodule PetepeteWeb.WithdrawalControllerTest do
   end
 
   test "more than the balance is rejected and nothing is recorded", ctx do
-    assert %{"error" => "insufficient_balance"} =
-             ctx.owner |> withdraw(ctx.g, 500_001) |> json_response(422)
+    over = withdraw(ctx.owner, ctx.g, 500_001)
+    Contract.check!("errors/insufficient_balance", over)
+    assert %{"error" => "insufficient_balance"} = json_response(over, 422)
 
     assert %{"status" => "submitted"} =
              ctx.owner |> withdraw(ctx.g, 500_000) |> json_response(201)
@@ -93,11 +103,14 @@ defmodule PetepeteWeb.WithdrawalControllerTest do
   end
 
   test "amounts must be positive whole rupiah", ctx do
-    assert %{"error" => "amount_not_positive"} =
-             ctx.owner |> withdraw(ctx.g, 0) |> json_response(422)
+    zero = withdraw(ctx.owner, ctx.g, 0)
+    Contract.check!("errors/amount_not_positive", zero)
+    assert %{"error" => "amount_not_positive"} = json_response(zero, 422)
 
-    assert %{"error" => "invalid_params"} =
-             ctx.owner |> withdraw(ctx.g, "100") |> json_response(422)
+    text = withdraw(ctx.owner, ctx.g, "100")
+    # `details` is a free-form field => message map, so this one test owns the sample.
+    Contract.check!("errors/invalid_params", text)
+    assert %{"error" => "invalid_params"} = json_response(text, 422)
 
     assert Repo.aggregate(Withdrawal, :count) == 0
   end
@@ -113,8 +126,81 @@ defmodule PetepeteWeb.WithdrawalControllerTest do
 
     on_exit(fn -> Application.put_env(:petepete, Fake, original) end)
 
-    assert %{"status" => "managed", "managed_url" => "https://dashboard.fake.test/withdraw"} =
-             ctx.owner |> withdraw(ctx.g, 100_000) |> json_response(201)
+    conn = withdraw(ctx.owner, ctx.g, 100_000)
+    Contract.check!("withdrawal.managed", conn)
+
+    assert %{
+             "status" => "managed",
+             "status_label" => "Selesaikan di dashboard gateway",
+             "managed_url" => "https://dashboard.fake.test/withdraw"
+           } = json_response(conn, 201)
+  end
+
+  test "a replay of a request whose outcome is not stored yet is pending", ctx do
+    Repo.insert!(%Withdrawal{
+      group_id: ctx.g.id,
+      payout_account_id: ctx.account.id,
+      amount: 100_000,
+      status: "pending",
+      idempotency_key: "stuck"
+    })
+
+    conn = withdraw(ctx.owner, ctx.g, 100_000, "stuck")
+    Contract.check!("withdrawal.pending", conn)
+
+    assert %{
+             "status" => "pending",
+             "status_label" => "Penarikan lagi diproses",
+             "replayed" => true
+           } =
+             json_response(conn, 200)
+  end
+
+  test "a refused request is 502 gateway_error and listed as failed", ctx do
+    Petepete.FakeGateway.configure(withdraw: {:error, :provider_down})
+
+    conn = withdraw(ctx.owner, ctx.g, 100_000)
+    Contract.check!("errors/gateway_error", conn)
+    assert %{"error" => "gateway_error"} = json_response(conn, 502)
+
+    assert %{"withdrawals" => [%{"status" => "failed", "status_label" => label}]} =
+             ctx.owner |> get(~p"/api/groups/#{ctx.g.id}/withdrawals") |> json_response(200)
+
+    assert label == "Penarikan gagal. Coba lagi."
+  end
+
+  test "history lists every status with its label, newest first", ctx do
+    rows = [
+      {"failed", nil, nil},
+      {"pending", nil, nil},
+      {"submitted", "fake-withdrawal-1", nil},
+      {"managed", nil, "https://dashboard.fake.test/withdraw"}
+    ]
+
+    for {{status, ref, url}, i} <- Enum.with_index(rows) do
+      Repo.insert!(%Withdrawal{
+        group_id: ctx.g.id,
+        payout_account_id: ctx.account.id,
+        amount: 10_000 * (i + 1),
+        status: status,
+        provider_ref: ref,
+        managed_url: url,
+        idempotency_key: "h#{i}",
+        inserted_at: DateTime.add(~U[2026-10-06 03:00:00Z], i, :minute)
+      })
+    end
+
+    conn = get(ctx.owner, ~p"/api/groups/#{ctx.g.id}/withdrawals")
+    Contract.check!("withdrawals.history", conn)
+
+    assert %{"withdrawals" => list} = json_response(conn, 200)
+
+    assert Enum.map(list, &{&1["status"], &1["status_label"]}) == [
+             {"managed", "Selesaikan di dashboard gateway"},
+             {"submitted", "Penarikan diajukan"},
+             {"pending", "Penarikan lagi diproses"},
+             {"failed", "Penarikan gagal. Coba lagi."}
+           ]
   end
 
   test "only the payout account owner may withdraw", ctx do
@@ -132,15 +218,21 @@ defmodule PetepeteWeb.WithdrawalControllerTest do
   test "an account still in KYC cannot withdraw", ctx do
     ctx.account |> Ecto.Changeset.change(status: "pending_kyc") |> Repo.update!()
 
-    assert %{"error" => "payout_account_not_active"} =
-             ctx.owner |> withdraw(ctx.g, 100_000) |> json_response(422)
+    conn = withdraw(ctx.owner, ctx.g, 100_000)
+    Contract.check!("errors/payout_account_not_active", conn)
+    assert %{"error" => "payout_account_not_active"} = json_response(conn, 422)
   end
 
   test "a group without a payout account cannot withdraw", %{conn: conn} do
     g = group_fixture()
     {host, _} = login(conn, g, "host")
 
-    assert %{"error" => "no_payout_account"} = host |> withdraw(g, 1_000) |> json_response(422)
+    conn = withdraw(host, g, 1_000)
+    Contract.check!("errors/no_payout_account", conn)
+    assert %{"error" => "no_payout_account"} = json_response(conn, 422)
+
+    balance = get(host, ~p"/api/groups/#{g.id}/payout-account/balance")
+    assert %{"error" => "no_payout_account", "message" => _} = json_response(balance, 422)
   end
 
   test "withdrawals of another group are never visible", ctx do
@@ -157,11 +249,25 @@ defmodule PetepeteWeb.WithdrawalControllerTest do
 
   describe "GET payout-account/balance" do
     test "the owner sees the balance and may withdraw", ctx do
+      conn = get(ctx.owner, ~p"/api/groups/#{ctx.g.id}/payout-account/balance")
+      Contract.check!("payout_balance.active", conn)
+
       assert %{
                "balance" => 500_000,
                "status" => "active",
+               "status_label" => "Aktif",
                "owner" => true,
                "can_withdraw" => true
+             } = json_response(conn, 200)
+    end
+
+    test "an account still in KYC says so", ctx do
+      ctx.account |> Ecto.Changeset.change(status: "pending_kyc") |> Repo.update!()
+
+      assert %{
+               "status" => "pending_kyc",
+               "status_label" => "Menunggu verifikasi (KYC)",
+               "can_withdraw" => false
              } =
                ctx.owner
                |> get(~p"/api/groups/#{ctx.g.id}/payout-account/balance")

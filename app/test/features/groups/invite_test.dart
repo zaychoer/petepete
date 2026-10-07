@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/fake_groups_api.dart';
+import '../../support/sample.dart';
 
 FakeGroupsApi _hostOfFutsal() {
   final fake = FakeGroupsApi();
@@ -130,7 +131,7 @@ void main() {
       },
     );
 
-    testWidgets('a reset link says it no longer works', (tester) async {
+    testWidgets('a reset link shows the server message', (tester) async {
       final fake = _hostOfFutsal()..inviteExpired = true;
       final app = AppHarness(fake);
       await app.pump(tester, app.screenRouter('/join/token-5'));
@@ -138,7 +139,10 @@ void main() {
       await tester.tap(find.text('Gabung'));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('sudah tidak berlaku'), findsOneWidget);
+      expect(
+        find.text(Sample.errorMessage('invite_not_found')),
+        findsOneWidget,
+      );
       expect(find.text('Beranda'), findsNothing);
     });
 
@@ -171,7 +175,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.textContaining('Sudah ada yang mengajukan klaim'),
+        find.text(Sample.error('claim_pending').json['message'] as String),
         findsOneWidget,
       );
       expect(find.text('Permintaan terkirim'), findsNothing);

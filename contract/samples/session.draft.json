@@ -1,0 +1,168 @@
+{
+  "cost_items": [
+    {
+      "amount": 60000,
+      "bearer_ids": [
+        1769,
+        1772,
+        1773,
+        1774,
+        1775,
+        1776
+      ],
+      "category": "minum",
+      "id": 277,
+      "label": null,
+      "members": [
+        1769,
+        1772,
+        1773,
+        1774,
+        1775,
+        1776
+      ],
+      "paid_by": 1769,
+      "paid_by_name": "Member 322",
+      "scope": "subset",
+      "session_id": 344
+    },
+    {
+      "amount": 350000,
+      "bearer_ids": [
+        1769,
+        1772,
+        1773,
+        1774,
+        1775,
+        1776,
+        1777,
+        1778,
+        1779,
+        1780
+      ],
+      "category": "lapangan",
+      "id": 278,
+      "label": null,
+      "members": [],
+      "paid_by": 1769,
+      "paid_by_name": "Member 322",
+      "scope": "all",
+      "session_id": 344
+    },
+    {
+      "amount": 100000,
+      "bearer_ids": [
+        1769,
+        1772,
+        1773,
+        1774,
+        1775,
+        1776,
+        1777,
+        1778,
+        1779,
+        1780
+      ],
+      "category": "wasit",
+      "id": 279,
+      "label": null,
+      "members": [],
+      "paid_by": 1769,
+      "paid_by_name": "Member 322",
+      "scope": "all",
+      "session_id": 344
+    }
+  ],
+  "participants": [
+    {
+      "attended": true,
+      "display_name": "Member 322",
+      "member_id": 1769,
+      "role": "host",
+      "role_label": "Host",
+      "weight": 1000
+    },
+    {
+      "attended": true,
+      "display_name": "Member 994",
+      "member_id": 1772,
+      "role": "member",
+      "role_label": "Anggota",
+      "weight": 1000
+    },
+    {
+      "attended": true,
+      "display_name": "Member 1026",
+      "member_id": 1773,
+      "role": "member",
+      "role_label": "Anggota",
+      "weight": 1000
+    },
+    {
+      "attended": true,
+      "display_name": "Member 1058",
+      "member_id": 1774,
+      "role": "member",
+      "role_label": "Anggota",
+      "weight": 1000
+    },
+    {
+      "attended": true,
+      "display_name": "Member 1090",
+      "member_id": 1775,
+      "role": "member",
+      "role_label": "Anggota",
+      "weight": 1000
+    },
+    {
+      "attended": true,
+      "display_name": "Member 1122",
+      "member_id": 1776,
+      "role": "member",
+      "role_label": "Anggota",
+      "weight": 1000
+    },
+    {
+      "attended": true,
+      "display_name": "Member 1154",
+      "member_id": 1777,
+      "role": "member",
+      "role_label": "Anggota",
+      "weight": 1000
+    },
+    {
+      "attended": true,
+      "display_name": "Member 1186",
+      "member_id": 1778,
+      "role": "member",
+      "role_label": "Anggota",
+      "weight": 1000
+    },
+    {
+      "attended": true,
+      "display_name": "Member 1218",
+      "member_id": 1779,
+      "role": "member",
+      "role_label": "Anggota",
+      "weight": 1000
+    },
+    {
+      "attended": true,
+      "display_name": "Member 1250",
+      "member_id": 1780,
+      "role": "member",
+      "role_label": "Anggota",
+      "weight": 1000
+    }
+  ],
+  "session": {
+    "event_id": 333,
+    "group_id": 721,
+    "id": 344,
+    "progress": "draft",
+    "progress_label": "Draft",
+    "starts_at": "2026-10-08T12:00:00Z",
+    "status": "draft",
+    "status_label": "Draft"
+  }
+}

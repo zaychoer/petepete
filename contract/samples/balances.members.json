@@ -1,0 +1,25 @@
+{
+  "kas": 20000,
+  "members": [
+    {
+      "balance": 0,
+      "display_name": "Member 6114",
+      "member_id": 11344
+    },
+    {
+      "balance": 0,
+      "display_name": "Member 6210",
+      "member_id": 11345
+    },
+    {
+      "balance": -20000,
+      "display_name": "Andi",
+      "member_id": 11347
+    },
+    {
+      "balance": 0,
+      "display_name": "Budi",
+      "member_id": 11348
+    }
+  ]
+}

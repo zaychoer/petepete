@@ -1,0 +1,49 @@
+{
+  "bills": [
+    {
+      "amount_due": 0,
+      "credit_applied": 34000,
+      "display_name": "Member 1954",
+      "id": 655,
+      "member_id": 1840,
+      "paid_via": "credit",
+      "paid_via_label": "Saldo",
+      "pay_token": "H9qQQPsa8cAIXP1G0e2Ql9equCYL_xc9",
+      "share": 34000,
+      "status": "paid",
+      "status_label": "Lunas",
+      "token_expires_at": "2026-11-05T03:00:00Z"
+    },
+    {
+      "amount_due": 34000,
+      "credit_applied": 0,
+      "display_name": "Member 1986",
+      "id": 656,
+      "member_id": 1841,
+      "paid_via": null,
+      "paid_via_label": null,
+      "pay_token": "dzuFA85rKasuHhwA4vXJNcOLcTLHD7aG",
+      "share": 34000,
+      "status": "unpaid",
+      "status_label": "Belum bayar",
+      "token_expires_at": "2026-11-05T03:00:00Z"
+    },
+    {
+      "amount_due": 34000,
+      "credit_applied": 0,
+      "display_name": "Member 2018",
+      "id": 657,
+      "member_id": 1842,
+      "paid_via": null,
+      "paid_via_label": null,
+      "pay_token": "HW-M9ArqsGqHKIA15X6K2kDqbQHygRay",
+      "share": 34000,
+      "status": "unpaid",
+      "status_label": "Belum bayar",
+      "token_expires_at": "2026-11-05T03:00:00Z"
+    }
+  ],
+  "replayed": false,
+  "session_id": 360,
+  "txn_id": 440
+}
