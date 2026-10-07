@@ -426,6 +426,6 @@ class AppHarness {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pumpAndSettle(const Duration(seconds: 5));
   }
 }

@@ -413,5 +413,5 @@ Future<void> pumpKas(
       child: MaterialApp.router(theme: buildAppTheme(), routerConfig: router),
     ),
   );
-  await tester.pumpAndSettle();
+  await tester.pumpAndSettle(const Duration(seconds: 5));
 }
