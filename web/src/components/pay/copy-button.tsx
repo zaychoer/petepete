@@ -1,5 +1,3 @@
-"use client";
-
 import { useState } from "react";
 
 export function CopyButton({ value, label }: { value: string; label: string }) {

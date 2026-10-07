@@ -1,5 +1,3 @@
-"use client";
-
 import { useState, type FormEvent } from "react";
 import { ApiError, apiFetch, errorMessage } from "@/lib/api";
 import { appInviteUrl } from "@/lib/invite-url";

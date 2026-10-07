@@ -1,12 +1,13 @@
-import type { Breadcrumb, ErrorEvent, Log, Metric } from "@sentry/nextjs";
+import type { Breadcrumb, ErrorEvent, Log, Metric } from "@sentry/core";
 import { scrub } from "./sentry-scrub";
 
-// Shared by the client, server and edge Sentry.init calls.
-// NEXT_PUBLIC_SENTRY_DSN is inlined at build time; unset or blank disables Sentry.
+// Shared by the client and server Sentry.init calls.
+// VITE_SENTRY_DSN is inlined at build time; unset or blank disables Sentry.
 export const sentryOptions = {
-  dsn: process.env.NEXT_PUBLIC_SENTRY_DSN?.trim() || undefined,
+  dsn: (import.meta.env.VITE_SENTRY_DSN as string | undefined)?.trim() || undefined,
   environment:
-    process.env.NEXT_PUBLIC_VERCEL_ENV ?? process.env.NODE_ENV ?? "production",
+    (import.meta.env.VITE_VERCEL_ENV as string | undefined) ??
+    (import.meta.env.MODE === "production" ? "production" : "development"),
   dataCollection: { userInfo: false },
   beforeSend: (event: ErrorEvent): ErrorEvent =>
     scrub({ ...event, tags: { ...event.tags, layer: "web" } }),

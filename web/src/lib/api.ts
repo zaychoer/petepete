@@ -1,6 +1,6 @@
 /**
- * Tiny client for the Petepete API, used by server components (first paint) and client
- * components (polling, forms). The base URL is public: `NEXT_PUBLIC_API_BASE_URL`.
+ * Tiny client for the Petepete API, used by server loaders (first paint) and client
+ * components (polling, forms). The base URL is public: `VITE_API_BASE_URL`.
  */
 
 export class ApiError extends Error {
@@ -26,11 +26,10 @@ export class ApiError extends Error {
 }
 
 export function apiBaseUrl(): string {
-  // Must be a literal `process.env.NEXT_PUBLIC_*` access so Next inlines it.
-  const configured = process.env.NEXT_PUBLIC_API_BASE_URL;
+  const configured = import.meta.env.VITE_API_BASE_URL as string | undefined;
   if (configured) return configured.replace(/\/+$/, "");
-  if (process.env.NODE_ENV !== "production") return "http://localhost:4000";
-  throw new Error("NEXT_PUBLIC_API_BASE_URL is not set");
+  if (import.meta.env.DEV) return "http://localhost:4000";
+  throw new Error("VITE_API_BASE_URL is not set");
 }
 
 /** Only for requests that got no answer at all (offline, DNS, CORS). */

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
 export function LegalPage({
@@ -10,7 +10,7 @@ export function LegalPage({
 }) {
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4 p-6 leading-relaxed">
-      <Link href="/" className="text-sm underline">
+      <Link to="/" className="text-sm underline">
         ← Petepete
       </Link>
       <h1 className="text-2xl font-semibold">{title}</h1>
