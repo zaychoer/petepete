@@ -23,13 +23,15 @@ defmodule Petepete.Payments.Withdrawals do
   `pending` by a crash between commit and outcome is therefore NOT retried automatically
   (the provider may have executed it); it needs a manual check at the provider. The
   Ledger is not touched.
+
+  The gateway request step is delegated to `WithdrawalIntent.request/2` so the
+  `IntentReconciler` can re-drive stuck rows through the same code path.
   """
   import Ecto.Query, only: [from: 2]
 
   alias Petepete.{Actor, HostAction}
   alias Petepete.Groups.PayoutAccount
-  alias Petepete.Payments
-  alias Petepete.Payments.Withdrawal
+  alias Petepete.Payments.{WithdrawalIntent, Withdrawal}
   alias Petepete.Repo
 
   @type error ::
@@ -121,15 +123,12 @@ defmodule Petepete.Payments.Withdrawals do
   defp run({:replay, withdrawal}, _actor, _group_id),
     do: {:ok, %{withdrawal: withdrawal, replayed: true}}
 
-  defp run({:call, account, withdrawal, replayed}, actor, group_id) do
+  defp run({:call, _account, withdrawal, replayed}, actor, group_id) do
     reference = "withdrawal-#{withdrawal.id}"
 
-    case Payments.gateway().withdraw(account.provider_account_id, withdrawal.amount, reference) do
-      {:ok, %{provider_ref: ref}} ->
-        settle(actor, group_id, withdrawal, replayed, status: "submitted", provider_ref: ref)
-
-      {:managed, url} ->
-        settle(actor, group_id, withdrawal, replayed, status: "managed", managed_url: url)
+    case WithdrawalIntent.request(withdrawal, reference) do
+      {:ok, changes} ->
+        settle(actor, group_id, withdrawal, replayed, Map.to_list(changes))
 
       {:error, reason} ->
         settle(actor, group_id, withdrawal, replayed, status: "failed")
@@ -215,7 +214,7 @@ defmodule Petepete.Payments.Withdrawals do
   end
 
   defp gateway_balance(%PayoutAccount{provider_account_id: id}) do
-    case Payments.gateway().balance(id) do
+    case Petepete.Payments.gateway().balance(id) do
       {:ok, balance} -> {:ok, balance}
       {:error, reason} -> {:error, {:gateway_error, reason}}
     end

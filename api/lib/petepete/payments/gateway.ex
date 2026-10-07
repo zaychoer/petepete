@@ -121,4 +121,13 @@ defmodule Petepete.Payments.Gateway do
               {:ok, %{provider_ref: String.t()}}
               | {:managed, dashboard_url :: String.t()}
               | {:error, term()}
+
+  @doc """
+  Checks the status of a withdrawal by its reference. Optional: adapters that do not
+  support it return `{:error, :unsupported}` (the default).
+  """
+  @callback withdrawal_status(reference :: String.t()) ::
+              {:ok, :submitted | :managed | :not_found} | {:error, :unsupported | term()}
+
+  @optional_callbacks [withdrawal_status: 1]
 end

@@ -39,6 +39,9 @@ defmodule Petepete.Payments.Gateway.Spy do
   @impl true
   defdelegate balance(provider_account_id), to: Fake
 
+
+  @impl true
+  defdelegate withdrawal_status(reference), to: Fake
   @impl true
   def withdraw(provider_account_id, amount, reference) do
     hook(:withdraw, reference)
