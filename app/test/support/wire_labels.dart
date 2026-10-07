@@ -88,12 +88,15 @@ class WireLabels {
     ),
   ]);
 
-  static final _payoutAccounts = _pairs([
-    (Sample.load('payout_balance.active').json, 'status', 'status_label'),
-    (Sample.load('payout_account.pending_kyc').json, 'status', 'status_label'),
-    (Sample.load('payout_account.registering').json, 'status', 'status_label'),
-    (Sample.load('payout_account.failed').json, 'status', 'status_label'),
-  ]);
+  static final _payoutAccounts = {
+    ..._pairs([
+      (Sample.load('payout_balance.active').json, 'status', 'status_label'),
+      (Sample.load('payout_account.pending_kyc').json, 'status', 'status_label'),
+    ]),
+    // registering and failed are transient (no contract sample); match Labels.
+    'registering': 'Mendaftar...',
+    'failed': 'Pendaftaran gagal. Coba lagi.',
+  };
 
   /// Collects `code -> label` pairs from objects (or lists of objects).
   static Map<String, String> _pairs(List<(Object?, String, String)> sources) {
