@@ -23,6 +23,18 @@ end
 config :petepete, PetepeteWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
+# Sentry is disabled (dsn nil) when SENTRY_DSN is absent or blank.
+# The environment name comes from SENTRY_ENVIRONMENT (set per Fly app).
+if sentry_dsn = System.get_env("SENTRY_DSN") do
+  config :sentry, dsn: if(String.trim(sentry_dsn) == "", do: nil, else: sentry_dsn)
+end
+
+# The bearer secret of GET /api/admin/metrics. Unset or blank: the endpoint answers 404.
+if config_env() != :test do
+  metrics_token = String.trim(System.get_env("METRICS_TOKEN", ""))
+  config :petepete, :metrics_token, if(metrics_token == "", do: nil, else: metrics_token)
+end
+
 if config_env() == :dev do
   config :petepete, PetepeteWeb.Endpoint,
     secret_key_base:
@@ -60,7 +72,40 @@ if config_env() == :prod do
       You can generate one by calling: mix phx.gen.secret
       """
 
+  # One policy for both adapter seams, see Petepete.AdapterPolicy and docs/deploy.md,
+  # "Adapters": no defaults, the module must load and implement the behaviour, and the
+  # fakes are refused unless ALLOW_FAKE_ADAPTERS=true (fly.staging.toml only).
+  allow_fake? = Petepete.AdapterPolicy.allow_fake?(System.get_env("ALLOW_FAKE_ADAPTERS"))
+
+  otp_sender = Petepete.AdapterPolicy.otp_sender!(System.get_env("OTP_SENDER"), allow_fake?)
+
+  otp_hmac_key =
+    System.get_env("OTP_HMAC_KEY") ||
+      raise """
+      environment variable OTP_HMAC_KEY is missing.
+      It keys the OTP hashes. Generate one with: openssl rand -base64 48
+      """
+
+  if byte_size(otp_hmac_key) < 32, do: raise("OTP_HMAC_KEY must be at least 32 bytes")
+
+  config :petepete, Petepete.Accounts, otp_sender: otp_sender, otp_hmac_key: otp_hmac_key
+
   host = System.get_env("PHX_HOST") || "example.com"
+
+  gateway = Petepete.AdapterPolicy.gateway!(System.get_env("PAYMENT_GATEWAY"), allow_fake?)
+
+  config :petepete, :gateway, gateway
+
+  # Public origin of the web app, where invite links point (https://host, no path).
+  web_base_url =
+    System.get_env("WEB_BASE_URL") ||
+      raise """
+      environment variable WEB_BASE_URL is missing.
+      It is the public origin of the web app that group invite links point to,
+      for example https://petepete.vercel.app
+      """
+
+  config :petepete, :web_base_url, web_base_url
 
   config :petepete, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
 

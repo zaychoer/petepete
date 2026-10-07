@@ -11,6 +11,27 @@ config :petepete,
   ecto_repos: [Petepete.Repo],
   generators: [timestamp_type: :utc_datetime]
 
+config :petepete, Oban,
+  engine: Oban.Engines.Basic,
+  repo: Petepete.Repo,
+  queues: [default: 10, payments: 10, notifications: 10],
+  plugins: [
+    # Cron expressions are UTC: 17:05 UTC is 00:05 WIB (UTC+7), daily.
+    {Oban.Plugins.Cron, crontab: [{"5 17 * * *", Petepete.Sessions.SessionScheduler}]}
+  ]
+
+# Payment gateway adapters. The adapter in use is set per environment
+# (`config :petepete, :gateway`: dev.exs, test.exs, runtime.exs for prod).
+# Fee tables: `flat` rupiah + `bps` basis points of the gross amount, PPN included.
+# These are placeholder figures for the fake adapter, not a provider's price list.
+config :petepete, Petepete.Payments.Gateway.Fake,
+  webhook_secret: "fake-webhook-secret",
+  fees: %{
+    "qris" => %{flat: 0, bps: 78},
+    "va" => %{flat: 4_440, bps: 0},
+    "ewallet" => %{flat: 0, bps: 167}
+  }
+
 # Configure the endpoint
 config :petepete, PetepeteWeb.Endpoint,
   url: [host: "localhost"],
@@ -19,13 +40,21 @@ config :petepete, PetepeteWeb.Endpoint,
     formats: [json: PetepeteWeb.ErrorJSON],
     layout: false
   ],
-  pubsub_server: Petepete.PubSub,
-  live_view: [signing_salt: "ZQyN0U8m"]
+  pubsub_server: Petepete.PubSub
 
 # Configure Elixir's Logger
 config :logger, :default_formatter,
   format: "$time $metadata[$level] $message\n",
   metadata: [:request_id]
+
+# Never log request parameters that identify or authenticate a person.
+config :phoenix, :filter_parameters, ["password", "phone", "code", "refresh_token"]
+
+# Sentry: DSN comes from SENTRY_DSN in config/runtime.exs; without it nothing is sent.
+# Every event carries the layer tag; Petepete.ErrorReporting masks phone numbers.
+config :sentry,
+  tags: %{layer: "api"},
+  before_send: {Petepete.ErrorReporting, :before_send}
 
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason

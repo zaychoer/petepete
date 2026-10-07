@@ -11,6 +11,11 @@ config :petepete, Petepete.Repo,
   show_sensitive_data_on_connection_error: true,
   pool_size: 10
 
+# OTP codes are logged (without the phone number), never sent.
+config :petepete, Petepete.Accounts,
+  otp_sender: Petepete.Accounts.OtpSender.Fake,
+  otp_hmac_key: "dev-only-otp-hmac-key-not-a-secret"
+
 # For development, we disable any cache and enable
 # debugging and code reloading.
 #
@@ -49,9 +54,6 @@ config :petepete, PetepeteWeb.Endpoint,
 # configured to run both http and https servers on
 # different ports.
 
-# Enable dev routes for dashboard and mailbox
-config :petepete, dev_routes: true
-
 # Do not include metadata nor timestamps in development logs
 config :logger, :default_formatter, format: "[$level] $message\n"
 
@@ -61,3 +63,8 @@ config :phoenix, :stacktrace_depth, 20
 
 # Initialize plugs at runtime for faster development compilation
 config :phoenix, :plug_init_mode, :runtime
+
+config :petepete, :gateway, Petepete.Payments.Gateway.Fake
+
+# Where invite links point: the web app (Next.js dev server).
+config :petepete, :web_base_url, "http://localhost:3000"

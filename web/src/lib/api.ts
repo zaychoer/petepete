@@ -1,0 +1,98 @@
+/**
+ * Tiny client for the Petepete API, used by server components (first paint) and client
+ * components (polling, forms). The base URL is public: `NEXT_PUBLIC_API_BASE_URL`.
+ */
+
+export class ApiError extends Error {
+  /** HTTP status, or 0 when the request never got an answer (offline, DNS, CORS). */
+  readonly status: number;
+  /** The API's `error` code, e.g. `bill_void`, `not_found`, `invalid`. */
+  readonly code: string;
+  /** Per-field messages of a 422 (`fields`), keyed by field name. */
+  readonly fields: Record<string, string>;
+
+  constructor(
+    status: number,
+    code: string,
+    message: string,
+    fields: Record<string, string> = {},
+  ) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = code;
+    this.fields = fields;
+  }
+}
+
+export function apiBaseUrl(): string {
+  // Must be a literal `process.env.NEXT_PUBLIC_*` access so Next inlines it.
+  const configured = process.env.NEXT_PUBLIC_API_BASE_URL;
+  if (configured) return configured.replace(/\/+$/, "");
+  if (process.env.NODE_ENV !== "production") return "http://localhost:4000";
+  throw new Error("NEXT_PUBLIC_API_BASE_URL is not set");
+}
+
+const NETWORK_MESSAGE = "Koneksi lagi bermasalah. Coba lagi ya.";
+
+/** `fields` of a 422 may hold a list of messages per field; keep the first. */
+function readFields(body: unknown): Record<string, string> {
+  if (typeof body !== "object" || body === null) return {};
+  const raw = (body as { fields?: unknown }).fields;
+  if (typeof raw !== "object" || raw === null) return {};
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    const first = Array.isArray(value) ? value[0] : value;
+    if (typeof first === "string") out[key] = first;
+  }
+  return out;
+}
+
+export async function apiFetch<T>(
+  path: string,
+  init: { method?: "GET" | "POST"; body?: unknown; signal?: AbortSignal } = {},
+): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(`${apiBaseUrl()}${path}`, {
+      method: init.method ?? "GET",
+      cache: "no-store",
+      signal: init.signal,
+      headers: {
+        accept: "application/json",
+        ...(init.body === undefined
+          ? {}
+          : { "content-type": "application/json" }),
+      },
+      body: init.body === undefined ? undefined : JSON.stringify(init.body),
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw error;
+    }
+    throw new ApiError(0, "network", NETWORK_MESSAGE);
+  }
+
+  let body: unknown = null;
+  try {
+    body = await response.json();
+  } catch {
+    // Non-JSON answer (proxy error page): handled below by status.
+  }
+
+  if (!response.ok) {
+    const payload =
+      typeof body === "object" && body !== null
+        ? (body as { error?: unknown; message?: unknown })
+        : {};
+    throw new ApiError(
+      response.status,
+      typeof payload.error === "string" ? payload.error : "unknown",
+      typeof payload.message === "string"
+        ? payload.message
+        : "Ada yang salah. Coba lagi ya.",
+      readFields(body),
+    );
+  }
+  return body as T;
+}

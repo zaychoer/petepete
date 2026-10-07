@@ -7,9 +7,15 @@ defmodule Petepete.Application do
 
   @impl true
   def start(_type, _args) do
+    # Fail the boot, not the first login, when no OTP sender is configured.
+    Petepete.Accounts.OtpSender.fetch!()
+
+    Petepete.ErrorReporting.install_logger_handlers()
+
     children = [
       PetepeteWeb.Telemetry,
       Petepete.Repo,
+      {Oban, Application.fetch_env!(:petepete, Oban)},
       {DNSCluster, query: Application.get_env(:petepete, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Petepete.PubSub},
       # Start a worker by calling: Petepete.Worker.start_link(arg)

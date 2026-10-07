@@ -28,6 +28,13 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // Host of the web app whose https://<host>/join/<token> invite links open this
+        // app (Android App Links). Set it with `webHost=<host>` in android/gradle.properties
+        // or ORG_GRADLE_PROJECT_webHost. The .invalid default matches nothing, so links
+        // open in the browser until a real host is configured. The same host must serve
+        // /.well-known/assetlinks.json for this app's signing key.
+        manifestPlaceholders["webHost"] =
+            (project.findProperty("webHost") as String?) ?: "petepete.invalid"
     }
 
     buildTypes {

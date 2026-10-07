@@ -1,49 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
-void main() {
-  runApp(const PetepeteApp());
-}
+import 'api/api_client.dart';
+import 'app/app.dart';
+import 'auth/auth_controller.dart';
+import 'auth/token_store.dart';
+import 'error_reporting.dart';
 
-class PetepeteApp extends StatelessWidget {
-  const PetepeteApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Petepete',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
-      ),
-      home: const PlaceholderScreen(),
+Future<void> main() async {
+  await runWithErrorReporting(() {
+    final tokens = SecureTokenStore();
+    final api = ApiClient(
+      baseUrl: apiBaseUrl,
+      httpClient: http.Client(),
+      tokens: tokens,
     );
-  }
-}
-
-/// Shown until onboarding (PP-GRP-01) replaces it.
-class PlaceholderScreen extends StatelessWidget {
-  const PlaceholderScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    return Scaffold(
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Petepete', style: textTheme.headlineMedium),
-              const SizedBox(height: 8),
-              Text(
-                'Patungan olahraga tanpa ribet. Aplikasinya lagi disiapin, sabar ya!',
-                style: textTheme.bodyLarge,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+    final auth = AuthController(api: api, tokens: tokens);
+    runApp(PetepeteApp(api: api, auth: auth));
+  });
 }

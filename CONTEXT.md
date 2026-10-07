@@ -18,6 +18,24 @@ _Avoid_: Admin, organizer, owner
 Anyone on a group's roster, with or without an app account; guests are members too.
 _Avoid_: User (a user is a login), participant (only those at a session)
 
+### Sessions and bills
+
+**Event**:
+What a group does, regularly or once, such as Thursday futsal.
+_Avoid_: Schedule, activity, match
+
+**Session**:
+One occurrence of an Event on a date, with its costs, attendance and bills.
+_Avoid_: Match, game, meeting
+
+**Bill**:
+One member's share of a Session.
+_Avoid_: Invoice, tagihan (UI only), debt
+
+**Payment attempt**:
+One request to pay a Bill through the gateway.
+_Avoid_: Payment (that is the money event), transaction
+
 ### Books
 
 **Ledger**:
@@ -53,7 +71,7 @@ A session cost a member paid out of pocket on the group's behalf, credited to th
 _Avoid_: Talangan (UI only), advance, reimbursement
 
 **Actor**:
-Who caused a money event: a host, the payment gateway, or the system.
+Who caused a money event: a host or the payment gateway.
 _Avoid_: User, initiator
 
 ### Undoing
