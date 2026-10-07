@@ -19,6 +19,6 @@ defmodule Petepete.Payments.Withdrawal do
     field :idempotency_key, :string
     field :retry_count, :integer, default: 0
 
-    timestamps(type: :utc_datetime)
+    timestamps(type: :utc_datetime, updated_at: false)
   end
 end

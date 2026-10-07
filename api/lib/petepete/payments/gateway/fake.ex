@@ -141,12 +141,12 @@ defmodule Petepete.Payments.Gateway.Fake do
   end
 
   @impl true
-  def withdrawal_status(_reference) do
+  def withdrawal_status(reference) do
     case config(:withdrawal_status, :auto) do
       :auto ->
-        # Known references (those created by withdraw/3 in this run) return :submitted;
-        # unknown ones return :not_found. In tests, configure :withdrawal_status explicitly.
-        {:ok, config(:withdrawal_status_result, :not_found)}
+        if String.starts_with?(reference, "withdrawal-"),
+          do: {:ok, :submitted},
+          else: {:ok, :not_found}
 
       result ->
         result

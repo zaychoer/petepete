@@ -20,6 +20,9 @@ defmodule Petepete.Payments.WithdrawalIntent do
   @impl true
   def kind, do: "withdrawal"
 
+  @doc false
+  def reference_from_row(%Withdrawal{id: id}), do: "withdrawal-#{id}"
+
   @impl true
   def prepare(%{account: account, key: key, amount: amount}) do
     case Repo.get_by(Withdrawal, group_id: account.group_id, idempotency_key: key) do
@@ -60,6 +63,12 @@ defmodule Petepete.Payments.WithdrawalIntent do
   def settle(row, {:ok, changes}) do
     withdrawal = Repo.get!(Withdrawal, row.id)
     updated = withdrawal |> Ecto.Changeset.change(Map.to_list(changes)) |> Repo.update!()
+    {:ok, updated}
+  end
+
+  def settle(row, {:error, :needs_review}) do
+    withdrawal = Repo.get!(Withdrawal, row.id)
+    updated = withdrawal |> Ecto.Changeset.change(status: "needs_review") |> Repo.update!()
     {:ok, updated}
   end
 

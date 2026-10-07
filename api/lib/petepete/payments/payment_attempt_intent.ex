@@ -96,7 +96,9 @@ defmodule Petepete.Payments.PaymentAttemptIntent do
       set: [status: "failed", updated_at: Clock.now()]
     )
 
-    {:error, :gateway_error}
+    # Return {:ok, ...} so the settle transaction commits the failed status.
+    # The caller (PayLink) maps this to {:error, :gateway_error}.
+    {:ok, Repo.get!(PaymentAttempt, row.id)}
   end
 
   @impl true

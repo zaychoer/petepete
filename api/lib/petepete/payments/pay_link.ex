@@ -114,7 +114,6 @@ defmodule Petepete.Payments.PayLink do
         do: %{method: method, fee: fee, gross_amount: amount_due + fee}
   end
 
-
   @doc """
   Creates (or returns the active) payment attempt of the bill behind `token` for `method`.
 
@@ -135,6 +134,8 @@ defmodule Petepete.Payments.PayLink do
         # Pending without provider data – call gateway via IntentRunner.
         true ->
           case IntentRunner.complete(PaymentAttemptIntent, row, ref) do
+            {:ok, %PaymentAttempt{status: "failed"}} -> {:error, :gateway_error}
+            {:ok, %PaymentAttempt{status: "cancelled"}} -> {:error, :bill_void}
             {:ok, attempt} -> {:ok, %{attempt: attempt, reused: false}}
             {:error, reason} -> {:error, reason}
           end
@@ -174,7 +175,6 @@ defmodule Petepete.Payments.PayLink do
 
   defp token_expired?(%Bill{token_expires_at: expires_at}, now),
     do: DateTime.compare(now, expires_at) != :lt
-
 
   defp expire_overdue(bill_id, now) do
     Repo.update_all(

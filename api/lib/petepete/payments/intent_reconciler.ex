@@ -1,89 +1,77 @@
 defmodule Petepete.Payments.IntentReconciler do
   @moduledoc """
-  Oban cron job (every 5 minutes) that sweeps stuck outbound intents (ADR-0005).
+  Oban cron worker (`*/5 * * * *`) that sweeps stuck outbound intents.
 
-  For each kind module, finds rows still pending/registering older than the threshold,
-  asks the module what to do (`recover/1`), and acts:
+  For each registered `OutboundIntent` kind module:
 
-    * `:redrive` – re-drives via `IntentRunner.redrive/2`; after `max_retries` the row
-      is marked `failed` and reported to Sentry.
-    * `:fail` – marks `failed` and reports to Sentry.
-    * `:needs_review` – marks `needs_review` and reports to Sentry.
+  1. `module.stuck(threshold)` — finds rows still pending/registering older than the threshold.
+  2. `module.recover(row)` — decides the action (`:redrive`, `:fail`, `:needs_review`).
+  3. Executes the action:
+     - `:redrive` → `IntentRunner.redrive(module, row)`.
+     - `:fail` → settles the row as failed and reports to Sentry.
+     - `:needs_review` → settles the row as needs_review and reports to Sentry.
   """
   use Oban.Worker, queue: :payments, max_attempts: 1
 
   alias Petepete.Payments.IntentRunner
-  alias Petepete.Payments.{PaymentAttemptIntent, WithdrawalIntent, PayoutRegistrationIntent}
-  alias Petepete.Repo
-
-  @kind_modules [PaymentAttemptIntent, WithdrawalIntent, PayoutRegistrationIntent]
+  alias Petepete.PhoneMask
 
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
-    threshold = threshold()
-    max_retries = max_retries()
+    threshold = stuck_threshold()
 
-    for module <- @kind_modules do
+    for module <- intent_modules() do
       module.stuck(threshold)
-      |> Enum.each(fn row -> handle_stuck(module, row, max_retries) end)
+      |> Enum.each(fn row -> handle_row(module, row) end)
     end
 
     :ok
   end
 
-  defp handle_stuck(module, row, max_retries) do
+  defp handle_row(module, row) do
     case module.recover(row) do
       :redrive ->
-        if row.retry_count >= max_retries do
-          mark_failed(row)
-          report("#{module.kind()}_exhausted_retries", row)
-        else
-          case IntentRunner.redrive(module, row) do
-            {:ok, _} -> :ok
-            {:error, _} -> :ok
-          end
+        case IntentRunner.redrive(module, row) do
+          {:ok, _settled} -> :ok
+          {:error, _reason} -> report_exhausted(module, row)
         end
 
       :fail ->
-        mark_failed(row)
-        report("#{module.kind()}_stuck_failed", row)
+        module.settle(row, {:error, :stuck_failed})
+        report_stuck(module, row, :fail)
 
       :needs_review ->
-        mark_needs_review(row)
-        report("#{module.kind()}_needs_review", row)
+        module.settle(row, {:error, :needs_review})
+        report_stuck(module, row, :needs_review)
     end
   end
 
-  defp mark_failed(row) do
-    row |> Ecto.Changeset.change(status: "failed") |> Repo.update!()
-  end
-
-  defp mark_needs_review(row) do
-    row |> Ecto.Changeset.change(status: "needs_review") |> Repo.update!()
-  end
-
-  defp report(message, row) do
-    Sentry.capture_message(message,
-      extra: %{
-        id: row.id,
-        kind: row.__struct__,
-        retry_count: row.retry_count
-      }
+  defp report_stuck(module, row, action) do
+    Sentry.capture_message(
+      "IntentReconciler: #{action} for #{module.kind()}",
+      extra: PhoneMask.scrub(%{id: row.id, kind: module.kind(), action: action})
     )
   end
 
-  defp threshold do
+  defp report_exhausted(module, row) do
+    Sentry.capture_message(
+      "IntentReconciler: redrive failed for #{module.kind()}",
+      extra: PhoneMask.scrub(%{id: row.id, kind: module.kind(), retry_count: row.retry_count})
+    )
+  end
+
+  defp stuck_threshold do
     seconds =
       :petepete
       |> Application.get_env(Petepete.Payments, [])
       |> Keyword.get(:intent_stuck_threshold_seconds, 600)
 
-    DateTime.add(DateTime.utc_now(:second), -seconds, :second)
+    DateTime.utc_now() |> DateTime.add(-seconds, :second)
   end
 
-  defp max_retries do
+  defp intent_modules do
     :petepete
     |> Application.get_env(Petepete.Payments, [])
-    |> Keyword.get(:intent_max_retries, 3)
+    |> Keyword.get(:intent_modules, [])
   end
 end

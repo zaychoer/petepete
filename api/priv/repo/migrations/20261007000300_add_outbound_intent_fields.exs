@@ -1,20 +1,16 @@
 defmodule Petepete.Repo.Migrations.AddOutboundIntentFields do
   use Ecto.Migration
 
-  # ADR-0005: outbound intent pattern – schema changes for retry tracking and new statuses.
   def up do
     # payment_attempts: add retry_count
     alter table(:payment_attempts) do
       add :retry_count, :integer, null: false, default: 0
     end
 
-    # withdrawals: add retry_count, add needs_review status, add updated_at
+    # withdrawals: add retry_count, extend status check constraint
     alter table(:withdrawals) do
       add :retry_count, :integer, null: false, default: 0
-      add :updated_at, :utc_datetime
     end
-
-    execute "UPDATE withdrawals SET updated_at = inserted_at"
 
     drop constraint(:withdrawals, :status_allowed)
 
@@ -22,8 +18,7 @@ defmodule Petepete.Repo.Migrations.AddOutboundIntentFields do
              check: "status IN ('pending', 'submitted', 'managed', 'failed', 'needs_review')"
            )
 
-    # payout_accounts: add retry_count, add registering/failed statuses,
-    # make provider_account_id nullable
+    # payout_accounts: add retry_count, make provider_account_id nullable, extend status check
     alter table(:payout_accounts) do
       add :retry_count, :integer, null: false, default: 0
       modify :provider_account_id, :text, null: true, from: {:text, null: false}
@@ -32,24 +27,16 @@ defmodule Petepete.Repo.Migrations.AddOutboundIntentFields do
     drop constraint(:payout_accounts, :status_allowed)
 
     create constraint(:payout_accounts, :status_allowed,
-             check: "status IN ('registering', 'pending_kyc', 'active', 'failed')"
+             check: "status IN ('pending_kyc', 'active', 'registering', 'failed')"
            )
   end
 
   def down do
-    alter table(:payment_attempts) do
-      remove :retry_count
-    end
+    # payout_accounts: revert
+    drop constraint(:payout_accounts, :status_allowed)
 
-    alter table(:withdrawals) do
-      remove :retry_count
-      remove :updated_at
-    end
-
-    drop constraint(:withdrawals, :status_allowed)
-
-    create constraint(:withdrawals, :status_allowed,
-             check: "status IN ('pending', 'submitted', 'managed', 'failed')"
+    create constraint(:payout_accounts, :status_allowed,
+             check: "status IN ('pending_kyc', 'active')"
            )
 
     alter table(:payout_accounts) do
@@ -57,10 +44,20 @@ defmodule Petepete.Repo.Migrations.AddOutboundIntentFields do
       modify :provider_account_id, :text, null: false, from: {:text, null: true}
     end
 
-    drop constraint(:payout_accounts, :status_allowed)
+    # withdrawals: revert
+    drop constraint(:withdrawals, :status_allowed)
 
-    create constraint(:payout_accounts, :status_allowed,
-             check: "status IN ('pending_kyc', 'active')"
+    create constraint(:withdrawals, :status_allowed,
+             check: "status IN ('pending', 'submitted', 'managed', 'failed')"
            )
+
+    alter table(:withdrawals) do
+      remove :retry_count
+    end
+
+    # payment_attempts: revert
+    alter table(:payment_attempts) do
+      remove :retry_count
+    end
   end
 end

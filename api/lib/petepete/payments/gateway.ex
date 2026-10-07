@@ -123,8 +123,8 @@ defmodule Petepete.Payments.Gateway do
               | {:error, term()}
 
   @doc """
-  Checks the status of a withdrawal by its reference. Optional: adapters that do not
-  support it return `{:error, :unsupported}` (the default).
+  Checks the status of a withdrawal at the provider by its reference.
+  Returns `{:error, :unsupported}` when the adapter has no such API.
   """
   @callback withdrawal_status(reference :: String.t()) ::
               {:ok, :submitted | :managed | :not_found} | {:error, :unsupported | term()}

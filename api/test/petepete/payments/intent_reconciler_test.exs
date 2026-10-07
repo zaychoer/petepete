@@ -2,7 +2,6 @@ defmodule Petepete.Payments.IntentReconcilerTest do
   # Not async: the fake gateway's behaviour is application config.
   use Petepete.DataCase, async: false
 
-
   alias Petepete.{BillingScenario, Clock, FakeGateway}
   alias Petepete.Groups.PayoutAccount
   alias Petepete.Payments.{IntentReconciler, PaymentAttempt, Withdrawal}
@@ -19,7 +18,12 @@ defmodule Petepete.Payments.IntentReconcilerTest do
     setup do
       Clock.freeze(~U[2026-10-06 03:00:00Z])
       FakeGateway.configure(notify: self())
-      put_payments_config(intent_stuck_threshold_seconds: @threshold_seconds, intent_max_retries: 3)
+
+      put_payments_config(
+        intent_stuck_threshold_seconds: @threshold_seconds,
+        intent_max_retries: 3
+      )
+
       ctx = BillingScenario.issued()
       %{bill: ctx.bills[ctx.a.id]}
     end
@@ -89,7 +93,12 @@ defmodule Petepete.Payments.IntentReconcilerTest do
   describe "withdrawals" do
     setup do
       FakeGateway.configure(balance: 500_000, notify: self())
-      put_payments_config(intent_stuck_threshold_seconds: @threshold_seconds, intent_max_retries: 3)
+
+      put_payments_config(
+        intent_stuck_threshold_seconds: @threshold_seconds,
+        intent_max_retries: 3
+      )
+
       ctx = BillingScenario.issued()
       %{ctx: ctx}
     end
@@ -104,8 +113,7 @@ defmodule Petepete.Payments.IntentReconcilerTest do
           amount: 100_000,
           status: "pending",
           idempotency_key: "stuck-wd",
-          inserted_at: stuck_time,
-          updated_at: stuck_time
+          inserted_at: stuck_time
         })
 
       # Default: gateway.withdrawal_status returns :not_found → :redrive
@@ -129,8 +137,7 @@ defmodule Petepete.Payments.IntentReconcilerTest do
           amount: 100_000,
           status: "pending",
           idempotency_key: "stuck-wd-settled",
-          inserted_at: stuck_time,
-          updated_at: stuck_time
+          inserted_at: stuck_time
         })
 
       # withdrawal_status returns :submitted → :redrive → calls request → settles
@@ -149,7 +156,12 @@ defmodule Petepete.Payments.IntentReconcilerTest do
   describe "payout registration" do
     setup do
       FakeGateway.configure(notify: self())
-      put_payments_config(intent_stuck_threshold_seconds: @threshold_seconds, intent_max_retries: 3)
+
+      put_payments_config(
+        intent_stuck_threshold_seconds: @threshold_seconds,
+        intent_max_retries: 3
+      )
+
       group = Petepete.Fixtures.group_fixture()
       {_user, host} = Petepete.Fixtures.host_fixture(group)
       %{group: group, host: host}

@@ -16,6 +16,9 @@ defmodule Petepete.Payments.PayoutRegistrationIntent do
   @impl true
   def kind, do: "payout_registration"
 
+  @doc false
+  def reference_from_row(%PayoutAccount{id: id}), do: "payout-reg-#{id}"
+
   @impl true
   def prepare(%{
         group_id: group_id,
