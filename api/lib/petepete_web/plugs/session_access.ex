@@ -4,7 +4,7 @@ defmodule PetepeteWeb.Plugs.SessionAccess do
 
       plug PetepeteWeb.Plugs.SessionAccess, role: :host
 
-  Resolves the group with `Groups.group_id_for(:session, id)`, then authorizes. On success
+  Resolves the group with `GroupsPolicy.group_id_for(:session, id)`, then authorizes. On success
   assigns `conn.assigns.group_id`, `:session_id` and, per `PetepeteWeb.Plugs.Access`, `:member`
   (role `:member`) or `:actor` and `:member` (role `:host`); otherwise halts with 404
   (unknown session or not a member of its group) or 403 (not the host). Requires
@@ -12,7 +12,7 @@ defmodule PetepeteWeb.Plugs.SessionAccess do
   """
   @behaviour Plug
 
-  alias Petepete.Groups
+  alias Petepete.Groups.Policy, as: GroupsPolicy
   alias PetepeteWeb.Plugs.Access
 
   @impl true
@@ -21,7 +21,7 @@ defmodule PetepeteWeb.Plugs.SessionAccess do
   @impl true
   def call(conn, role) do
     with {:ok, session_id} <- Access.parse_id(conn.params["id"]),
-         group_id when is_integer(group_id) <- Groups.group_id_for(:session, session_id) do
+         group_id when is_integer(group_id) <- GroupsPolicy.group_id_for(:session, session_id) do
       conn
       |> Access.authorize(group_id, role)
       |> assign_id(session_id)

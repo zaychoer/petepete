@@ -43,7 +43,7 @@ defmodule Petepete.Accounts do
     access tokens of a deleted user are rejected by `authenticate_access_token/1`.
 
   It is refused with `{:error, :still_host}` while the user hosts an active group
-  (see `Petepete.Groups.hosts_active_group?/1`: any non-cancelled session, or any
+  (see `Petepete.Groups.Policy.hosts_active_group?/1`: any non-cancelled session, or any
   roster entry besides the host). The same phone can log in again afterwards and
   gets a fresh user.
   """
@@ -289,7 +289,7 @@ defmodule Petepete.Accounts do
       Repo.transaction(fn ->
         with %User{deleted_at: nil} = user <-
                Repo.one(from u in User, where: u.id == ^user_id, lock: "FOR UPDATE"),
-             false <- Groups.hosts_active_group?(user_id) do
+             false <- Groups.Policy.hosts_active_group?(user_id) do
           phone_hash = hash_phone(user.phone)
           Repo.delete_all(from c in OtpChallenge, where: c.phone_hash == ^phone_hash)
 

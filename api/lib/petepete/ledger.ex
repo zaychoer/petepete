@@ -20,7 +20,7 @@ defmodule Petepete.Ledger do
   * **Actor**: a `%Petepete.Actor{}`: `type: :host` (with its `user_id` and `member_id`) for
     every event except `GatewayPaymentReceived`, which takes `Actor.gateway()` only. Anything
     else is `{:error, :invalid_actor}`. There is no system actor. The Ledger trusts that a
-    host Actor was authorized at the edge (`Petepete.Groups.authorize_actor/3`); it never
+    host Actor was authorized at the edge (`Petepete.Groups.Policy.authorize_actor/3`); it never
     checks roles.
   * **Transaction**: `record/2` never opens a transaction. It must run inside the caller's
     `Repo.transaction/1` / `Ecto.Multi`; outside one it raises `ArgumentError`. A returned

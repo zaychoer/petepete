@@ -14,7 +14,7 @@ defmodule Petepete.Fixtures do
     * `bill_fixture/3`, `attendance_fixture/3`, `cost_item_fixture/2`
     * `host_fixture/1`, `plain_member_fixture/1`, `guest_fixture/1`: `{user, member}` helpers
     * `host_actor/2`: the host `Petepete.Actor` for a host member (production code gets it
-      from `Groups.authorize_actor/3`)
+      from `Groups.Policy.authorize_actor/3`)
     * `bearer_login/1`, `bearer_conn/2`, `valid_phone/0`: HTTP login helpers
   """
   alias Petepete.Accounts.User
@@ -66,7 +66,7 @@ defmodule Petepete.Fixtures do
 
   @doc """
   The host `Petepete.Actor` of `host_member` in `group`, without going through
-  `Groups.authorize_actor/3`. Raises unless `host_member` is a linked host of `group`.
+  `Groups.Policy.authorize_actor/3`. Raises unless `host_member` is a linked host of `group`.
   """
   def host_actor(%Group{id: group_id}, %Member{
         id: member_id,

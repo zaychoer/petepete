@@ -5,7 +5,7 @@ defmodule Petepete.Actor do
   A host Actor proves that the HTTP edge already authorized the caller as host of the
   group in question. Contexts (Billing, Ledger, Payments) take an Actor and never check
   roles again, so the only way production code gets a host Actor is
-  `Petepete.Groups.authorize_actor/3`, called by the access plugs
+  `Petepete.Groups.Policy.authorize_actor/3`, called by the access plugs
   (`PetepeteWeb.Plugs.GroupAccess`, `SessionAccess`, `BillAccess`, `TxnAccess`) which
   assign it to `conn.assigns.actor`. Do not build `%Petepete.Actor{type: :host}` by hand
   outside tests (`Petepete.Fixtures.host_actor/2`).

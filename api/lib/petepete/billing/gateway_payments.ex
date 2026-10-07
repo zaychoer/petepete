@@ -109,7 +109,7 @@ defmodule Petepete.Billing.GatewayPayments do
                  paid_txn_id: txn.id,
                  paid_at: paid_at
                ) do
-          Metrics.record_paid(bill, Groups.group_id_for(:bill, bill.id), paid_at, :gateway)
+          Metrics.record_paid(bill, Groups.Policy.group_id_for(:bill, bill.id), paid_at, :gateway)
           {:ok, :paid}
         end
       end
@@ -130,7 +130,7 @@ defmodule Petepete.Billing.GatewayPayments do
   defp post(%Bill{} = bill, key) do
     Ledger.record(Actor.gateway(), %GatewayPaymentReceived{
       idempotency_key: key,
-      group_id: Groups.group_id_for(:bill, bill.id),
+      group_id: Groups.Policy.group_id_for(:bill, bill.id),
       bill_id: bill.id,
       member_id: bill.member_id,
       amount: bill.amount_due

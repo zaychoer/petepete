@@ -5,6 +5,7 @@ defmodule Petepete.GroupsAuthorizationTest do
 
   alias Petepete.Accounts.Scope
   alias Petepete.Groups
+  alias Petepete.Groups.Policy, as: GroupsPolicy
   alias Petepete.Ledger.Txn
 
   setup do
@@ -48,36 +49,37 @@ defmodule Petepete.GroupsAuthorizationTest do
           txn: ctx.txn_b.id,
           member: ctx.host_b_member.id
         ] do
-      group_id = Groups.group_id_for(kind, id)
+      group_id = GroupsPolicy.group_id_for(kind, id)
       assert group_id == ctx.b.id
-      assert Groups.authorize(ctx.plain_a, group_id, :member) == {:error, :not_found}
-      assert Groups.authorize(ctx.host_a, group_id, :member) == {:error, :not_found}
-      assert Groups.authorize(ctx.host_a, group_id, :host) == {:error, :not_found}
+      assert GroupsPolicy.authorize(ctx.plain_a, group_id, :member) == {:error, :not_found}
+      assert GroupsPolicy.authorize(ctx.host_a, group_id, :member) == {:error, :not_found}
+      assert GroupsPolicy.authorize(ctx.host_a, group_id, :host) == {:error, :not_found}
     end
   end
 
   test "group_id_for is nil for unknown ids" do
-    for kind <- [:session, :bill, :txn, :member], do: assert(Groups.group_id_for(kind, -1) == nil)
+    for kind <- [:session, :bill, :txn, :member],
+        do: assert(GroupsPolicy.group_id_for(kind, -1) == nil)
   end
 
   test "plain member can read but gets :forbidden for host actions", ctx do
-    assert {:ok, m} = Groups.authorize(ctx.plain_a, ctx.a.id, :member)
+    assert {:ok, m} = GroupsPolicy.authorize(ctx.plain_a, ctx.a.id, :member)
     assert m.id == ctx.plain_a_member.id
-    assert Groups.authorize(ctx.plain_a, ctx.a.id, :host) == {:error, :forbidden}
-    assert {:ok, _} = Groups.authorize(ctx.guest_a, ctx.a.id, :member)
-    assert Groups.authorize(ctx.guest_a, ctx.a.id, :host) == {:error, :forbidden}
+    assert GroupsPolicy.authorize(ctx.plain_a, ctx.a.id, :host) == {:error, :forbidden}
+    assert {:ok, _} = GroupsPolicy.authorize(ctx.guest_a, ctx.a.id, :member)
+    assert GroupsPolicy.authorize(ctx.guest_a, ctx.a.id, :host) == {:error, :forbidden}
   end
 
   test "host of A is host of A only", ctx do
-    assert {:ok, m} = Groups.authorize(ctx.host_a, ctx.a.id, :host)
+    assert {:ok, m} = GroupsPolicy.authorize(ctx.host_a, ctx.a.id, :host)
     assert m.id == ctx.host_a_member.id
-    assert Groups.authorize(ctx.host_a, ctx.b.id, :host) == {:error, :not_found}
-    assert {:ok, _} = Groups.authorize(ctx.host_b, ctx.b.id, :host)
-    assert Groups.authorize(ctx.host_b, ctx.a.id, :host) == {:error, :not_found}
+    assert GroupsPolicy.authorize(ctx.host_a, ctx.b.id, :host) == {:error, :not_found}
+    assert {:ok, _} = GroupsPolicy.authorize(ctx.host_b, ctx.b.id, :host)
+    assert GroupsPolicy.authorize(ctx.host_b, ctx.a.id, :host) == {:error, :not_found}
   end
 
   test "authorize_actor builds a host Actor for the host of that group only", ctx do
-    assert {:ok, actor} = Groups.authorize_actor(ctx.host_a, ctx.a.id, :host)
+    assert {:ok, actor} = GroupsPolicy.authorize_actor(ctx.host_a, ctx.a.id, :host)
 
     assert actor == %Petepete.Actor{
              type: :host,
@@ -85,11 +87,11 @@ defmodule Petepete.GroupsAuthorizationTest do
              member_id: ctx.host_a_member.id
            }
 
-    assert Groups.authorize_actor(ctx.host_a, ctx.b.id, :host) == {:error, :not_found}
-    assert Groups.authorize_actor(ctx.host_a, nil, :host) == {:error, :not_found}
-    assert Groups.authorize_actor(ctx.plain_a, ctx.a.id, :host) == {:error, :forbidden}
-    assert Groups.authorize_actor(ctx.guest_a, ctx.a.id, :host) == {:error, :forbidden}
-    assert Groups.authorize_actor(ctx.host_b, ctx.a.id, :host) == {:error, :not_found}
+    assert GroupsPolicy.authorize_actor(ctx.host_a, ctx.b.id, :host) == {:error, :not_found}
+    assert GroupsPolicy.authorize_actor(ctx.host_a, nil, :host) == {:error, :not_found}
+    assert GroupsPolicy.authorize_actor(ctx.plain_a, ctx.a.id, :host) == {:error, :forbidden}
+    assert GroupsPolicy.authorize_actor(ctx.guest_a, ctx.a.id, :host) == {:error, :forbidden}
+    assert GroupsPolicy.authorize_actor(ctx.host_b, ctx.a.id, :host) == {:error, :not_found}
   end
 
   test "scope helpers restrict queries to one group", ctx do

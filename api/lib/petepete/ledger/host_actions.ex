@@ -6,7 +6,7 @@ defmodule Petepete.Ledger.HostActions do
   Three thin host actions on top of `Petepete.HostAction.run/4`: each posts one event with
   `Petepete.Ledger.record/2` and lets the wrapper own the transaction and the `audit_log`
   row (written once, skipped for an idempotent replay, rolled back with the Ledger on
-  error). The caller passes a host `Petepete.Actor` from `Petepete.Groups.authorize_actor/3`;
+  error). The caller passes a host `Petepete.Actor` from `Petepete.Groups.Policy.authorize_actor/3`;
   no role is checked here. They answer `{:ok, %{txn: txn, replayed: boolean}}` or
   `{:error, reason}` with the Ledger's reasons.
   """

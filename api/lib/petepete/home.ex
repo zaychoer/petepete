@@ -4,7 +4,7 @@ defmodule Petepete.Home do
   the bills still open. A read model assembled from Billing and the Ledger in a handful of
   queries, with no per-row lookups, so it stays one round trip however many bills there are.
 
-  Authorization is the caller's job (`Petepete.Groups.authorize/3`, any member may read).
+  Authorization is the caller's job (`Petepete.Groups.Policy.authorize/3`, any member may read).
   """
 
   alias Petepete.{Billing, Ledger, Repo, Wib}

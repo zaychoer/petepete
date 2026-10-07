@@ -65,7 +65,7 @@ defmodule Petepete.Billing.Invoicing do
 
     with :ok <- Replay.require_key(key),
          group_id when is_integer(group_id) <-
-           Groups.group_id_for(:session, session_id) || {:error, :not_found} do
+           Groups.Policy.group_id_for(:session, session_id) || {:error, :not_found} do
       HostAction.run(actor, group_id, "session.issue", fn ->
         with {:ok, session, bills} <- Locks.lock_session_and_bills(session_id) do
           issue_locked(session, bills, actor, key)
