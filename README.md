@@ -9,7 +9,7 @@ Spec and tickets: [`docs/spec.md`](docs/spec.md).
 | Path | Stack | Role |
 | --- | --- | --- |
 | `api/` | Elixir/Phoenix JSON API, Ecto, PostgreSQL | Contexts `Accounts`, `Groups`, `Sessions`, `Billing`, `Ledger`, `Payments`; webhooks |
-| `web/` | Next.js (Vercel) | Participant pay page and web join |
+| `web/` | TanStack Start (React, Vite, Nitro) | Participant pay page and web join |
 | `app/` | Flutter (Android first) | Host app |
 | `bin/dev` | bash | Local one-command start |
 
@@ -34,7 +34,7 @@ Local secrets live in `.env` at the repo root (gitignored). `.env.example` is th
 
 - `bin/dev` creates `.env` on first run with generated values and loads it before starting anything.
 - Running `mix` in `api/` directly needs the same variables: with [direnv](https://direnv.net) hooked into your shell, run `direnv allow` once and `.envrc` loads `.env` automatically; otherwise `set -a; . ./.env; set +a` first.
-- Production secrets are set with `fly secrets set` and never stored in files. The Flutter app and the Next.js pay page ship to clients, so they must not hold secrets.
+- Production secrets are set with `fly secrets set` and never stored in files. The Flutter app and the web pay page ship to clients, so they must not hold secrets.
 
 ## Tests
 
