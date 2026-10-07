@@ -21,10 +21,21 @@ defmodule PetepeteWeb.Plugs.GroupAccessTest do
     %{a: a, b: b, host: host, host_member: host_member, plain: plain}
   end
 
-  test "assigns the member on success", ctx do
+  test "a host route assigns the host Actor, the member and the group", ctx do
     conn = run(ctx.host, ctx.a.id, :host)
     refute conn.halted
     assert conn.assigns.member.id == ctx.host_member.id
+    assert conn.assigns.group_id == ctx.a.id
+
+    assert conn.assigns.actor ==
+             %Petepete.Actor{type: :host, user_id: ctx.host.id, member_id: ctx.host_member.id}
+  end
+
+  test "a member route assigns the member and no Actor", ctx do
+    conn = run(ctx.plain, ctx.a.id, :member)
+    refute conn.halted
+    assert conn.assigns.member.role == "member"
+    refute Map.has_key?(conn.assigns, :actor)
   end
 
   test "403 for a plain member on a host route", ctx do

@@ -142,7 +142,7 @@ defmodule PetepeteWeb.MeControllerTest do
     test "anonymises user and roster but leaves the ledger untouched", %{conn: conn} do
       phone = unique_phone()
       group = group_fixture()
-      {host_user, host} = host_fixture(group)
+      {_host_user, host} = host_fixture(group)
       leaver = member_fixture(group, phone: phone, display_name: "Budi", role: "member")
 
       %{"access_token" => access, "refresh_token" => refresh, "user" => %{"id" => id}} =
@@ -153,7 +153,7 @@ defmodule PetepeteWeb.MeControllerTest do
       other =
         member_fixture(group, display_name: "Citra", phone: "6281" <> String.duplicate("9", 8))
 
-      txn = settle(host_user, group, payer: leaver, payee: host, amount: 15_000)
+      txn = settle(host, group, payer: leaver, payee: host, amount: 15_000)
       entries_before = entries(group)
       assert length(entries_before) == 2
       assert Enum.any?(entries_before, &(&1.member_id == leaver.id))
@@ -248,10 +248,10 @@ defmodule PetepeteWeb.MeControllerTest do
     {conn, user.id}
   end
 
-  defp settle(host_user, group, opts) do
+  defp settle(host, group, opts) do
     {:ok, {:ok, %{txn: txn}}} =
       Repo.transaction(fn ->
-        Ledger.record({:host, host_user.id}, %Settlement{
+        Ledger.record(host_actor(group, host), %Settlement{
           idempotency_key: "k#{uniq()}",
           group_id: group.id,
           payer_member_id: opts[:payer].id,

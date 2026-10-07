@@ -36,7 +36,7 @@ defmodule Petepete.Billing.GatewayPayments do
   import Ecto.Query, only: [from: 2]
 
   alias Petepete.Billing.{Bill, Locks, Transitions}
-  alias Petepete.{Clock, Groups, Ledger}
+  alias Petepete.{Actor, Clock, Groups, Ledger}
   alias Petepete.Ledger.Event.GatewayPaymentReceived
   alias Petepete.Metrics
   alias Petepete.Payments.PaymentAttempt
@@ -128,7 +128,7 @@ defmodule Petepete.Billing.GatewayPayments do
   defp outcome_of_replay(_bill, _txn), do: :overpaid
 
   defp post(%Bill{} = bill, key) do
-    Ledger.record(:gateway, %GatewayPaymentReceived{
+    Ledger.record(Actor.gateway(), %GatewayPaymentReceived{
       idempotency_key: key,
       group_id: Groups.group_id_for(:bill, bill.id),
       bill_id: bill.id,

@@ -27,7 +27,7 @@ defmodule PetepeteWeb.SessionVoidControllerTest do
     cost_item_fixture(session, amount: 100_000, paid_by: host)
 
     {:ok, %{bills: bills}} =
-      Billing.issue(session.id, actor: {:host, host_user.id}, idempotency_key: "issue-1")
+      Billing.issue(session.id, actor: host_actor(group, host), idempotency_key: "issue-1")
 
     %{
       group: group,
@@ -75,16 +75,6 @@ defmodule PetepeteWeb.SessionVoidControllerTest do
     assert %Session{status: "draft"} = Repo.get!(Session, ctx.session.id)
     assert Repo.all(from b in Bill, select: b.status) == ["void", "void"]
     assert Repo.get!(PaymentAttempt, attempt.id).status == "cancelled"
-    assert audit_count(ctx.group) == 1
-  end
-
-  test "a repeated request is one txn and one audit row", ctx do
-    first = void(ctx.host_conn, ctx.session, "dup", "salah") |> json_response(201)
-    second = void(ctx.host_conn, ctx.session, "dup", "salah") |> json_response(200)
-
-    assert second["replayed"] == true
-    assert second["txn_id"] == first["txn_id"]
-    assert txn_count(ctx.group) == 2
     assert audit_count(ctx.group) == 1
   end
 

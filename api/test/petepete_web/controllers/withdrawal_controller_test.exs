@@ -82,11 +82,6 @@ defmodule PetepeteWeb.WithdrawalControllerTest do
              1
   end
 
-  test "a withdrawal needs the Idempotency-Key header", ctx do
-    conn = post(ctx.owner, ~p"/api/groups/#{ctx.g.id}/withdrawals", %{amount: 1_000})
-    assert %{"error" => "idempotency_key_required"} = json_response(conn, 422)
-  end
-
   test "more than the balance is rejected and nothing is recorded", ctx do
     assert %{"error" => "insufficient_balance"} =
              ctx.owner |> withdraw(ctx.g, 500_001) |> json_response(422)

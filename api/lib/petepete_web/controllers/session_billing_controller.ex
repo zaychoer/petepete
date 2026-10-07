@@ -4,8 +4,9 @@ defmodule PetepeteWeb.SessionBillingController do
 
   `GET /api/sessions/:id/preview` returns `Billing.preview/1`: per-person, per-item parts,
   total billed vs total cost, credit used and the kas remainder ("Masuk kas").
-  `POST /api/sessions/:id/issue` needs an `Idempotency-Key` header and returns the bills
-  and `txn_id`; a repeated key returns the same bills with `replayed: true`.
+  `POST /api/sessions/:id/issue` needs an `Idempotency-Key` header (422
+  `idempotency_key_required` without) and returns the bills and `txn_id`; a repeated key
+  returns the same bills with `replayed: true`.
   `POST /api/sessions/:id/void` (Batalkan tagihan, body `reason`, `Idempotency-Key` header)
   calls `Payments.void_issue/2` (`Billing.void_issue/2` plus the gateway cancellation job, in one
   transaction) and returns the reversing `txn_id` (201, or 200 with
@@ -17,7 +18,7 @@ defmodule PetepeteWeb.SessionBillingController do
   alias PetepeteWeb.{BillingError, LedgerError}
 
   plug PetepeteWeb.Plugs.SessionAccess, role: :host
-  plug PetepeteWeb.Plugs.IdempotencyKey when action == :void
+  plug PetepeteWeb.Plugs.IdempotencyKey when action in [:issue, :void]
 
   def preview(conn, _params) do
     case Billing.preview(conn.assigns.session_id) do
@@ -27,10 +28,7 @@ defmodule PetepeteWeb.SessionBillingController do
   end
 
   def issue(conn, _params) do
-    opts = [
-      actor: {:host, conn.assigns.current_scope.user.id},
-      idempotency_key: List.first(get_req_header(conn, "idempotency-key"))
-    ]
+    opts = [actor: conn.assigns.actor, idempotency_key: conn.assigns.idempotency_key]
 
     case Billing.issue(conn.assigns.session_id, opts) do
       {:ok, %{bills: bills, txn: txn, session: session, replayed: replayed}} ->
@@ -48,7 +46,7 @@ defmodule PetepeteWeb.SessionBillingController do
 
   def void(conn, %{"reason" => reason}) when is_binary(reason) do
     opts = [
-      actor: {:host, conn.assigns.current_scope.user.id},
+      actor: conn.assigns.actor,
       idempotency_key: conn.assigns.idempotency_key,
       reason: reason
     ]

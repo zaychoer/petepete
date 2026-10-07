@@ -17,8 +17,11 @@ defmodule Petepete.Ledger do
         | {:ok, %{txn: txn, replayed: boolean, balances_before: %{member_id => integer}}}  # SessionBilled only
         | {:error, reason}
 
-  * **Actor**: `{:host, user_id}` for every event except `GatewayPaymentReceived`, which
-    takes `:gateway` only. Anything else is `{:error, :invalid_actor}`. There is no system actor.
+  * **Actor**: a `%Petepete.Actor{}`: `type: :host` (with its `user_id` and `member_id`) for
+    every event except `GatewayPaymentReceived`, which takes `Actor.gateway()` only. Anything
+    else is `{:error, :invalid_actor}`. There is no system actor. The Ledger trusts that a
+    host Actor was authorized at the edge (`Petepete.Groups.authorize_actor/3`); it never
+    checks roles.
   * **Transaction**: `record/2` never opens a transaction. It must run inside the caller's
     `Repo.transaction/1` / `Ecto.Multi`; outside one it raises `ArgumentError`. A returned
     `{:error, _}` has written nothing, so the caller decides whether to roll back.
@@ -42,7 +45,7 @@ defmodule Petepete.Ledger do
   | --- | --- | --- |
   | `SessionBilled` | `session_id`, `shares: [{member_id, share}]`, `fronted: [{member_id, amount}]` (default `[]`), `kas_remainder` (≥ 0) | −share per participant; +amount per fronted entry; +`kas_remainder` to kas (omitted when 0) |
   | `GatewayPaymentReceived` | `bill_id`, `member_id`, `amount` | +amount to member; −amount to the payout account owner |
-  | `CashReceived` | `bill_id`, `member_id`, `amount`, `at` | +amount to member; −amount to the host Actor's member |
+  | `CashReceived` | `bill_id`, `member_id`, `amount`, `at` | +amount to member; −amount to the host Actor's `member_id` |
   | `Settlement` | `payer_member_id`, `payee_member_id`, `amount`, `note` | +amount payer; −amount payee |
   | `KasSpend` | `member_id`, `amount`, `note` | −amount kas; +amount member |
   | `SessionBillsCancelled` | `txn_id`, `reason` | mirror of that `session_billed` txn |
@@ -63,7 +66,8 @@ defmodule Petepete.Ledger do
     `:unbalanced_shares` (Σ shares ≠ Σ fronted + kas_remainder)
   * `GatewayPaymentReceived`: `:no_payout_account` (the owner is the latest payout account's
     owner, resolved now and written into the entries; later owner changes leave history alone)
-  * `CashReceived`: `:actor_not_member` (host Actor has no member row in the group)
+  * `CashReceived`: `:member_not_in_group` also when the host Actor's `member_id` is not on
+    the group's roster
   * `Settlement`: `:same_member`
   * `KasSpend`: `:insufficient_kas` (amount > kas balance; cash and gateway payments have no cap)
   * undo events: `:reason_required`, `:txn_not_found` (missing or other group), `:not_undoable`
@@ -81,6 +85,7 @@ defmodule Petepete.Ledger do
 
   import Ecto.Query
 
+  alias Petepete.Actor
   alias Petepete.Groups.{Member, PayoutAccount}
   alias Petepete.Ledger.Event
   alias Petepete.Ledger.{Entry, Txn}
@@ -107,14 +112,13 @@ defmodule Petepete.Ledger do
     Event.Correction => "correction"
   }
 
-  @type actor :: {:host, user_id :: pos_integer()} | :gateway
   @type account :: :kas | {:member, pos_integer()}
 
   # ── Writing ────────────────────────────────────────────────────────────────
 
   @doc "Posts one money event. See the moduledoc for the contract."
-  @spec record(actor(), Event.t()) :: {:ok, map()} | {:error, atom()}
-  def record(actor, %mod{} = event) when is_map_key(@kinds, mod) do
+  @spec record(Actor.t(), Event.t()) :: {:ok, map()} | {:error, atom()}
+  def record(%Actor{} = actor, %mod{} = event) when is_map_key(@kinds, mod) do
     unless Repo.in_transaction?() do
       raise ArgumentError,
             "Ledger.record/2 must run inside the caller's Repo.transaction/Ecto.Multi"
@@ -131,7 +135,7 @@ defmodule Petepete.Ledger do
     end
   end
 
-  def record(_actor, _event), do: {:error, :unknown_event}
+  def record(%Actor{}, _event), do: {:error, :unknown_event}
 
   defp lock_group(group_id) when is_integer(group_id) do
     key = Bitwise.bor(Bitwise.bsl(@lock_namespace, 32), Bitwise.band(group_id, 0xFFFFFFFF))
@@ -150,7 +154,7 @@ defmodule Petepete.Ledger do
   # ── Planning (no state beyond the original txn of undo events) ─────────────
 
   # A spec is the event reduced to what gets stored. Accounts may be the placeholders
-  # :payout_owner / :actor_member, resolved only when actually posting.
+  # :payout_owner, resolved only when actually posting.
   defp plan(actor, event) do
     with :ok <- check_key(event.idempotency_key),
          :ok <- check_actor(actor, event),
@@ -163,16 +167,19 @@ defmodule Petepete.Ledger do
   defp check_key(_), do: err()
   defp err, do: {:error, :idempotency_key_required}
 
-  defp check_actor(:gateway, %Event.GatewayPaymentReceived{}), do: :ok
+  defp check_actor(%Actor{type: :gateway}, %Event.GatewayPaymentReceived{}), do: :ok
 
-  defp check_actor({:host, id}, event) when is_integer(id) do
+  defp check_actor(%Actor{type: :host, user_id: user_id, member_id: member_id}, event)
+       when is_integer(user_id) and is_integer(member_id) do
     if is_struct(event, Event.GatewayPaymentReceived), do: {:error, :invalid_actor}, else: :ok
   end
 
   defp check_actor(_, _), do: {:error, :invalid_actor}
 
-  defp actor_fields(:gateway), do: %{actor_type: "gateway", actor_user_id: nil}
-  defp actor_fields({:host, id}), do: %{actor_type: "host", actor_user_id: id}
+  defp actor_fields(%Actor{type: :gateway}), do: %{actor_type: "gateway", actor_user_id: nil}
+
+  defp actor_fields(%Actor{type: :host, user_id: id}),
+    do: %{actor_type: "host", actor_user_id: id}
 
   defp base(event, extra) do
     Map.merge(
@@ -231,7 +238,7 @@ defmodule Petepete.Ledger do
     end
   end
 
-  defp do_plan(_actor, %Event.CashReceived{} = e) do
+  defp do_plan(%Actor{member_id: host_member_id}, %Event.CashReceived{} = e) do
     with :ok <- positive(e.amount),
          {:ok, at} <- time(e.at) do
       {:ok,
@@ -239,8 +246,8 @@ defmodule Petepete.Ledger do
          ref_type: "bill",
          ref_id: e.bill_id,
          at: at,
-         member_ids: [e.member_id],
-         entries: [{{:member, e.member_id}, e.amount}, {:actor_member, -e.amount}]
+         member_ids: [e.member_id, host_member_id],
+         entries: [{{:member, e.member_id}, e.amount}, {{:member, host_member_id}, -e.amount}]
        })}
     end
   end
@@ -453,17 +460,6 @@ defmodule Petepete.Ledger do
     if owner, do: {:ok, {:member, owner}}, else: {:error, :no_payout_account}
   end
 
-  defp resolve_account(:actor_member, %{group_id: group_id, actor_user_id: user_id}) do
-    member =
-      Repo.one(
-        from m in Member,
-          where: m.group_id == ^group_id and m.user_id == ^user_id,
-          select: m.id
-      )
-
-    if member, do: {:ok, {:member, member}}, else: {:error, :actor_not_member}
-  end
-
   defp resolve_account(acct, _spec), do: {:ok, acct}
 
   # ── Replaying an existing key ──────────────────────────────────────────────
@@ -472,7 +468,7 @@ defmodule Petepete.Ledger do
     txn = Repo.preload(txn, entries: entries_query())
     stored = Enum.map(txn.entries, fn en -> {account(en), en.amount} end)
 
-    # The payout owner / host member were fixed when the txn was posted; take them from it.
+    # The payout owner was fixed when the txn was posted; take it from there.
     placeholder =
       case Enum.find(stored, fn {acct, amount} -> amount < 0 and acct != :kas end) do
         {acct, _} -> acct
@@ -481,7 +477,7 @@ defmodule Petepete.Ledger do
 
     expected =
       Enum.map(spec.entries, fn
-        {p, amount} when p in [:payout_owner, :actor_member] -> {placeholder, amount}
+        {:payout_owner, amount} -> {placeholder, amount}
         other -> other
       end)
 

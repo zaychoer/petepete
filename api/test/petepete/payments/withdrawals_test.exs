@@ -3,6 +3,7 @@ defmodule Petepete.Payments.WithdrawalsTest do
   use Petepete.DataCase, async: false
 
   import Ecto.Query, only: [from: 2]
+  import Petepete.Fixtures, only: [host_actor: 2]
 
   alias Petepete.{BillingScenario, FakeGateway, Payments}
   alias Petepete.Ledger.AuditLog
@@ -16,7 +17,7 @@ defmodule Petepete.Payments.WithdrawalsTest do
   end
 
   defp withdraw(ctx, key, amount),
-    do: Payments.withdraw(ctx.group.id, ctx.host, ctx.user.id, key, amount)
+    do: Payments.withdraw(host_actor(ctx.group, ctx.host), ctx.group.id, key, amount)
 
   defp audit_actions,
     do:
@@ -55,6 +56,7 @@ defmodule Petepete.Payments.WithdrawalsTest do
 
     assert {:error, :idempotency_key_conflict} = withdraw(ctx, "k1", 150_000)
     assert Repo.aggregate(Withdrawal, :count) == 1
+    assert audit_actions() == ["withdrawal.request", "withdrawal.submitted"]
   end
 
   test "a refused request is kept as failed and the same key tries again", %{ctx: ctx} do

@@ -28,7 +28,10 @@ defmodule PetepeteWeb.PayControllerTest do
     cost_item_fixture(session, amount: 100_000, paid_by: host, label: "Sewa lapangan")
 
     {:ok, %{bills: bills}} =
-      Billing.issue(session.id, actor: {:host, host_user.id}, idempotency_key: "issue-#{uniq()}")
+      Billing.issue(session.id,
+        actor: host_actor(group, host),
+        idempotency_key: "issue-#{uniq()}"
+      )
 
     bill = Enum.find(bills, &(&1.member_id == hd(others).id))
     %{group: group, session: session, bill: bill, bills: bills, host: host}

@@ -3,7 +3,7 @@ defmodule Petepete.Billing.VoidingTest do
 
   import Ecto.Query
   import Petepete.BillingScenario
-  import Petepete.Fixtures, only: [uniq: 0]
+  import Petepete.Fixtures, only: [host_actor: 2, uniq: 0]
 
   alias Petepete.{Billing, Clock, Ledger}
   alias Petepete.Billing.{Bill, Session, TransitionError}
@@ -81,7 +81,7 @@ defmodule Petepete.Billing.VoidingTest do
   test "the kas may go negative", ctx do
     {:ok, {:ok, _}} =
       Repo.transaction(fn ->
-        Ledger.record({:host, ctx.user.id}, %KasSpend{
+        Ledger.record(host_actor(ctx.group, ctx.host), %KasSpend{
           idempotency_key: "spend-#{uniq()}",
           group_id: ctx.group.id,
           member_id: ctx.host.id,
@@ -145,7 +145,10 @@ defmodule Petepete.Billing.VoidingTest do
              Billing.void_issue(ctx.session.id, opts(ctx, reason: "x", idempotency_key: " "))
 
     assert {:error, :idempotency_key_required} =
-             Billing.void_issue(ctx.session.id, actor: {:host, ctx.user.id}, reason: "x")
+             Billing.void_issue(ctx.session.id,
+               actor: host_actor(ctx.group, ctx.host),
+               reason: "x"
+             )
   end
 
   test "the same key again returns the same txn: one txn, one audit row", ctx do
@@ -193,7 +196,7 @@ defmodule Petepete.Billing.VoidingTest do
 
     assert {:ok, reissued} =
              Billing.issue(ctx.session.id,
-               actor: {:host, ctx.user.id},
+               actor: host_actor(ctx.group, ctx.host),
                idempotency_key: "issue-2"
              )
 

@@ -1,12 +1,11 @@
 defmodule Petepete.Ledger.Audit do
   @moduledoc """
-  Writes `audit_log` rows: one per host action that changes money.
+  The low-level writer of `audit_log` rows: one per host action that changes money.
 
-  `record/5` MUST run inside the same `Repo.transaction/1` as the money change it
-  describes, so the row commits and rolls back together with it. Every ticket that lets a
-  host move money (issue, void, cash, settlement, kas spend, correction, payout account,
-  withdrawals) calls it; call it only when the action actually happened, not for an
-  idempotent replay.
+  Only `Petepete.HostAction.run/4` may call `record/5` (ADR-0003; a test greps `lib/` for
+  other callers). HostAction runs it inside the money change's transaction and skips it for
+  an idempotent replay, so the row commits and rolls back together with the action.
+  Everything else goes through `HostAction.run/4`; never call this directly.
 
   Metadata is plain JSON data (ids, rupiah, reason); never put phone numbers in it.
   """

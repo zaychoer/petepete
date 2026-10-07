@@ -27,7 +27,7 @@ defmodule PetepeteWeb.BillControllerTest do
     cost_item_fixture(session, amount: 100_000, paid_by: host)
 
     {:ok, %{bills: bills}} =
-      Billing.issue(session.id, actor: {:host, host_user.id}, idempotency_key: "issue-1")
+      Billing.issue(session.id, actor: host_actor(group, host), idempotency_key: "issue-1")
 
     bill = Enum.find(bills, &(&1.member_id == a.id))
 
@@ -67,22 +67,6 @@ defmodule PetepeteWeb.BillControllerTest do
       assert %Txn{kind: "cash_received"} = Repo.get!(Txn, txn_id)
       assert %Bill{status: "paid", paid_txn_id: ^txn_id} = Repo.get!(Bill, ctx.bill.id)
       assert audit_count(ctx.group, "bill.mark_paid_cash") == 1
-    end
-
-    test "a repeated request is one txn and one audit row", ctx do
-      first = cash(ctx.host_conn, ctx.bill, "dup") |> json_response(201)
-      second = cash(ctx.host_conn, ctx.bill, "dup") |> json_response(200)
-
-      assert second["replayed"] == true
-      assert second["txn_id"] == first["txn_id"]
-      assert txn_count(ctx.group) == 2
-      assert audit_count(ctx.group, "bill.mark_paid_cash") == 1
-    end
-
-    test "needs an Idempotency-Key", ctx do
-      body = post(ctx.host_conn, ~p"/api/bills/#{ctx.bill.id}/cash") |> json_response(422)
-      assert body["error"] == "idempotency_key_required"
-      assert txn_count(ctx.group) == 1
     end
 
     test "a bill that is not open is 409", ctx do

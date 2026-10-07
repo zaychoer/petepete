@@ -1,6 +1,7 @@
 defmodule PetepeteWeb.SessionBillingControllerTest do
   use PetepeteWeb.ConnCase, async: true
 
+  import Ecto.Query, only: [from: 2]
   import Petepete.Fixtures
 
   alias Petepete.{Clock, Ledger, Repo}
@@ -121,6 +122,13 @@ defmodule PetepeteWeb.SessionBillingControllerTest do
       assert second["txn_id"] == first["txn_id"]
       assert second["bills"] == first["bills"]
       assert length(Ledger.txns(ctx.group.id)) == 1
+
+      assert Repo.aggregate(
+               from(a in Petepete.Ledger.AuditLog,
+                 where: a.group_id == ^ctx.group.id and a.action == "session.issue"
+               ),
+               :count
+             ) == 1
     end
 
     test "a different key after issuing is 409, no header is 422", %{conn: conn, user: user} do
@@ -132,6 +140,12 @@ defmodule PetepeteWeb.SessionBillingControllerTest do
 
       assert %{"error" => "idempotency_key_required"} =
                post(conn, ~p"/api/sessions/#{ctx.session.id}/issue") |> json_response(422)
+
+      assert %{"error" => "idempotency_key_required"} =
+               conn
+               |> put_req_header("idempotency-key", "  ")
+               |> post(~p"/api/sessions/#{ctx.session.id}/issue")
+               |> json_response(422)
 
       assert length(Ledger.txns(ctx.group.id)) == 1
     end

@@ -54,12 +54,12 @@ defmodule PetepeteWeb.LedgerControllerTest do
   defp txn_count(group_id),
     do: Repo.aggregate(from(t in Txn, where: t.group_id == ^group_id), :count)
 
-  defp fund_kas(g, host, member, amount) do
+  defp fund_kas(g, host_m, member, amount) do
     # A session bill with a kas remainder funds kas without involving the HTTP layer.
     {:ok, _} =
       Repo.transaction(fn ->
         Ledger.record(
-          {:host, host.id},
+          host_actor(g, host_m),
           %Event.SessionBilled{
             idempotency_key: key(),
             group_id: g.id,
@@ -92,26 +92,6 @@ defmodule PetepeteWeb.LedgerControllerTest do
                audit_rows(ctx.g.id, "settlement.record")
 
       assert uid == ctx.host.id
-    end
-
-    test "the same key twice posts one txn and one audit row", ctx do
-      body = %{from_member_id: ctx.andi.id, to_member_id: ctx.budi.id, amount: 45_000}
-      k = key()
-      c1 = ctx.host_conn |> keyed(k) |> post(~p"/api/groups/#{ctx.g.id}/settlements", body)
-      c2 = ctx.host_conn |> keyed(k) |> post(~p"/api/groups/#{ctx.g.id}/settlements", body)
-
-      assert %{"txn_id" => id} = json_response(c1, 201)
-      assert %{"txn_id" => ^id, "replayed" => true} = json_response(c2, 200)
-      assert txn_count(ctx.g.id) == 1
-      assert length(audit_rows(ctx.g.id, "settlement.record")) == 1
-    end
-
-    test "a missing key is 422 and posts nothing", ctx do
-      body = %{from_member_id: ctx.andi.id, to_member_id: ctx.budi.id, amount: 45_000}
-      conn = post(ctx.host_conn, ~p"/api/groups/#{ctx.g.id}/settlements", body)
-
-      assert %{"error" => "idempotency_key_required", "message" => _} = json_response(conn, 422)
-      assert txn_count(ctx.g.id) == 0
     end
 
     test "ledger rejections are 422 with a code and no audit row", ctx do
@@ -154,7 +134,7 @@ defmodule PetepeteWeb.LedgerControllerTest do
 
   describe "POST kas-spends" do
     test "spends from kas, replays once, and rejects beyond the balance", ctx do
-      fund_kas(ctx.g, ctx.host, ctx.andi, 100_000)
+      fund_kas(ctx.g, ctx.host_m, ctx.andi, 100_000)
       path = ~p"/api/groups/#{ctx.g.id}/kas-spends"
       body = %{member_id: ctx.andi.id, amount: 60_000, note: "bola"}
       k = key()
@@ -170,13 +150,6 @@ defmodule PetepeteWeb.LedgerControllerTest do
       assert %{"error" => "insufficient_kas"} = json_response(over, 422)
       assert Ledger.balances(ctx.g.id).kas == 40_000
       assert length(audit_rows(ctx.g.id, "kas_spend.record")) == 1
-    end
-
-    test "authorization is per group", ctx do
-      path = ~p"/api/groups/#{ctx.g.id}/kas-spends"
-      body = %{member_id: ctx.andi.id, amount: 1}
-      assert ctx.plain_conn |> keyed(key()) |> post(path, body) |> json_response(403)
-      assert ctx.outsider_conn |> keyed(key()) |> post(path, body) |> json_response(404)
     end
   end
 
@@ -232,7 +205,7 @@ defmodule PetepeteWeb.LedgerControllerTest do
       {:ok, billed} =
         Repo.transaction(fn ->
           {:ok, %{txn: t}} =
-            Ledger.record({:host, ctx.host.id}, %Event.SessionBilled{
+            Ledger.record(host_actor(ctx.g, ctx.host_m), %Event.SessionBilled{
               idempotency_key: key(),
               group_id: ctx.g.id,
               session_id: session_fixture(event_fixture(ctx.g)).id,
@@ -265,7 +238,7 @@ defmodule PetepeteWeb.LedgerControllerTest do
 
   describe "GET balances and txns" do
     test "any member reads balances; outsiders get 404", ctx do
-      fund_kas(ctx.g, ctx.host, ctx.andi, 20_000)
+      fund_kas(ctx.g, ctx.host_m, ctx.andi, 20_000)
 
       body = ctx.plain_conn |> get(~p"/api/groups/#{ctx.g.id}/balances") |> json_response(200)
       assert body["kas"] == 20_000

@@ -3,6 +3,7 @@ defmodule Petepete.Billing.GatewayPaymentsTest do
 
   import Ecto.Query
   import Petepete.BillingScenario
+  import Petepete.Fixtures, only: [host_actor: 2]
 
   alias Petepete.{Billing, Clock, Ledger}
   alias Petepete.Ledger.Txn
@@ -100,7 +101,10 @@ defmodule Petepete.Billing.GatewayPaymentsTest do
     assert balance(ctx, ctx.a) == 34_000
 
     assert {:ok, reissued} =
-             Billing.issue(ctx.session.id, actor: {:host, ctx.user.id}, idempotency_key: "again")
+             Billing.issue(ctx.session.id,
+               actor: host_actor(ctx.group, ctx.host),
+               idempotency_key: "again"
+             )
 
     bill = Enum.find(reissued.bills, &(&1.member_id == ctx.a.id))
     assert {bill.credit_applied, bill.amount_due, bill.status} == {34_000, 0, "paid"}

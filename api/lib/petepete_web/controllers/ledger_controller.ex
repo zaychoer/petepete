@@ -8,17 +8,17 @@ defmodule PetepeteWeb.LedgerController do
   """
   use PetepeteWeb, :controller
 
-  alias Petepete.{Groups, Ledger, Repo}
+  alias Petepete.{Ledger, Repo}
   alias Petepete.Groups.Member
   alias Petepete.Ledger.{Description, HostActions}
-  alias PetepeteWeb.{FallbackController, LedgerError}
-  alias PetepeteWeb.Plugs.{GroupAccess, IdempotencyKey}
+  alias PetepeteWeb.LedgerError
+  alias PetepeteWeb.Plugs.{GroupAccess, IdempotencyKey, TxnAccess}
 
   import Ecto.Query, only: [from: 2]
 
   plug GroupAccess, [role: :host] when action in [:settlement, :kas_spend]
   plug GroupAccess, [role: :member] when action in [:balances, :txns]
-  plug :authorize_txn when action == :correction
+  plug TxnAccess, [role: :host] when action == :correction
   plug IdempotencyKey when action in [:settlement, :kas_spend, :correction]
 
   def settlement(conn, params) do
@@ -29,8 +29,8 @@ defmodule PetepeteWeb.LedgerController do
              "amount" => {:amount, :int},
              "note" => {:note, :opt_string}
            }) do
-      conn.assigns.member.group_id
-      |> HostActions.record_settlement(user_id(conn), conn.assigns.idempotency_key, p)
+      conn.assigns.actor
+      |> HostActions.record_settlement(conn.assigns.group_id, conn.assigns.idempotency_key, p)
       |> respond(conn)
     else
       {:error, details} -> LedgerError.render_invalid(conn, details)
@@ -44,8 +44,8 @@ defmodule PetepeteWeb.LedgerController do
              "amount" => {:amount, :int},
              "note" => {:note, :opt_string}
            }) do
-      conn.assigns.member.group_id
-      |> HostActions.record_kas_spend(user_id(conn), conn.assigns.idempotency_key, p)
+      conn.assigns.actor
+      |> HostActions.record_kas_spend(conn.assigns.group_id, conn.assigns.idempotency_key, p)
       |> respond(conn)
     else
       {:error, details} -> LedgerError.render_invalid(conn, details)
@@ -54,9 +54,9 @@ defmodule PetepeteWeb.LedgerController do
 
   def correction(conn, params) do
     with {:ok, p} <- parse(params, %{"reason" => {:reason, :opt_string}}) do
-      conn.assigns.member.group_id
+      conn.assigns.actor
       |> HostActions.correct(
-        user_id(conn),
+        conn.assigns.group_id,
         conn.assigns.idempotency_key,
         conn.assigns.txn_id,
         p[:reason]
@@ -68,7 +68,7 @@ defmodule PetepeteWeb.LedgerController do
   end
 
   def balances(conn, _params) do
-    group_id = conn.assigns.member.group_id
+    group_id = conn.assigns.group_id
     balances = Ledger.balances(group_id)
     names = names(group_id)
 
@@ -84,7 +84,7 @@ defmodule PetepeteWeb.LedgerController do
   end
 
   def txns(conn, params) do
-    group_id = conn.assigns.member.group_id
+    group_id = conn.assigns.group_id
 
     with {:ok, opts} <- member_filter(params) do
       names = names(group_id)
@@ -96,19 +96,6 @@ defmodule PetepeteWeb.LedgerController do
   end
 
   # ── helpers ────────────────────────────────────────────────────────────────
-
-  defp authorize_txn(conn, _opts) do
-    with {id, ""} <- Integer.parse(to_string(conn.params["id"])),
-         group_id when is_integer(group_id) <- Groups.group_id_for(:txn, id),
-         {:ok, member} <- Groups.authorize(conn.assigns.current_scope, group_id, :host) do
-      conn |> assign(:member, member) |> assign(:txn_id, id)
-    else
-      {:error, reason} -> conn |> FallbackController.call({:error, reason}) |> halt()
-      _ -> conn |> FallbackController.call({:error, :not_found}) |> halt()
-    end
-  end
-
-  defp user_id(conn), do: conn.assigns.current_scope.user.id
 
   defp respond({:ok, %{txn: txn, replayed: replayed}}, conn) do
     conn

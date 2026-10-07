@@ -24,7 +24,7 @@ defmodule Petepete.LedgerConcurrencyTest do
     group = group_fixture()
     host = member_fixture(group, user_id: user.id, role: "host")
     other = member_fixture(group)
-    {:ok, g: group.id, actor: {:host, user.id}, host: host.id, other: other.id}
+    {:ok, g: group.id, actor: host_actor(group, host), host: host.id, other: other.id}
   end
 
   defp concurrently(fun, n) do

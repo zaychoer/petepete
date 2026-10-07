@@ -4,33 +4,22 @@ defmodule PetepeteWeb.Plugs.GroupAccess do
 
       plug PetepeteWeb.Plugs.GroupAccess, role: :host
 
-  On success assigns `conn.assigns.member`; otherwise halts with 404/403 JSON.
-  Requires `conn.assigns.current_scope` (set by the `:authenticated` pipeline).
+  On success assigns `conn.assigns.group_id` and, per `PetepeteWeb.Plugs.Access`,
+  `:member` (role `:member`) or `:actor` and `:member` (role `:host`); otherwise halts with
+  404/403 JSON. Requires `conn.assigns.current_scope` (set by the `:authenticated` pipeline).
   """
   @behaviour Plug
 
-  alias Petepete.Groups
-  alias PetepeteWeb.FallbackController
+  alias PetepeteWeb.Plugs.Access
 
   @impl true
   def init(opts), do: Keyword.get(opts, :role, :member)
 
   @impl true
   def call(conn, role) do
-    with {:ok, group_id} <- parse(conn.params["group_id"]),
-         {:ok, member} <- Groups.authorize(conn.assigns.current_scope, group_id, role) do
-      Plug.Conn.assign(conn, :member, member)
-    else
-      {:error, reason} -> conn |> FallbackController.call({:error, reason}) |> Plug.Conn.halt()
+    case Access.parse_id(conn.params["group_id"]) do
+      {:ok, group_id} -> Access.authorize(conn, group_id, role)
+      {:error, reason} -> Access.halt_with(conn, reason)
     end
   end
-
-  defp parse(value) when is_binary(value) do
-    case Integer.parse(value) do
-      {id, ""} -> {:ok, id}
-      _ -> {:error, :not_found}
-    end
-  end
-
-  defp parse(_), do: {:error, :not_found}
 end

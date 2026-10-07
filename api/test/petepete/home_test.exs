@@ -94,10 +94,12 @@ defmodule Petepete.HomeTest do
   end
 
   test "kas balance comes from the ledger", %{group: group, host: host, a: a} do
+    acting_host = member_fixture(group, role: "host", user: user_fixture())
+
     {:ok, {:ok, _}} =
       Repo.transaction(fn ->
         Ledger.record(
-          {:host, user_fixture().id},
+          host_actor(group, acting_host),
           %SessionBilled{
             idempotency_key: "k-#{uniq()}",
             group_id: group.id,

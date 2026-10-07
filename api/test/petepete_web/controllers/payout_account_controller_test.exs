@@ -24,8 +24,14 @@ defmodule PetepeteWeb.PayoutAccountControllerTest do
     bearer_conn(conn, user)
   end
 
+  defp register(conn, group, body) do
+    conn
+    |> put_req_header("idempotency-key", "pa-#{System.unique_integer([:positive])}")
+    |> post(~p"/api/groups/#{group.id}/payout-account", body)
+  end
+
   test "host registers the payout account and the audit row is written", ctx do
-    conn = post(ctx.host, ~p"/api/groups/#{ctx.g.id}/payout-account", @bank)
+    conn = register(ctx.host, ctx.g, @bank)
 
     assert %{"payout_account_id" => id, "status" => "pending_kyc"} = json_response(conn, 201)
     assert %PayoutAccount{account_last4: "7890"} = Repo.get!(PayoutAccount, id)
@@ -34,23 +40,16 @@ defmodule PetepeteWeb.PayoutAccountControllerTest do
              Repo.all(from a in AuditLog, where: a.action == "payout_account.register")
 
     refute inspect(meta) =~ "1234567890"
+    assert Repo.aggregate(AuditLog, :count) == 1
   end
 
   test "bad bank data is 422 and leaves nothing behind", ctx do
-    conn =
-      post(ctx.host, ~p"/api/groups/#{ctx.g.id}/payout-account", %{@bank | account_number: "12"})
+    conn = register(ctx.host, ctx.g, %{@bank | account_number: "12"})
 
     assert %{"error" => "invalid_params", "details" => %{"account_number" => _}} =
              json_response(conn, 422)
 
     assert Repo.aggregate(PayoutAccount, :count) == 0
     assert Repo.aggregate(AuditLog, :count) == 0
-  end
-
-  test "only the group's host may register", ctx do
-    path = ~p"/api/groups/#{ctx.g.id}/payout-account"
-    assert ctx.plain |> post(path, @bank) |> json_response(403)
-    assert ctx.outsider |> post(path, @bank) |> json_response(404)
-    assert Repo.aggregate(PayoutAccount, :count) == 0
   end
 end

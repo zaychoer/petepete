@@ -14,6 +14,7 @@ defmodule Petepete.Payments do
   """
   import Ecto.Changeset
 
+  alias Petepete.{Actor, HostAction}
   alias Petepete.Groups.{Group, Member, PayoutAccount}
   alias Petepete.Repo
 
@@ -33,19 +34,36 @@ defmodule Petepete.Payments do
   @bank_types %{bank_name: :string, account_number: :string, account_holder_name: :string}
 
   @doc """
-  Registers `owner` (a host of `group`) as the group's payout account owner: asks the
-  gateway for a sub-account and records it in `payout_accounts` with the status the
+  Registers the host `actor` as the payout account owner of `group_id` (PAY-07): asks the
+  gateway for a sub-account, then records it in `payout_accounts` with the status the
   gateway returns (`pending_kyc` until KYC finishes, see `refresh_payout_account/1`).
+
+  `key` is the request's `Idempotency-Key`, unique per group. A repeat of a key that
+  already registered an account returns that account (`replayed: true`) without asking the
+  gateway again and without a second audit row.
+
+  The gateway is asked first, outside any transaction; the `payout_accounts` row and its
+  `payout_account.register` audit row then commit together through `Petepete.HostAction`,
+  so a gateway failure or invalid bank data leaves no audit row.
 
   `bank_details` takes `bank_name`, `account_number` and `account_holder_name`. Only the
   last four digits of the account number are kept.
   """
-  @spec register_payout_account(Group.t(), Member.t(), map()) ::
-          {:ok, PayoutAccount.t()}
-          | {:error, Ecto.Changeset.t() | :owner_not_in_group | :owner_not_host | term()}
-  def register_payout_account(%Group{} = group, %Member{} = owner, bank_details) do
-    with :ok <- check_owner(group, owner),
-         {:ok, bank} <- validate_bank(bank_details),
+  @spec register_payout_account(Actor.t(), pos_integer(), String.t(), map()) ::
+          {:ok, %{payout_account: PayoutAccount.t(), replayed: boolean()}}
+          | {:error, Ecto.Changeset.t() | term()}
+  def register_payout_account(%Actor{} = actor, group_id, key, bank_details)
+      when is_binary(key) do
+    case Repo.get_by(PayoutAccount, group_id: group_id, idempotency_key: key) do
+      %PayoutAccount{} = account -> {:ok, %{payout_account: account, replayed: true}}
+      nil -> register_new(actor, group_id, key, bank_details)
+    end
+  end
+
+  defp register_new(actor, group_id, key, bank_details) do
+    with {:ok, bank} <- validate_bank(bank_details),
+         group = Repo.get!(Group, group_id),
+         owner = Repo.get!(Member, actor.member_id),
          gateway = gateway(),
          {:ok, account} <-
            gateway.register_payout_account(%{
@@ -54,25 +72,36 @@ defmodule Petepete.Payments do
              owner_member_id: owner.id,
              owner_name: owner.display_name,
              bank: bank
-           }) do
-      Repo.insert(%PayoutAccount{
-        group_id: group.id,
-        owner_member_id: owner.id,
-        provider: gateway.provider(),
-        provider_account_id: account.provider_account_id,
-        status: Atom.to_string(account.status),
-        bank_name: bank.bank_name,
-        account_last4: String.slice(bank.account_number, -4, 4)
-      })
+           }),
+         {:ok, payout_account} <-
+           HostAction.run(actor, group.id, "payout_account.register", fn ->
+             with {:ok, payout_account} <-
+                    Repo.insert(%PayoutAccount{
+                      group_id: group.id,
+                      owner_member_id: owner.id,
+                      provider: gateway.provider(),
+                      provider_account_id: account.provider_account_id,
+                      status: Atom.to_string(account.status),
+                      bank_name: bank.bank_name,
+                      account_last4: String.slice(bank.account_number, -4, 4),
+                      idempotency_key: key
+                    }) do
+               {:ok, payout_account,
+                %{
+                  subject: {"payout_account", payout_account.id},
+                  metadata: %{
+                    "owner_member_id" => owner.id,
+                    "provider" => payout_account.provider,
+                    "bank_name" => payout_account.bank_name,
+                    "account_last4" => payout_account.account_last4
+                  },
+                  replayed: false
+                }}
+             end
+           end) do
+      {:ok, %{payout_account: payout_account, replayed: false}}
     end
   end
-
-  defp check_owner(%Group{id: group_id}, %Member{group_id: group_id, role: "host"}), do: :ok
-
-  defp check_owner(%Group{id: group_id}, %Member{group_id: group_id}),
-    do: {:error, :owner_not_host}
-
-  defp check_owner(_group, _owner), do: {:error, :owner_not_in_group}
 
   defp validate_bank(attrs) do
     {%{}, @bank_types}
@@ -132,7 +161,7 @@ defmodule Petepete.Payments do
 
   defdelegate payout_account_balance(group_id), to: Petepete.Payments.Withdrawals, as: :balance
 
-  defdelegate withdraw(group_id, member, actor_user_id, idempotency_key, amount),
+  defdelegate withdraw(actor, group_id, idempotency_key, amount),
     to: Petepete.Payments.Withdrawals
 
   defdelegate list_withdrawals(group_id), to: Petepete.Payments.Withdrawals, as: :list

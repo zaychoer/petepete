@@ -76,6 +76,22 @@ defmodule Petepete.GroupsAuthorizationTest do
     assert Groups.authorize(ctx.host_b, ctx.a.id, :host) == {:error, :not_found}
   end
 
+  test "authorize_actor builds a host Actor for the host of that group only", ctx do
+    assert {:ok, actor} = Groups.authorize_actor(ctx.host_a, ctx.a.id, :host)
+
+    assert actor == %Petepete.Actor{
+             type: :host,
+             user_id: ctx.host_a_member.user_id,
+             member_id: ctx.host_a_member.id
+           }
+
+    assert Groups.authorize_actor(ctx.host_a, ctx.b.id, :host) == {:error, :not_found}
+    assert Groups.authorize_actor(ctx.host_a, nil, :host) == {:error, :not_found}
+    assert Groups.authorize_actor(ctx.plain_a, ctx.a.id, :host) == {:error, :forbidden}
+    assert Groups.authorize_actor(ctx.guest_a, ctx.a.id, :host) == {:error, :forbidden}
+    assert Groups.authorize_actor(ctx.host_b, ctx.a.id, :host) == {:error, :not_found}
+  end
+
   test "scope helpers restrict queries to one group", ctx do
     session_a = session_fixture(event_fixture(ctx.a))
     bill_a = bill_fixture(session_a, ctx.host_a_member)

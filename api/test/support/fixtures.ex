@@ -13,9 +13,12 @@ defmodule Petepete.Fixtures do
       `group_event_session_fixture/1` builds all three and returns `{group, event, session}`
     * `bill_fixture/3`, `attendance_fixture/3`, `cost_item_fixture/2`
     * `host_fixture/1`, `plain_member_fixture/1`, `guest_fixture/1`: `{user, member}` helpers
+    * `host_actor/2`: the host `Petepete.Actor` for a host member (production code gets it
+      from `Groups.authorize_actor/3`)
     * `bearer_login/1`, `bearer_conn/2`, `valid_phone/0`: HTTP login helpers
   """
   alias Petepete.Accounts.User
+  alias Petepete.Actor
   alias Petepete.Billing.{Bill, Session}
   alias Petepete.Groups.{Group, Member, PayoutAccount}
   alias Petepete.Repo
@@ -60,6 +63,19 @@ defmodule Petepete.Fixtures do
   def plain_member_fixture(group), do: user_member(group, "member")
   @doc "Returns `{user, member}` with role guest in `group`."
   def guest_fixture(group), do: user_member(group, "guest")
+
+  @doc """
+  The host `Petepete.Actor` of `host_member` in `group`, without going through
+  `Groups.authorize_actor/3`. Raises unless `host_member` is a linked host of `group`.
+  """
+  def host_actor(%Group{id: group_id}, %Member{
+        id: member_id,
+        group_id: group_id,
+        role: "host",
+        user_id: user_id
+      })
+      when is_integer(user_id),
+      do: %Actor{type: :host, user_id: user_id, member_id: member_id}
 
   defp user_member(group, role) do
     user = user_fixture()
@@ -125,6 +141,7 @@ defmodule Petepete.Fixtures do
           owner_member_id: owner.id,
           provider: "fake",
           provider_account_id: "acc#{uniq()}",
+          idempotency_key: "pa-#{uniq()}",
           status: "active"
         },
         attrs
