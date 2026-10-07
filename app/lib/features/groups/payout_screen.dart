@@ -14,6 +14,8 @@ StatusChip payoutStatusChip(PayoutAccountInfo info) => StatusChip(
   tone: switch (info.status) {
     'active' => StatusTone.success,
     'pending_kyc' => StatusTone.warning,
+    'registering' => StatusTone.info,
+    'failed' => StatusTone.danger,
     _ => StatusTone.neutral,
   },
 );
@@ -22,6 +24,10 @@ String _statusHint(String status) => switch (status) {
   'active' => 'Rekeningmu sudah aktif. Uang patungan bisa dicairkan ke sini.',
   'pending_kyc' =>
     'Verifikasi data rekening sedang diproses. Kamu belum bisa menarik dana sampai statusnya Aktif.',
+  'registering' =>
+    'Pendaftaran rekeningmu sedang diproses. Tunggu sebentar ya.',
+  'failed' =>
+    'Pendaftaran gagal. Kamu bisa coba daftarkan lagi.',
   _ => '',
 };
 
@@ -41,32 +47,51 @@ class _PayoutScreenState extends State<PayoutScreen> {
   // without another round trip.
   PayoutAccountInfo? _registered;
 
+  // Set when retrying a failed registration so the form shows again.
+  bool _retrying = false;
+
+  void _retry() => setState(() {
+    _registered = null;
+    _retrying = true;
+  });
+
   @override
   Widget build(BuildContext context) {
     final api = GroupsApi(AppScope.of(context).api);
     return Scaffold(
       appBar: AppBar(title: const Text('Rekening pencairan')),
-      body: _registered != null
-          ? _StatusView(info: _registered!)
-          : AsyncBody<PayoutAccountInfo?>(
-              load: () => api.payoutAccount(widget.groupId),
-              builder: (context, info, _) => info != null
-                  ? _StatusView(info: info)
-                  : _RegisterForm(
-                      api: api,
-                      groupId: widget.groupId,
-                      onRegistered: (info) =>
-                          setState(() => _registered = info),
-                    ),
-            ),
+      body: _registered != null && !_retrying
+          ? _StatusView(info: _registered!, onRetry: _retry)
+          : _retrying
+              ? _RegisterForm(
+                  api: api,
+                  groupId: widget.groupId,
+                  onRegistered: (info) =>
+                      setState(() {
+                        _registered = info;
+                        _retrying = false;
+                      }),
+                )
+              : AsyncBody<PayoutAccountInfo?>(
+                  load: () => api.payoutAccount(widget.groupId),
+                  builder: (context, info, _) => info != null
+                      ? _StatusView(info: info, onRetry: _retry)
+                      : _RegisterForm(
+                          api: api,
+                          groupId: widget.groupId,
+                          onRegistered: (info) =>
+                              setState(() => _registered = info),
+                        ),
+                ),
     );
   }
 }
 
 class _StatusView extends StatelessWidget {
-  const _StatusView({required this.info});
+  const _StatusView({required this.info, this.onRetry});
 
   final PayoutAccountInfo info;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -91,6 +116,13 @@ class _StatusView extends StatelessWidget {
                   ),
                 const SizedBox(height: 8),
                 Text(_statusHint(info.status)),
+                if (info.status == 'failed' && onRetry != null) ...[
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: onRetry,
+                    child: const Text('Coba lagi'),
+                  ),
+                ],
               ],
             ),
           ),

@@ -41,6 +41,7 @@ defmodule PetepeteWeb.Labels do
     "registering" => "Mendaftar...",
     "pending_kyc" => "Menunggu verifikasi (KYC)",
     "active" => "Aktif",
+
     "failed" => "Pendaftaran gagal. Coba lagi."
   }
 

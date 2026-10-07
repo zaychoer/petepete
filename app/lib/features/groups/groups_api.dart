@@ -247,9 +247,8 @@ class PayoutAccountInfo {
     accountLast4: json['account_last4'] as String?,
   );
 
-  /// `pending_kyc` or `active`.
+  /// `pending_kyc`, `active`, `registering` or `failed`.
   final String status;
-
   /// The server's text for [status] ("Aktif").
   final String statusLabel;
   final String? bankName;

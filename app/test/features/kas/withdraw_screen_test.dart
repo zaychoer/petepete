@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:petepete/ui/status_chip.dart';
 
 import '../../support/fake_kas_api.dart';
 import '../../support/sample.dart';
@@ -187,6 +188,25 @@ void main() {
     await tester.tap(find.text('Daftarkan rekening pencairan'));
     await tester.pumpAndSettle();
     expect(find.text('Daftar rekening pencairan'), findsOneWidget);
+  });
+
+  testWidgets('a needs_review withdrawal shows the label and a warning chip', (
+    tester,
+  ) async {
+    final fake = FakeKasApi();
+    fake.addWithdrawal(
+      id: 99,
+      amount: 50000,
+      status: 'needs_review',
+      insertedAt: DateTime.utc(2026, 10, 2),
+    );
+    await pumpKas(tester, fake, location: _location);
+
+    expect(find.text(WireLabels.withdrawal('needs_review')), findsOneWidget);
+    final chip = tester.widget<StatusChip>(
+      find.widgetWithText(StatusChip, WireLabels.withdrawal('needs_review')),
+    );
+    expect(chip.tone, StatusTone.warning);
   });
 
   testWidgets('Kas & riwayat links the host to Tarik dana', (tester) async {

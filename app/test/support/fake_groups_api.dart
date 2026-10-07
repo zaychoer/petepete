@@ -322,7 +322,12 @@ String roleLabel(String role) {
 /// The server's label for a payout account [status], read from the recorded
 /// responses that carry one.
 String payoutLabel(String status) => [
-  for (final name in ['payout_account.pending_kyc', 'payout_balance.active'])
+  for (final name in [
+    'payout_account.pending_kyc',
+    'payout_account.registering',
+    'payout_account.failed',
+    'payout_balance.active',
+  ])
     if (Sample.load(name).json['status'] == status)
       Sample.load(name).json['status_label'] as String,
 ].first;
