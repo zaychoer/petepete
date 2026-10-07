@@ -3,7 +3,7 @@ import tseslint from "typescript-eslint";
 
 const eslintConfig = defineConfig([
   ...tseslint.configs.recommended,
-  globalIgnores([".output/**", ".vinxi/**", ".next/**", "src/routeTree.gen.ts"]),
+  globalIgnores([".output/**", ".vinxi/**", "src/routeTree.gen.ts"]),
 ]);
 
 export default eslintConfig;

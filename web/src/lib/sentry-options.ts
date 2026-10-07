@@ -5,9 +5,7 @@ import { scrub } from "./sentry-scrub";
 // VITE_SENTRY_DSN is inlined at build time; unset or blank disables Sentry.
 export const sentryOptions = {
   dsn: (import.meta.env.VITE_SENTRY_DSN as string | undefined)?.trim() || undefined,
-  environment:
-    (import.meta.env.VITE_VERCEL_ENV as string | undefined) ??
-    (import.meta.env.MODE === "production" ? "production" : "development"),
+  environment: import.meta.env.MODE === "production" ? "production" : "development",
   dataCollection: { userInfo: false },
   beforeSend: (event: ErrorEvent): ErrorEvent =>
     scrub({ ...event, tags: { ...event.tags, layer: "web" } }),
