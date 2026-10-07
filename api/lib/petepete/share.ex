@@ -29,12 +29,9 @@ defmodule Petepete.Share do
   (`PetepeteWeb.Plugs.SessionAccess`).
   """
 
-  import Ecto.Query, only: [from: 2]
-
-  alias Petepete.Billing.{Bill, CostItem, Session}
-  alias Petepete.Groups.{Group, Member}
   alias Petepete.Ledger.Description
-  alias Petepete.{Clock, Ledger, Repo, Wib}
+  alias Petepete.Reports.Queries
+  alias Petepete.{Clock, Ledger, Wib}
   alias PetepeteWeb.Labels
 
   @days ~w(Senin Selasa Rabu Kamis Jumat Sabtu Minggu)
@@ -87,7 +84,7 @@ defmodule Petepete.Share do
   @spec bills(pos_integer()) ::
           {:ok, %{session_id: pos_integer(), bills: [entry()]}} | {:error, error()}
   def bills(session_id) do
-    with {:ok, ctx} <- load(session_id) do
+    with {:ok, ctx} <- Queries.session_bills(session_id) do
       rows = Enum.sort_by(summary_rows(ctx), fn {bill, _} -> bill.id end)
       {:ok, %{session_id: session_id, bills: Enum.map(rows, &entry(ctx, &1, :bill))}}
     end
@@ -111,7 +108,7 @@ defmodule Petepete.Share do
            }}
           | {:error, error()}
   def reminder(session_id) do
-    with {:ok, ctx} <- load(session_id) do
+    with {:ok, ctx} <- Queries.session_bills(session_id) do
       owing = Enum.filter(live(ctx), fn {bill, _} -> bill.status in ~w(unpaid needs_review) end)
       group_text = if owing != [], do: reminder_group_text(ctx, owing)
 
@@ -134,7 +131,7 @@ defmodule Petepete.Share do
   """
   @spec summary(pos_integer()) :: {:ok, map()} | {:error, error()}
   def summary(session_id) do
-    with {:ok, ctx} <- load(session_id) do
+    with {:ok, ctx} <- Queries.session_bills(session_id) do
       live = live(ctx)
       total_cost = ctx.costs
       total_billed = live |> Enum.map(fn {bill, _} -> bill.share end) |> Enum.sum()
@@ -199,25 +196,25 @@ defmodule Petepete.Share do
     }
   end
 
-  defp cash_cancellable?(%Bill{status: "paid", paid_via: "cash", paid_at: %DateTime{} = at}),
+  defp cash_cancellable?(%{status: "paid", paid_via: "cash", paid_at: %DateTime{} = at}),
     do: Ledger.cash_undo_window_open?(at, Clock.now())
 
   defp cash_cancellable?(_bill), do: false
 
-  defp message(ctx, %Bill{status: "paid"} = bill, member, _kind) do
+  defp message(ctx, %{status: "paid"} = bill, member, _kind) do
     """
     Halo #{member.display_name}! Tagihan #{title(ctx)} (#{date_text(ctx.session)}) sudah Lunas#{paid_note(bill)}. Makasih ya!\
     """
   end
 
-  defp message(ctx, %Bill{status: "needs_review"} = bill, member, _kind) do
+  defp message(ctx, %{status: "needs_review"} = bill, member, _kind) do
     """
     Halo #{member.display_name}! Pembayaran #{rupiah(bill.amount_due)} untuk #{title(ctx)} (#{date_text(ctx.session)}) lagi Perlu dicek host, nominalnya belum cocok.
     Cek statusnya di sini: #{pay_url(bill)}\
     """
   end
 
-  defp message(ctx, %Bill{} = bill, member, :bill) do
+  defp message(ctx, bill, member, :bill) do
     """
     Halo #{member.display_name}! Tagihan #{title(ctx)} (#{date_text(ctx.session)}): #{rupiah(bill.amount_due)}.
     Bayar lewat link ini ya: #{pay_url(bill)}
@@ -225,7 +222,7 @@ defmodule Petepete.Share do
     """
   end
 
-  defp message(ctx, %Bill{} = bill, member, :reminder) do
+  defp message(ctx, bill, member, :reminder) do
     """
     Halo #{member.display_name}, mau ngingetin tagihan #{title(ctx)} (#{date_text(ctx.session)}) #{rupiah(bill.amount_due)} belum masuk nih.
     Bayar lewat link ini ya: #{pay_url(bill)}
@@ -233,7 +230,7 @@ defmodule Petepete.Share do
     """
   end
 
-  defp paid_note(%Bill{amount_due: 0}), do: " (sudah ketutup pakai saldo kamu)"
+  defp paid_note(%{amount_due: 0}), do: " (sudah ketutup pakai saldo kamu)"
   defp paid_note(_), do: ""
 
   defp reminder_group_text(ctx, owing) do
@@ -256,7 +253,7 @@ defmodule Petepete.Share do
     live_members = MapSet.new(live(ctx), fn {_bill, member} -> member.id end)
 
     voids =
-      for {%Bill{status: "void"}, member} = row <- ctx.rows,
+      for {%{status: "void"}, member} = row <- ctx.rows,
           not MapSet.member?(live_members, member.id),
           do: row
 
@@ -272,7 +269,7 @@ defmodule Petepete.Share do
       else: "#{event.name} (#{group.name})"
   end
 
-  defp date_text(%Session{starts_at: starts_at}) do
+  defp date_text(%{starts_at: starts_at}) do
     date = Wib.date(starts_at)
     day = Enum.at(@days, Date.day_of_week(date) - 1)
     "#{day}, #{date.day} #{Enum.at(@months, date.month - 1)} #{date.year}"
@@ -280,7 +277,7 @@ defmodule Petepete.Share do
 
   defp rupiah(amount), do: Description.rupiah(amount)
 
-  defp pay_url(%Bill{pay_token: token}) do
+  defp pay_url(%{pay_token: token}) do
     base = :petepete |> Application.fetch_env!(:web_base_url) |> String.trim_trailing("/")
     "#{base}/pay/#{token}"
   end
@@ -291,43 +288,4 @@ defmodule Petepete.Share do
   ## Loading
 
   defp live(ctx), do: Enum.reject(ctx.rows, fn {bill, _} -> bill.status == "void" end)
-
-  defp load(session_id) do
-    case Repo.get(Session, session_id) do
-      nil ->
-        {:error, :not_found}
-
-      %Session{status: "issued"} = session ->
-        {:ok,
-         %{
-           session: session,
-           group: Repo.get!(Group, session.group_id),
-           event: Repo.preload(session, :event).event,
-           rows: rows(session_id),
-           costs: costs(session_id)
-         }}
-
-      %Session{} ->
-        {:error, {:conflict, :session_not_issued}}
-    end
-  end
-
-  defp rows(session_id) do
-    Repo.all(
-      from b in Bill,
-        join: m in Member,
-        on: m.id == b.member_id,
-        where: b.session_id == ^session_id,
-        order_by: b.id,
-        select: {b, m}
-    )
-  end
-
-  defp costs(session_id) do
-    Repo.one(from c in CostItem, where: c.session_id == ^session_id, select: sum(c.amount))
-    |> case do
-      nil -> 0
-      total -> Decimal.to_integer(total)
-    end
-  end
 end

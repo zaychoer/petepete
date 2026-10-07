@@ -31,12 +31,13 @@ defmodule Petepete.SingleCallerTest do
     assert lib_lines() |> matching(~r/\{:host,/) == []
   end
 
-  # Contexts under lib/petepete receive an Actor the HTTP edge built; only `Petepete.Groups`
-  # itself authorizes (it defines `authorize/3` and `authorize_actor/3`, and its own host-only
-  # functions call the local `authorize/3`). Each allowlisted file is justified here.
+  # Contexts under lib/petepete receive an Actor the HTTP edge built; only
+  # `Petepete.Groups.Policy` authorizes (it defines `authorize/3` and `authorize_actor/3`).
+  # Each allowlisted file is justified here.
   # The web edge (`lib/petepete_web/plugs`) is where authorization belongs and is not scanned.
   @authorize_allowlist %{
-    "lib/petepete/groups.ex" => "defines authorize/3 and authorize_actor/3"
+    "lib/petepete/groups/policy.ex" => "defines authorize/3 and authorize_actor/3",
+    "lib/petepete/groups.ex" => "delegates to Policy.authorize/3 in decide_claim"
   }
 
   test "contexts do not call Groups.authorize" do

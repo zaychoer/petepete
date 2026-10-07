@@ -3,15 +3,15 @@ defmodule PetepeteWeb.Plugs.Access do
   What the `GroupAccess`, `SessionAccess`, `BillAccess` and `TxnAccess` plugs share, once
   they know the group: authorize the caller there and assign the result.
 
-    * role `:member`: `Groups.authorize/3`; assigns `:member` (the caller's `Member`).
-    * role `:host`: `Groups.authorize_actor/3`; assigns `:actor` (a host `Petepete.Actor`,
+    * role `:member`: `Groups.Policy.authorize/3`; assigns `:member` (the caller's `Member`).
+    * role `:host`: `Groups.Policy.authorize_actor/3`; assigns `:actor` (a host `Petepete.Actor`,
       what host actions hand to contexts) and `:member`, for controllers that still read the
       roster entry.
 
   Both also assign `:group_id`. Unknown group or non-member halts with 404, a non-host
   member on a host route with 403 (`PetepeteWeb.FallbackController`).
   """
-  alias Petepete.Groups
+  alias Petepete.Groups.Policy, as: GroupsPolicy
   alias PetepeteWeb.FallbackController
 
   @spec authorize(Plug.Conn.t(), integer() | nil, :member | :host) :: Plug.Conn.t()
@@ -43,12 +43,13 @@ defmodule PetepeteWeb.Plugs.Access do
   def parse_id(_), do: {:error, :not_found}
 
   defp do_authorize(scope, group_id, :member) do
-    with {:ok, member} <- Groups.authorize(scope, group_id, :member), do: {:ok, member: member}
+    with {:ok, member} <- GroupsPolicy.authorize(scope, group_id, :member),
+         do: {:ok, member: member}
   end
 
   defp do_authorize(scope, group_id, :host) do
-    with {:ok, actor} <- Groups.authorize_actor(scope, group_id, :host),
-         {:ok, member} <- Groups.authorize(scope, group_id, :member) do
+    with {:ok, actor} <- GroupsPolicy.authorize_actor(scope, group_id, :host),
+         {:ok, member} <- GroupsPolicy.authorize(scope, group_id, :member) do
       {:ok, actor: actor, member: member}
     end
   end

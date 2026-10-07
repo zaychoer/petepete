@@ -20,7 +20,7 @@ defmodule Petepete.HostAction do
     * `fun` raises: the transaction rolls back and the exception propagates.
 
   Authorization happened at the HTTP edge: only a host `Petepete.Actor` (from
-  `Petepete.Groups.authorize_actor/3`) is accepted; any other Actor is a
+  `Petepete.Groups.Policy.authorize_actor/3`) is accepted; any other Actor is a
   `FunctionClauseError`. The wrapper does not own the idempotency key: callers put it on
   their own Ledger event, and `PetepeteWeb.Plugs.IdempotencyKey` makes it mandatory on every
   host money route. `metadata` is plain JSON data and never holds phone numbers.

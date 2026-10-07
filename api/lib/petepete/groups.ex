@@ -1,6 +1,6 @@
 defmodule Petepete.Groups do
   @moduledoc """
-  Groups, their roster and their payout account, plus per-group authorization.
+  Groups, their roster and their payout account.
 
   Schemas: `Petepete.Groups.Group` (`groups`), `Petepete.Groups.Member`
   (`group_members`; hosts, members and guests), `Petepete.Groups.PayoutAccount`
@@ -13,74 +13,20 @@ defmodule Petepete.Groups do
   (`add_guest/2`). Approving a claim only links the account to the roster entry: the
   member id stays the same, so no ledger row moves or changes.
 
-  Authorization: a user only sees their own group's data. Non-members get
-  `:not_found` (existence is never leaked); a member acting beyond their role
-  gets `:forbidden`. Everything that writes sessions, costs, bills or the
-  ledger is host-only. `authorize/3` answers with the caller's `Member` (reads);
-  `authorize_actor/3` answers with a host `Petepete.Actor` and is the only way
-  production code obtains one (ADR-0003).
+  Authorization lives in `Petepete.Groups.Policy`.
 
   Accounts meet rosters here: `link_members_by_phone/1` attaches entries added by
-  phone number to a login, `hosts_active_group?/1` and `anonymize_roster/1` serve
-  account deletion.
+  phone number to a login, `anonymize_roster/1` serves account deletion.
   """
   import Ecto.Query
 
   alias Ecto.Multi
   alias Petepete.Accounts.{Scope, User}
-  alias Petepete.Actor
-  alias Petepete.Billing.{Bill, Session}
+  alias Petepete.Billing.Session
   alias Petepete.Groups.{Group, Member}
-  alias Petepete.Ledger.Txn
   alias Petepete.Repo
 
   @former_member_label "Mantan anggota"
-
-  @type role :: :member | :host
-  @type resource :: :session | :bill | :txn | :member
-
-  @doc """
-  Resolves the caller's roster entry in `group_id` and checks it satisfies `role`.
-
-  `:member` accepts any roster entry linked to the caller's account (host,
-  member or guest); `:host` requires the host role.
-  """
-  @spec authorize(Scope.t(), integer() | nil, role()) ::
-          {:ok, Member.t()} | {:error, :not_found | :forbidden}
-  def authorize(%Scope{user: %{id: user_id}}, group_id, role)
-      when is_integer(group_id) and role in [:member, :host] do
-    member =
-      Repo.one(
-        from m in Member,
-          where: m.group_id == ^group_id and m.user_id == ^user_id,
-          order_by: [asc: fragment("CASE ? WHEN 'host' THEN 0 ELSE 1 END", m.role), asc: m.id],
-          limit: 1
-      )
-
-    case {member, role} do
-      {nil, _} -> {:error, :not_found}
-      {%Member{role: "host"} = m, _} -> {:ok, m}
-      {m, :member} -> {:ok, m}
-      {_, :host} -> {:error, :forbidden}
-    end
-  end
-
-  def authorize(%Scope{}, _group_id, role) when role in [:member, :host],
-    do: {:error, :not_found}
-
-  @doc """
-  Authorizes the caller as host of `group_id` and returns the host `Petepete.Actor` that
-  contexts take for host actions. The only constructor of a host Actor in production code.
-
-  Non-members get `{:error, :not_found}`, non-host members `{:error, :forbidden}`.
-  """
-  @spec authorize_actor(Scope.t(), integer() | nil, :host) ::
-          {:ok, Actor.t()} | {:error, :not_found | :forbidden}
-  def authorize_actor(%Scope{} = scope, group_id, :host) do
-    with {:ok, %Member{} = member} <- authorize(scope, group_id, :host) do
-      {:ok, %Actor{type: :host, user_id: member.user_id, member_id: member.id}}
-    end
-  end
 
   @doc """
   Creates a group named and templated by the host, who becomes its host member.
@@ -232,8 +178,9 @@ defmodule Petepete.Groups do
   def reject_claim(%Scope{} = scope, member_id), do: decide_claim(scope, member_id, :reject)
 
   defp decide_claim(scope, member_id, decision) do
-    with group_id when is_integer(group_id) <- group_id_for(:member, member_id),
-         {:ok, _host} <- authorize(scope, group_id, :host) do
+    with group_id when is_integer(group_id) <-
+           Petepete.Groups.Policy.group_id_for(:member, member_id),
+         {:ok, _host} <- Petepete.Groups.Policy.authorize(scope, group_id, :host) do
       transact(fn ->
         member = lock_member(member_id) || Repo.rollback(:not_found)
         member.claim_user_id || Repo.rollback({:conflict, :no_claim})
@@ -329,27 +276,6 @@ defmodule Petepete.Groups do
     )
   end
 
-  @doc "The id of the group owning the resource, or `nil` if it does not exist."
-  @spec group_id_for(resource(), integer()) :: integer() | nil
-  def group_id_for(:session, id), do: group_of(Session, id)
-  def group_id_for(:txn, id), do: group_of(Txn, id)
-  def group_id_for(:member, id), do: group_of(Member, id)
-
-  def group_id_for(:bill, id) do
-    Repo.one(
-      from b in Bill,
-        join: s in Session,
-        on: s.id == b.session_id,
-        where: b.id == ^id,
-        select: s.group_id
-    )
-  end
-
-  defp group_of(schema, id) when is_integer(id),
-    do: Repo.one(from r in schema, where: r.id == ^id, select: r.group_id)
-
-  defp group_of(_schema, _id), do: nil
-
   @doc "Restricts a query over a table with a `group_id` column (sessions, events, members, txns…) to one group."
   @spec scope_to_group(Ecto.Queryable.t(), integer()) :: Ecto.Query.t()
   def scope_to_group(queryable, group_id), do: where(queryable, [r], r.group_id == ^group_id)
@@ -410,31 +336,6 @@ defmodule Petepete.Groups do
 
         count
     end
-  end
-
-  @doc """
-  Whether the user hosts a group that is still active.
-
-  A group is active when it has any session that is not cancelled, or any roster
-  entry besides the host's own. A group with only its host and no live sessions is
-  empty and may be left behind.
-  """
-  @spec hosts_active_group?(integer()) :: boolean()
-  def hosts_active_group?(user_id) do
-    Repo.exists?(
-      from h in Member,
-        as: :h,
-        where: h.user_id == ^user_id and h.role == "host",
-        where:
-          exists(
-            from s in Session,
-              where: s.group_id == parent_as(:h).group_id and s.status != "cancelled"
-          ) or
-            exists(
-              from m in Member,
-                where: m.group_id == parent_as(:h).group_id and m.id != parent_as(:h).id
-            )
-    )
   end
 
   @doc """

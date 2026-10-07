@@ -47,7 +47,7 @@ defmodule Petepete.Billing.CashPayments do
 
     with :ok <- Replay.require_key(key),
          group_id when is_integer(group_id) <-
-           Groups.group_id_for(:bill, bill_id) || {:error, :not_found} do
+           Groups.Policy.group_id_for(:bill, bill_id) || {:error, :not_found} do
       HostAction.run(actor, group_id, action, fn ->
         case Locks.lock_bills([bill_id]) do
           [bill] -> locked_fun.(bill, group_id, actor, key, opts)
