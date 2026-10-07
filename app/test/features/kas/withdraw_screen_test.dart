@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:petepete/ui/status_chip.dart';
 
 import '../../support/fake_kas_api.dart';
 import '../../support/sample.dart';
@@ -45,7 +46,7 @@ void main() {
 
     await _enterAmount(tester, '100000');
     await tester.tap(_withdrawButton);
-    await tester.pumpAndSettle();
+    await tester.pump(); await tester.pump(const Duration(milliseconds: 16));
 
     expect(fake.posts.single.path, '/api/groups/1/withdrawals');
     expect(fake.posts.single.body, {'amount': 100000});
@@ -86,11 +87,11 @@ void main() {
 
     await _enterAmount(tester, '100000');
     await tester.tap(_withdrawButton);
-    await tester.pumpAndSettle();
+    await tester.pump(); await tester.pump(const Duration(milliseconds: 16));
     expect(find.textContaining('Tidak bisa terhubung'), findsOneWidget);
 
     await tester.tap(_withdrawButton);
-    await tester.pumpAndSettle();
+    await tester.pump(); await tester.pump(const Duration(milliseconds: 16));
 
     expect(fake.posts, hasLength(2));
     expect(fake.posts[1].key, fake.posts[0].key);
@@ -104,7 +105,7 @@ void main() {
 
     await _enterAmount(tester, '100000');
     await tester.tap(_withdrawButton);
-    await tester.pumpAndSettle();
+    await tester.pump(); await tester.pump(const Duration(milliseconds: 16));
 
     expect(find.text(_serverMessage('insufficient_balance')), findsOneWidget);
   });
@@ -121,7 +122,7 @@ void main() {
 
       await _enterAmount(tester, '100000');
       await tester.tap(_withdrawButton);
-      await tester.pumpAndSettle();
+      await tester.pump(); await tester.pump(const Duration(milliseconds: 16));
 
       expect(launched, [Uri.parse(dashboard)]);
       expect(
@@ -132,7 +133,7 @@ void main() {
 
       // The history row can open it again.
       await tester.tap(find.text('Buka dashboard'));
-      await tester.pumpAndSettle();
+      await tester.pump(); await tester.pump(const Duration(milliseconds: 16));
       expect(launched, hasLength(2));
     });
 
@@ -150,7 +151,7 @@ void main() {
 
       await _enterAmount(tester, '100000');
       await tester.tap(_withdrawButton);
-      await tester.pumpAndSettle();
+      await tester.pump(); await tester.pump(const Duration(milliseconds: 16));
 
       expect(find.textContaining('gagal dibuka otomatis'), findsOneWidget);
       expect(find.text(dashboard), findsOneWidget);
@@ -185,8 +186,27 @@ void main() {
 
     expect(find.text(_serverMessage('no_payout_account')), findsOneWidget);
     await tester.tap(find.text('Daftarkan rekening pencairan'));
-    await tester.pumpAndSettle();
+    await tester.pump(); await tester.pump(const Duration(milliseconds: 16));
     expect(find.text('Daftar rekening pencairan'), findsOneWidget);
+  });
+
+  testWidgets('a needs_review withdrawal shows the label and a warning chip', (
+    tester,
+  ) async {
+    final fake = FakeKasApi();
+    fake.addWithdrawal(
+      id: 99,
+      amount: 50000,
+      status: 'needs_review',
+      insertedAt: DateTime.utc(2026, 10, 2),
+    );
+    await pumpKas(tester, fake, location: _location);
+
+    expect(find.text(WireLabels.withdrawal('needs_review')), findsOneWidget);
+    final chip = tester.widget<StatusChip>(
+      find.widgetWithText(StatusChip, WireLabels.withdrawal('needs_review')),
+    );
+    expect(chip.tone, StatusTone.warning);
   });
 
   testWidgets('Kas & riwayat links the host to Tarik dana', (tester) async {
@@ -194,7 +214,7 @@ void main() {
     await pumpKas(tester, fake);
 
     await tester.tap(find.text('Tarik dana'));
-    await tester.pumpAndSettle();
+    await tester.pump(); await tester.pump(const Duration(milliseconds: 16));
 
     expect(find.text('Saldo sub-account'), findsOneWidget);
   });

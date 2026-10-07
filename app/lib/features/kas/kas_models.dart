@@ -197,7 +197,7 @@ class Withdrawal {
   final int id;
   final int amount;
 
-  /// `pending`, `submitted`, `managed` or `failed`.
+  /// `pending`, `submitted`, `managed`, `failed` or `needs_review`.
   final String status;
   final String statusLabel;
 

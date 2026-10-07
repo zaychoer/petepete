@@ -413,5 +413,10 @@ Future<void> pumpKas(
       child: MaterialApp.router(theme: buildAppTheme(), routerConfig: router),
     ),
   );
-  await tester.pumpAndSettle();
+  // Do NOT use pumpAndSettle here: the withdraw screen's CircularProgressIndicator
+  // is an infinite animation that prevents settling. Pump enough frames for the
+  // fake HTTP response to complete and the screen to rebuild.
+  for (var i = 0; i < 20; i++) {
+    await tester.pump(const Duration(milliseconds: 16));
+  }
 }

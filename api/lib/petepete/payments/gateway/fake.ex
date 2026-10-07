@@ -140,6 +140,19 @@ defmodule Petepete.Payments.Gateway.Fake do
     end
   end
 
+  @impl true
+  def withdrawal_status(reference) do
+    case config(:withdrawal_status, :auto) do
+      :auto ->
+        if String.starts_with?(reference, "withdrawal-"),
+          do: {:ok, :submitted},
+          else: {:ok, :not_found}
+
+      result ->
+        result
+    end
+  end
+
   defp notify(call, key) do
     if pid = config(:notify, nil), do: send(pid, {:fake_gateway, call, key})
   end

@@ -28,6 +28,15 @@
       "status_label": "Penarikan lagi diproses"
     },
     {
+      "amount": 5000,
+      "id": 15,
+      "inserted_at": "2026-10-06T02:59:00Z",
+      "managed_url": null,
+      "provider_ref": null,
+      "status": "needs_review",
+      "status_label": "Penarikan perlu dicek"
+    },
+    {
       "amount": 10000,
       "id": 16,
       "inserted_at": "2026-10-06T03:00:00Z",

@@ -45,11 +45,10 @@ defmodule Petepete.Payments.PayLink do
   alias Petepete.Billing.Bill
   alias Petepete.Clock
   alias Petepete.Payments
-  alias Petepete.Payments.PaymentAttempt
+  alias Petepete.Payments.{IntentRunner, PaymentAttemptIntent, PaymentAttempt}
   alias Petepete.Repo
 
   @methods ~w(qris va ewallet)
-  @default_ttl_seconds 3600
 
   @type start_error ::
           :not_found
@@ -126,136 +125,36 @@ defmodule Petepete.Payments.PayLink do
   def start_payment(token, method) do
     with :ok <- check_method(method),
          %Bill{} = bill <- Billing.bill_by_token(token) || {:error, :not_found},
-         {:ok, step} <- prepare(bill.id, method) do
-      run(step)
+         {:ok, {row, ref}} <- prepare_attempt(bill.id, method) do
+      cond do
+        # Already has provider data – reuse; no gateway call.
+        is_binary(row.provider_ref) ->
+          {:ok, %{attempt: row, reused: true}}
+
+        # Pending without provider data – call gateway via IntentRunner.
+        true ->
+          case IntentRunner.complete(PaymentAttemptIntent, row, ref) do
+            {:ok, %PaymentAttempt{status: "failed"}} -> {:error, :gateway_error}
+            {:ok, %PaymentAttempt{status: "cancelled"}} -> {:error, :bill_void}
+            {:ok, attempt} -> {:ok, %{attempt: attempt, reused: false}}
+            {:error, reason} -> {:error, reason}
+          end
+      end
+    end
+  end
+
+  defp prepare_attempt(bill_id, method) do
+    case Repo.transaction(fn ->
+           PaymentAttemptIntent.prepare(%{bill_id: bill_id, method: method})
+         end) do
+      {:ok, {:ok, row, ref}} -> {:ok, {row, ref}}
+      {:ok, {:error, reason}} -> {:error, reason}
+      {:error, reason} -> {:error, reason}
     end
   end
 
   defp check_method(method) when method in @methods, do: :ok
   defp check_method(_), do: {:error, :unsupported_method}
-
-  # Under the bill lock: pick the attempt to return or complete, inserting a new `pending`
-  # row when there is none. Commits before the gateway is involved.
-  defp prepare(bill_id, method) do
-    Repo.transaction(fn ->
-      [bill] = Billing.lock_bills([bill_id])
-      now = Clock.now()
-
-      with :ok <- check_payable(bill, now) do
-        expire_overdue(bill.id, now)
-
-        case active_attempt(bill.id, method, now) do
-          %PaymentAttempt{provider_ref: ref} = attempt when is_binary(ref) -> {:reuse, attempt}
-          %PaymentAttempt{} = attempt -> {:call, attempt}
-          nil -> {:call, insert_attempt(bill, method, now)}
-        end
-      else
-        {:error, reason} -> Repo.rollback(reason)
-      end
-    end)
-  end
-
-  defp run({:reuse, attempt}), do: {:ok, %{attempt: attempt, reused: true}}
-
-  defp run({:call, %PaymentAttempt{} = attempt}) do
-    gateway = Payments.gateway()
-
-    request = %{
-      external_id: attempt.external_id,
-      method: attempt.method,
-      gross_amount: attempt.gross_amount,
-      expires_at: attempt.expires_at
-    }
-
-    case gateway.create_payment(request) do
-      {:ok, payment} -> accept(gateway, attempt, payment)
-      {:error, _reason} -> refuse(attempt)
-    end
-  end
-
-  defp check_payable(%Bill{status: "paid"}, _now), do: {:error, :bill_paid}
-  defp check_payable(%Bill{status: "void"}, _now), do: {:error, :bill_void}
-  defp check_payable(%Bill{status: "needs_review"}, _now), do: {:error, :bill_needs_review}
-
-  defp check_payable(%Bill{status: "unpaid"} = bill, now) do
-    if token_expired?(bill, now), do: {:error, :token_expired}, else: :ok
-  end
-
-  defp token_expired?(%Bill{status: "paid"}, _now), do: false
-
-  defp token_expired?(%Bill{token_expires_at: expires_at}, now),
-    do: DateTime.compare(now, expires_at) != :lt
-
-  defp insert_attempt(bill, method, now) do
-    gateway = Payments.gateway()
-
-    case Payments.fee_for(method, bill.amount_due) do
-      {:ok, fee} ->
-        seq = last_seq(bill.id) + 1
-
-        Repo.insert!(%PaymentAttempt{
-          bill_id: bill.id,
-          seq: seq,
-          external_id: "#{bill.id}-#{seq}",
-          provider: gateway.provider(),
-          method: method,
-          amount_due: bill.amount_due,
-          fee: fee,
-          gross_amount: bill.amount_due + fee,
-          expires_at: attempt_expiry(now, bill)
-        })
-
-      {:error, _} ->
-        Repo.rollback(:unsupported_method)
-    end
-  end
-
-  # The provider data is always stored (the webhook and a later cancel job need it); only a
-  # voiding that raced the gateway call turns the answer into an error, and the payment the
-  # provider just created is cancelled again, best effort.
-  defp accept(gateway, attempt, payment) do
-    Repo.update_all(
-      from(a in PaymentAttempt, where: a.id == ^attempt.id),
-      set: [
-        provider_ref: payment.provider_ref,
-        action: payment.action,
-        expires_at: DateTime.truncate(payment.expires_at, :second),
-        updated_at: Clock.now()
-      ]
-    )
-
-    case Repo.get!(PaymentAttempt, attempt.id) do
-      %PaymentAttempt{status: "cancelled"} ->
-        _ = gateway.cancel_payment(payment.provider_ref)
-        {:error, :bill_void}
-
-      %PaymentAttempt{} = updated ->
-        {:ok, %{attempt: updated, reused: false}}
-    end
-  end
-
-  # Keep the failed row: its seq must never be handed out again.
-  defp refuse(attempt) do
-    Repo.update_all(
-      from(a in PaymentAttempt, where: a.id == ^attempt.id and a.status == "pending"),
-      set: [status: "failed", updated_at: Clock.now()]
-    )
-
-    {:error, :gateway_error}
-  end
-
-  defp attempt_expiry(now, bill) do
-    ttl =
-      :petepete
-      |> Application.get_env(Petepete.Payments, [])
-      |> Keyword.get(:attempt_ttl_seconds, @default_ttl_seconds)
-
-    Enum.min([DateTime.add(now, ttl, :second), bill.token_expires_at], DateTime)
-  end
-
-  defp last_seq(bill_id) do
-    Repo.one(from a in PaymentAttempt, where: a.bill_id == ^bill_id, select: max(a.seq)) || 0
-  end
 
   defp latest_attempt(bill_id) do
     Repo.one(
@@ -272,18 +171,11 @@ defmodule Petepete.Payments.PayLink do
     )
   end
 
-  defp active_attempt(bill_id, method, now) do
-    Repo.one(
-      from a in PaymentAttempt,
-        where:
-          a.bill_id == ^bill_id and a.method == ^method and a.status == "pending" and
-            a.expires_at > ^now,
-        order_by: [desc: a.seq],
-        limit: 1
-    )
-  end
+  defp token_expired?(%Bill{status: "paid"}, _now), do: false
 
-  # Guarded on status so a concurrent webhook that settles the attempt wins.
+  defp token_expired?(%Bill{token_expires_at: expires_at}, now),
+    do: DateTime.compare(now, expires_at) != :lt
+
   defp expire_overdue(bill_id, now) do
     Repo.update_all(
       from(a in PaymentAttempt,

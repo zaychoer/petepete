@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:petepete/ui/status_chip.dart';
 
 import '../../support/fake_groups_api.dart';
 
@@ -125,5 +126,49 @@ void main() {
       findsOneWidget,
     );
     expect(fake.calls('POST /api/groups/5/payout-account'), isEmpty);
+  });
+
+  testWidgets('a registering payout shows the label and an info chip', (
+    tester,
+  ) async {
+    final fake = _fake()
+      ..payout = {
+        'status': 'registering',
+        'bank_name': 'BCA',
+        'account_last4': '7890',
+      };
+    final app = AppHarness(fake);
+    await app.pump(tester, app.screenRouter(_route));
+
+    expect(find.text(payoutLabel('registering')), findsOneWidget);
+    final chip = tester.widget<StatusChip>(
+      find.widgetWithText(StatusChip, payoutLabel('registering')),
+    );
+    expect(chip.tone, StatusTone.info);
+  });
+
+  testWidgets('a failed payout shows the label and a retry button', (
+    tester,
+  ) async {
+    final fake = _fake()
+      ..payout = {
+        'status': 'failed',
+        'bank_name': 'BCA',
+        'account_last4': '7890',
+      };
+    final app = AppHarness(fake);
+    await app.pump(tester, app.screenRouter(_route));
+
+    expect(find.text(payoutLabel('failed')), findsOneWidget);
+    final chip = tester.widget<StatusChip>(
+      find.widgetWithText(StatusChip, payoutLabel('failed')),
+    );
+    expect(chip.tone, StatusTone.danger);
+    expect(find.widgetWithText(FilledButton, 'Coba lagi'), findsOneWidget);
+
+    // Tapping retry shows the registration form.
+    await tester.tap(find.text('Coba lagi'));
+    await tester.pumpAndSettle();
+    expect(find.text('Daftarkan rekening'), findsOneWidget);
   });
 }

@@ -319,13 +319,18 @@ String roleLabel(String role) {
   ].first;
 }
 
-/// The server's label for a payout account [status], read from the recorded
-/// responses that carry one.
-String payoutLabel(String status) => [
-  for (final name in ['payout_account.pending_kyc', 'payout_balance.active'])
-    if (Sample.load(name).json['status'] == status)
-      Sample.load(name).json['status_label'] as String,
-].first;
+/// The server's label for a payout account [status].
+/// `registering` and `failed` are transient (no contract sample); their labels
+/// match the server's `PetepeteWeb.Labels.payout_account/1`.
+String payoutLabel(String status) => switch (status) {
+  'registering' => 'Mendaftar...',
+  'failed' => 'Pendaftaran gagal. Coba lagi.',
+  _ => [
+    for (final name in ['payout_account.pending_kyc', 'payout_balance.active'])
+      if (Sample.load(name).json['status'] == status)
+        Sample.load(name).json['status_label'] as String,
+  ].first,
+};
 
 /// A home with nothing in it yet (`group_home.quiet`).
 Sample emptyHome(int id, String name, {String role = 'host'}) =>
@@ -421,6 +426,6 @@ class AppHarness {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pumpAndSettle(const Duration(seconds: 5));
   }
 }

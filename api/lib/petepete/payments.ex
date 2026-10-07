@@ -16,6 +16,7 @@ defmodule Petepete.Payments do
 
   alias Petepete.{Actor, HostAction}
   alias Petepete.Groups.{Group, Member, PayoutAccount}
+  alias Petepete.Payments.{IntentRunner, PayoutRegistrationIntent}
   alias Petepete.Repo
 
   @doc "The configured `Petepete.Payments.Gateway` adapter module."
@@ -34,17 +35,13 @@ defmodule Petepete.Payments do
   @bank_types %{bank_name: :string, account_number: :string, account_holder_name: :string}
 
   @doc """
-  Registers the host `actor` as the payout account owner of `group_id` (PAY-07): asks the
-  gateway for a sub-account, then records it in `payout_accounts` with the status the
-  gateway returns (`pending_kyc` until KYC finishes, see `refresh_payout_account/1`).
+  Registers the host `actor` as the payout account owner of `group_id` (PAY-07): commits a
+  `registering` row first (via HostAction + audit), then asks the gateway for a sub-account
+  outside the transaction, then settles the row with the gateway's outcome.
 
   `key` is the request's `Idempotency-Key`, unique per group. A repeat of a key that
   already registered an account returns that account (`replayed: true`) without asking the
   gateway again and without a second audit row.
-
-  The gateway is asked first, outside any transaction; the `payout_accounts` row and its
-  `payout_account.register` audit row then commit together through `Petepete.HostAction`,
-  so a gateway failure or invalid bank data leaves no audit row.
 
   `bank_details` takes `bank_name`, `account_number` and `account_holder_name`. Only the
   last four digits of the account number are kept.
@@ -54,52 +51,83 @@ defmodule Petepete.Payments do
           | {:error, Ecto.Changeset.t() | term()}
   def register_payout_account(%Actor{} = actor, group_id, key, bank_details)
       when is_binary(key) do
-    case Repo.get_by(PayoutAccount, group_id: group_id, idempotency_key: key) do
-      %PayoutAccount{} = account -> {:ok, %{payout_account: account, replayed: true}}
-      nil -> register_new(actor, group_id, key, bank_details)
+    with {:ok, bank} <- validate_bank(bank_details) do
+      group = Repo.get!(Group, group_id)
+      owner = Repo.get!(Member, actor.member_id)
+      gw = gateway()
+
+      # Prepare: insert registering row or find existing, inside HostAction for audit.
+      case prepare_registration(actor, group, owner, gw, key, bank) do
+        {:ok, %{payout_account: account, replayed: true}} ->
+          {:ok, %{payout_account: account, replayed: true}}
+
+        {:ok, %{payout_account: account, replayed: false}} ->
+          # Request: call gateway outside any transaction.
+          # Store bank details in process dict for the intent's request callback.
+          Process.put({PayoutRegistrationIntent, :bank_details}, bank)
+          result = PayoutRegistrationIntent.request(account, "payout-reg-#{account.id}")
+          Process.delete({PayoutRegistrationIntent, :bank_details})
+
+          # Settle: update the row with the gateway result.
+          case Repo.transaction(fn ->
+                 PayoutRegistrationIntent.settle(account, result)
+               end) do
+            {:ok, {:ok, settled}} ->
+              {:ok, %{payout_account: settled, replayed: false}}
+
+            {:ok, {:error, {:registration_failed, _failed, reason}}} ->
+              {:error, reason}
+
+            {:error, reason} ->
+              {:error, reason}
+          end
+
+        {:error, reason} ->
+          {:error, reason}
+      end
     end
   end
 
-  defp register_new(actor, group_id, key, bank_details) do
-    with {:ok, bank} <- validate_bank(bank_details),
-         group = Repo.get!(Group, group_id),
-         owner = Repo.get!(Member, actor.member_id),
-         gateway = gateway(),
-         {:ok, account} <-
-           gateway.register_payout_account(%{
-             group_id: group.id,
-             group_name: group.name,
-             owner_member_id: owner.id,
-             owner_name: owner.display_name,
-             bank: bank
-           }),
-         {:ok, payout_account} <-
-           HostAction.run(actor, group.id, "payout_account.register", fn ->
-             with {:ok, payout_account} <-
-                    Repo.insert(%PayoutAccount{
-                      group_id: group.id,
-                      owner_member_id: owner.id,
-                      provider: gateway.provider(),
-                      provider_account_id: account.provider_account_id,
-                      status: Atom.to_string(account.status),
-                      bank_name: bank.bank_name,
-                      account_last4: String.slice(bank.account_number, -4, 4),
-                      idempotency_key: key
-                    }) do
-               {:ok, payout_account,
+  defp prepare_registration(actor, group, owner, gateway, key, bank) do
+    # Check for existing account first (cheap, no HostAction needed for replay)
+    case Repo.get_by(PayoutAccount, group_id: group.id, idempotency_key: key) do
+      %PayoutAccount{status: "registering"} = account ->
+        # In-progress registration: treat as new (complete the request)
+        {:ok, %{payout_account: account, replayed: false}}
+
+      %PayoutAccount{} = account ->
+        {:ok, %{payout_account: account, replayed: true}}
+
+      nil ->
+        # New registration: create inside HostAction for audit
+        case HostAction.run(actor, group.id, "payout_account.register", fn ->
+               {:ok, account, _ref} =
+                 IntentRunner.prepare_only(PayoutRegistrationIntent, %{
+                   group_id: group.id,
+                   owner_member_id: owner.id,
+                   bank: bank,
+                   idempotency_key: key,
+                   gateway: gateway
+                 })
+
+               {:ok, account,
                 %{
-                  subject: {"payout_account", payout_account.id},
+                  subject: {"payout_account", account.id},
                   metadata: %{
                     "owner_member_id" => owner.id,
-                    "provider" => payout_account.provider,
-                    "bank_name" => payout_account.bank_name,
-                    "account_last4" => payout_account.account_last4
+                    "provider" => account.provider,
+                    "bank_name" => account.bank_name,
+                    "account_last4" => account.account_last4
                   },
                   replayed: false
                 }}
-             end
-           end) do
-      {:ok, %{payout_account: payout_account, replayed: false}}
+             end) do
+          {:ok, account} ->
+            {:ok, %{payout_account: account, replayed: false}}
+
+          {:error, reason} ->
+            {:error, reason}
+        end
     end
   end
 

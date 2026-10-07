@@ -16,6 +16,7 @@ defmodule Petepete.Payments.PaymentAttempt do
     field :status, :string, default: "pending"
     field :action, :map
     field :expires_at, :utc_datetime
+    field :retry_count, :integer, default: 0
 
     timestamps(type: :utc_datetime)
   end
