@@ -66,7 +66,7 @@ defmodule Petepete.Sessions.SessionSchedulerTest do
     {Oban.Plugins.Cron, opts} =
       :petepete |> Application.fetch_env!(Oban) |> Keyword.fetch!(:plugins) |> List.first()
 
-    assert [{expression, SessionScheduler}] = Keyword.fetch!(opts, :crontab)
+    assert [{expression, SessionScheduler} | _] = Keyword.fetch!(opts, :crontab)
     parsed = Oban.Cron.Expression.parse!(expression)
 
     assert Oban.Cron.Expression.now?(parsed, ~U[2026-10-05 17:05:00Z])

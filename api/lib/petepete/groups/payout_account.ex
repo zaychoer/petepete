@@ -11,6 +11,7 @@ defmodule Petepete.Groups.PayoutAccount do
     field :bank_name, :string
     field :account_last4, :string
     field :idempotency_key, :string
+    field :retry_count, :integer, default: 0
 
     timestamps(type: :utc_datetime)
   end

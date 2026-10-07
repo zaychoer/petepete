@@ -45,6 +45,9 @@ defmodule Petepete.Payments.Gateway.Spy do
     Fake.withdraw(provider_account_id, amount, reference)
   end
 
+  @impl true
+  defdelegate withdrawal_status(reference), to: Fake
+
   @doc "Makes the Spy the gateway of the calling test and runs `on_call` on each call."
   @spec install(function()) :: :ok
   def install(on_call) when is_function(on_call, 2) do

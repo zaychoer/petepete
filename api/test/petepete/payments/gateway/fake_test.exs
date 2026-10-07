@@ -71,4 +71,15 @@ defmodule Petepete.Payments.Gateway.FakeTest do
   test "cancel_payment/1 is unsupported" do
     assert {:error, :unsupported} = Fake.cancel_payment("fake-12-1")
   end
+
+  describe "withdrawal_status/1" do
+    test "returns :submitted for references starting with withdrawal-" do
+      assert {:ok, :submitted} = Fake.withdrawal_status("withdrawal-abc123")
+    end
+
+    test "returns :not_found for other references" do
+      assert {:ok, :not_found} = Fake.withdrawal_status("payment-xyz")
+      assert {:ok, :not_found} = Fake.withdrawal_status("unknown")
+    end
+  end
 end

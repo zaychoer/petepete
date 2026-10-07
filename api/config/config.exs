@@ -17,7 +17,11 @@ config :petepete, Oban,
   queues: [default: 10, payments: 10, notifications: 10],
   plugins: [
     # Cron expressions are UTC: 17:05 UTC is 00:05 WIB (UTC+7), daily.
-    {Oban.Plugins.Cron, crontab: [{"5 17 * * *", Petepete.Sessions.SessionScheduler}]}
+    {Oban.Plugins.Cron,
+     crontab: [
+       {"5 17 * * *", Petepete.Sessions.SessionScheduler},
+       {"*/5 * * * *", Petepete.Payments.IntentReconciler}
+     ]}
   ]
 
 # Payment gateway adapters. The adapter in use is set per environment
@@ -31,6 +35,12 @@ config :petepete, Petepete.Payments.Gateway.Fake,
     "va" => %{flat: 4_440, bps: 0},
     "ewallet" => %{flat: 0, bps: 167}
   }
+
+# Outbound intent runner and reconciler settings.
+config :petepete, Petepete.Payments,
+  intent_stuck_threshold_seconds: 600,
+  intent_max_retries: 3,
+  intent_modules: []
 
 # Configure the endpoint
 config :petepete, PetepeteWeb.Endpoint,
