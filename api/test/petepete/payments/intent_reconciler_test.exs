@@ -1,83 +1,193 @@
 defmodule Petepete.Payments.IntentReconcilerTest do
+  # Not async: the fake gateway's behaviour is application config.
   use Petepete.DataCase, async: false
-  use Oban.Testing, repo: Petepete.Repo
 
-  alias Petepete.Payments.{IntentReconciler, IntentRunner}
-  alias Petepete.TestIntent
+  alias Petepete.{BillingScenario, Clock, FakeGateway}
+  alias Petepete.Groups.PayoutAccount
+  alias Petepete.Payments.{IntentReconciler, PaymentAttempt, Withdrawal}
 
-  setup do
-    ctx = Petepete.BillingScenario.issued()
-    bill = ctx.bills |> Map.values() |> hd()
-    TestIntent.start(bill_id: bill.id)
-    on_exit(fn -> TestIntent.stop() end)
+  @threshold_seconds 600
 
-    # Register the test intent module
-    original = Application.get_env(:petepete, Petepete.Payments, [])
-
-    Application.put_env(
-      :petepete,
-      Petepete.Payments,
-      Keyword.merge(original, intent_modules: [TestIntent])
-    )
-
-    on_exit(fn -> Application.put_env(:petepete, Petepete.Payments, original) end)
-
-    %{bill_id: bill.id}
+  defp put_payments_config(overrides) do
+    old = Application.get_env(:petepete, Petepete.Payments, [])
+    Application.put_env(:petepete, Petepete.Payments, Keyword.merge(old, overrides))
+    on_exit(fn -> Application.put_env(:petepete, Petepete.Payments, old) end)
   end
 
-  test "reconciler redrives stuck rows", %{bill_id: bill_id} do
-    ref = "recon-redrive-#{System.unique_integer([:positive])}"
-    {:ok, row} = IntentRunner.run(TestIntent, %{ref: ref, bill_id: bill_id})
+  describe "payment attempts" do
+    setup do
+      Clock.freeze(~U[2026-10-06 03:00:00Z])
+      FakeGateway.configure(notify: self())
 
-    # Make the row look stuck (pending)
-    row
-    |> Ecto.Changeset.change(status: "pending")
-    |> Repo.update!()
+      put_payments_config(
+        intent_stuck_threshold_seconds: @threshold_seconds,
+        intent_max_retries: 3
+      )
 
-    stuck_row = %{row | status: "pending"}
+      ctx = BillingScenario.issued()
+      %{bill: ctx.bills[ctx.a.id]}
+    end
 
-    # Configure test intent: stuck returns our row, recover says :redrive
-    TestIntent.configure(stuck_rows: [stuck_row], recover_action: :redrive)
+    test "reconciler re-drives a stuck pending attempt (no provider_ref, older than threshold)",
+         %{bill: bill} do
+      # Insert a stuck pending attempt older than the threshold.
+      stuck_time = DateTime.add(~U[2026-10-06 03:00:00Z], -(@threshold_seconds + 60), :second)
 
-    assert :ok = perform_job(IntentReconciler, %{})
+      stuck =
+        Repo.insert!(%PaymentAttempt{
+          bill_id: bill.id,
+          seq: 1,
+          external_id: "#{bill.id}-1",
+          provider: "fake",
+          method: "qris",
+          amount_due: bill.amount_due,
+          fee: 240,
+          gross_amount: bill.amount_due + 240,
+          status: "pending",
+          expires_at: DateTime.add(~U[2026-10-06 03:00:00Z], 3600, :second),
+          inserted_at: stuck_time,
+          updated_at: stuck_time
+        })
 
-    # Row should be settled after redrive
-    updated = Repo.get!(TestIntent, row.id)
-    assert updated.status == "paid"
-    assert updated.retry_count == 1
+      assert is_nil(stuck.provider_ref)
+
+      # Run the reconciler.
+      assert :ok = IntentReconciler.perform(%Oban.Job{args: %{}})
+
+      # The attempt should now have a provider_ref (re-driven successfully).
+      updated = Repo.get!(PaymentAttempt, stuck.id)
+      assert updated.provider_ref == "fake-#{bill.id}-1"
+      assert updated.retry_count == 1
+      assert_received {:fake_gateway, :create_payment, _}
+    end
+
+    test "reconciler marks stuck attempt as failed after max retries", %{bill: bill} do
+      stuck_time = DateTime.add(~U[2026-10-06 03:00:00Z], -(@threshold_seconds + 60), :second)
+
+      stuck =
+        Repo.insert!(%PaymentAttempt{
+          bill_id: bill.id,
+          seq: 1,
+          external_id: "#{bill.id}-1",
+          provider: "fake",
+          method: "qris",
+          amount_due: bill.amount_due,
+          fee: 240,
+          gross_amount: bill.amount_due + 240,
+          status: "pending",
+          expires_at: DateTime.add(~U[2026-10-06 03:00:00Z], 3600, :second),
+          retry_count: 3,
+          inserted_at: stuck_time,
+          updated_at: stuck_time
+        })
+
+      assert :ok = IntentReconciler.perform(%Oban.Job{args: %{}})
+
+      updated = Repo.get!(PaymentAttempt, stuck.id)
+      assert updated.status == "failed"
+      assert updated.retry_count == 3
+      refute_received {:fake_gateway, :create_payment, _}
+    end
   end
 
-  test "reconciler marks :fail rows as failed", %{bill_id: bill_id} do
-    ref = "recon-fail-#{System.unique_integer([:positive])}"
-    {:ok, row} = IntentRunner.run(TestIntent, %{ref: ref, bill_id: bill_id})
+  describe "withdrawals" do
+    setup do
+      FakeGateway.configure(balance: 500_000, notify: self())
 
-    row
-    |> Ecto.Changeset.change(status: "pending")
-    |> Repo.update!()
+      put_payments_config(
+        intent_stuck_threshold_seconds: @threshold_seconds,
+        intent_max_retries: 3
+      )
 
-    stuck_row = %{row | status: "pending"}
-    TestIntent.configure(stuck_rows: [stuck_row], recover_action: :fail)
+      ctx = BillingScenario.issued()
+      %{ctx: ctx}
+    end
 
-    assert :ok = perform_job(IntentReconciler, %{})
+    test "a stuck pending withdrawal moves to needs_review (default recovery)", %{ctx: ctx} do
+      stuck_time = DateTime.add(DateTime.utc_now(:second), -(@threshold_seconds + 60), :second)
 
-    updated = Repo.get!(TestIntent, row.id)
-    assert updated.status == "failed"
+      stuck =
+        Repo.insert!(%Withdrawal{
+          group_id: ctx.group.id,
+          payout_account_id: ctx.payout_account.id,
+          amount: 100_000,
+          status: "pending",
+          idempotency_key: "stuck-wd",
+          inserted_at: stuck_time
+        })
+
+      # Default: gateway.withdrawal_status returns :not_found → :redrive
+      # But after max_retries, it would fail. Let's test with :unsupported to get :needs_review.
+      FakeGateway.configure(withdrawal_status: {:error, :unsupported})
+
+      assert :ok = IntentReconciler.perform(%Oban.Job{args: %{}})
+
+      updated = Repo.get!(Withdrawal, stuck.id)
+      assert updated.status == "needs_review"
+    end
+
+    test "when the Fake returns :submitted for a stuck withdrawal, the reconciler settles it",
+         %{ctx: ctx} do
+      stuck_time = DateTime.add(DateTime.utc_now(:second), -(@threshold_seconds + 60), :second)
+
+      stuck =
+        Repo.insert!(%Withdrawal{
+          group_id: ctx.group.id,
+          payout_account_id: ctx.payout_account.id,
+          amount: 100_000,
+          status: "pending",
+          idempotency_key: "stuck-wd-settled",
+          inserted_at: stuck_time
+        })
+
+      # withdrawal_status returns :submitted → :redrive → calls request → settles
+      FakeGateway.configure(withdrawal_status: {:ok, :submitted})
+
+      assert :ok = IntentReconciler.perform(%Oban.Job{args: %{}})
+
+      updated = Repo.get!(Withdrawal, stuck.id)
+      # The redrive calls WithdrawalIntent.request → gateway.withdraw → settles
+      assert updated.status in ~w(submitted managed)
+      assert updated.retry_count == 1
+      assert_received {:fake_gateway, :withdraw, _}
+    end
   end
 
-  test "reconciler marks :needs_review rows", %{bill_id: bill_id} do
-    ref = "recon-review-#{System.unique_integer([:positive])}"
-    {:ok, row} = IntentRunner.run(TestIntent, %{ref: ref, bill_id: bill_id})
+  describe "payout registration" do
+    setup do
+      FakeGateway.configure(notify: self())
 
-    row
-    |> Ecto.Changeset.change(status: "pending")
-    |> Repo.update!()
+      put_payments_config(
+        intent_stuck_threshold_seconds: @threshold_seconds,
+        intent_max_retries: 3
+      )
 
-    stuck_row = %{row | status: "pending"}
-    TestIntent.configure(stuck_rows: [stuck_row], recover_action: :needs_review)
+      group = Petepete.Fixtures.group_fixture()
+      {_user, host} = Petepete.Fixtures.host_fixture(group)
+      %{group: group, host: host}
+    end
 
-    assert :ok = perform_job(IntentReconciler, %{})
+    test "reconciler marks stuck registering payout account as failed after threshold",
+         %{group: group, host: host} do
+      stuck_time = DateTime.add(DateTime.utc_now(:second), -(@threshold_seconds + 60), :second)
 
-    updated = Repo.get!(TestIntent, row.id)
-    assert updated.status == "expired"
+      stuck =
+        Repo.insert!(%PayoutAccount{
+          group_id: group.id,
+          owner_member_id: host.id,
+          provider: "fake",
+          status: "registering",
+          bank_name: "BCA",
+          account_last4: "9012",
+          idempotency_key: "stuck-pa",
+          inserted_at: stuck_time,
+          updated_at: stuck_time
+        })
+
+      assert :ok = IntentReconciler.perform(%Oban.Job{args: %{}})
+
+      updated = Repo.get!(PayoutAccount, stuck.id)
+      assert updated.status == "failed"
+    end
   end
 end

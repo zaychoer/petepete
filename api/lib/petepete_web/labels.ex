@@ -33,12 +33,15 @@ defmodule PetepeteWeb.Labels do
     "pending" => "Penarikan lagi diproses",
     "failed" => "Penarikan gagal. Coba lagi.",
     "submitted" => "Penarikan diajukan",
-    "managed" => "Selesaikan di dashboard gateway"
+    "managed" => "Selesaikan di dashboard gateway",
+    "needs_review" => "Penarikan perlu dicek"
   }
 
   @payout_account %{
+    "registering" => "Mendaftar...",
     "pending_kyc" => "Menunggu verifikasi (KYC)",
-    "active" => "Aktif"
+    "active" => "Aktif",
+    "failed" => "Pendaftaran gagal. Coba lagi."
   }
 
   @paid_via %{"cash" => "Cash", "gateway" => "Online", "credit" => "Saldo"}

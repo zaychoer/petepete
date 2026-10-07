@@ -142,10 +142,14 @@ defmodule Petepete.Payments.Gateway.Fake do
 
   @impl true
   def withdrawal_status(reference) do
-    if String.starts_with?(reference, "withdrawal-") do
-      {:ok, :submitted}
-    else
-      {:ok, :not_found}
+    case config(:withdrawal_status, :auto) do
+      :auto ->
+        if String.starts_with?(reference, "withdrawal-"),
+          do: {:ok, :submitted},
+          else: {:ok, :not_found}
+
+      result ->
+        result
     end
   end
 

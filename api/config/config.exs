@@ -24,6 +24,16 @@ config :petepete, Oban,
      ]}
   ]
 
+# Outbound intent configuration (ADR-0005).
+config :petepete, Petepete.Payments,
+  intent_modules: [
+    Petepete.Payments.PaymentAttemptIntent,
+    Petepete.Payments.WithdrawalIntent,
+    Petepete.Payments.PayoutRegistrationIntent
+  ],
+  intent_stuck_threshold_seconds: 600,
+  intent_max_retries: 3
+
 # Payment gateway adapters. The adapter in use is set per environment
 # (`config :petepete, :gateway`: dev.exs, test.exs, runtime.exs for prod).
 # Fee tables: `flat` rupiah + `bps` basis points of the gross amount, PPN included.
@@ -35,12 +45,6 @@ config :petepete, Petepete.Payments.Gateway.Fake,
     "va" => %{flat: 4_440, bps: 0},
     "ewallet" => %{flat: 0, bps: 167}
   }
-
-# Outbound intent runner and reconciler settings.
-config :petepete, Petepete.Payments,
-  intent_stuck_threshold_seconds: 600,
-  intent_max_retries: 3,
-  intent_modules: []
 
 # Configure the endpoint
 config :petepete, PetepeteWeb.Endpoint,

@@ -190,7 +190,7 @@ defmodule Petepete.PaymentsTest do
       assert id == "other-#{host.id}"
     end
 
-    test "a gateway failure creates no payout account" do
+    test "a gateway failure creates a failed payout account row" do
       put_env!(:gateway, OtherGateway)
       Process.put(:other_register, {:error, :provider_down})
       group = group_fixture()
@@ -199,8 +199,11 @@ defmodule Petepete.PaymentsTest do
       assert {:error, :provider_down} =
                Payments.register_payout_account(host_actor(group, host), group.id, "k1", @bank)
 
-      assert Repo.aggregate(PayoutAccount, :count) == 0
-      assert Repo.aggregate(AuditLog, :count) == 0
+      # The intent row is created first as `registering`, then settled to `failed`.
+      assert Repo.aggregate(PayoutAccount, :count) == 1
+      assert Repo.get_by!(PayoutAccount, idempotency_key: "k1").status == "failed"
+      # One audit row from the prepare (register) step.
+      assert Repo.aggregate(AuditLog, :count) == 1
     end
   end
 end
