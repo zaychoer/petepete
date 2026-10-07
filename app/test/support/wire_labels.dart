@@ -25,11 +25,11 @@ class WireLabels {
   /// A ledger txn `kind` (`settlement`, `kas_spend`, ...) from `txns.history`.
   static String txnKind(String code) => _find(_txnKinds, code, 'txn kind');
 
-  /// `pending | submitted | managed | failed`.
+  /// `pending | submitted | managed | failed | needs_review`.
   static String withdrawal(String code) =>
       _find(_withdrawals, code, 'withdrawal status');
 
-  /// `pending_kyc | active`.
+  /// `pending_kyc | active | registering | failed`.
   static String payoutAccount(String code) =>
       _find(_payoutAccounts, code, 'payout account status');
 
@@ -91,6 +91,8 @@ class WireLabels {
   static final _payoutAccounts = _pairs([
     (Sample.load('payout_balance.active').json, 'status', 'status_label'),
     (Sample.load('payout_account.pending_kyc').json, 'status', 'status_label'),
+    (Sample.load('payout_account.registering').json, 'status', 'status_label'),
+    (Sample.load('payout_account.failed').json, 'status', 'status_label'),
   ]);
 
   /// Collects `code -> label` pairs from objects (or lists of objects).

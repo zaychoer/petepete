@@ -298,6 +298,7 @@ class _WithdrawalTile extends StatelessWidget {
     final tone = switch (withdrawal.status) {
       'failed' => StatusTone.danger,
       'managed' || 'pending' => StatusTone.warning,
+      'needs_review' => StatusTone.warning,
       _ => StatusTone.info,
     };
     return Card(
