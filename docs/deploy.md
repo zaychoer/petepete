@@ -60,7 +60,7 @@ fly secrets set -a petepete-staging --stage WEB_BASE_URL=https://<web-app-host>
 
 `WEB_BASE_URL` is the public origin of the web app. Group invite links are `<WEB_BASE_URL>/join/<token>`. **The app refuses to boot in production without it.**
 
-The web app needs the opposite link: set the Vercel project env var `NEXT_PUBLIC_API_BASE_URL` to the API's public origin (e.g. `https://petepete-staging.fly.dev`, no trailing slash) and redeploy, because it is baked in at build time. The pay page (`/pay/<token>`) and join page (`/join/<token>`) call the API from the browser; the API answers CORS only for the `WEB_BASE_URL` origin, so the two values must name the same site.
+The web app needs the opposite link: set the env var `VITE_API_BASE_URL` to the API's public origin (e.g. `https://petepete-staging.fly.dev`, no trailing slash) and rebuild, because it is baked in at build time. The pay page (`/pay/<token>`) and join page (`/join/<token>`) call the API from the browser; the API answers CORS only for the `WEB_BASE_URL` origin, so the two values must name the same site.
 
 ### 4d. Link from the web join page into the app (Android App Links)
 
@@ -133,7 +133,7 @@ One Sentry project per layer, so every event carries the tag `layer` = `api`, `w
 | Layer | Where the DSN goes | Notes |
 | --- | --- | --- |
 | API | Fly secret `SENTRY_DSN` | `SENTRY_ENVIRONMENT` is already set per app in `api/fly.*.toml` |
-| WEB | Vercel project env var `NEXT_PUBLIC_SENTRY_DSN` (public by design) | Read at build time: redeploy after changing it |
+| WEB | Build env var `VITE_SENTRY_DSN` (public by design) | Read at build time: rebuild after changing it |
 | APP | `--dart-define=SENTRY_DSN=<dsn>` on `flutter run` / `flutter build` | Optional `--dart-define=SENTRY_ENVIRONMENT=staging` |
 
 ```sh
@@ -146,9 +146,7 @@ Send a test event from each layer and check in Sentry that the issue has the rig
 # API: run inside the app (the message contains a phone number on purpose)
 fly ssh console -a petepete-staging -C '/app/bin/petepete rpc "Sentry.capture_message(~s[Sentry test event (api) 081234567890])"'
 
-# WEB: set SENTRY_TEST_TOKEN in Vercel (any random string), redeploy, then
-curl "https://<web-host>/api/sentry-test?token=<SENTRY_TEST_TOKEN>"
-# remove SENTRY_TEST_TOKEN again afterwards: the route answers 404 without it
+# WEB: no built-in test route; send a test event from the browser console or add a test endpoint
 
 # APP: starts the app and sends one test error
 flutter run --dart-define=SENTRY_DSN=<app-project-dsn> --dart-define=SENTRY_TEST_EVENT=true

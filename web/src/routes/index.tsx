@@ -1,6 +1,10 @@
-import Link from "next/link";
+import { Link, createFileRoute } from "@tanstack/react-router";
 
-export default function Home() {
+export const Route = createFileRoute("/")({
+  component: Home,
+});
+
+function Home() {
   return (
     <>
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-2 p-6">
@@ -8,10 +12,10 @@ export default function Home() {
         <p>Buka link tagihan dari host grupmu untuk membayar.</p>
       </main>
       <footer className="mx-auto flex w-full max-w-md gap-4 p-6 text-sm">
-        <Link href="/kebijakan-privasi" className="underline">
+        <Link to="/kebijakan-privasi" className="underline">
           Kebijakan Privasi
         </Link>
-        <Link href="/syarat-ketentuan" className="underline">
+        <Link to="/syarat-ketentuan" className="underline">
           Syarat &amp; Ketentuan
         </Link>
       </footer>

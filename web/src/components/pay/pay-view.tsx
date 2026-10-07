@@ -1,5 +1,3 @@
-"use client";
-
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, apiFetch, errorMessage } from "@/lib/api";
 import { formatSessionDate, formatWibDateTime } from "@/lib/dates";

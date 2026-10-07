@@ -1,11 +1,14 @@
-import type { Metadata } from "next";
-import { LegalPage, Section } from "../legal";
+import { createFileRoute } from "@tanstack/react-router";
+import { LegalPage, Section } from "@/components/legal";
 
-export const metadata: Metadata = {
-  title: "Kebijakan Privasi – Petepete",
-};
+export const Route = createFileRoute("/kebijakan-privasi")({
+  head: () => ({
+    meta: [{ title: "Kebijakan Privasi – Petepete" }],
+  }),
+  component: KebijakanPrivasi,
+});
 
-export default function KebijakanPrivasi() {
+function KebijakanPrivasi() {
   return (
     <LegalPage title="Kebijakan Privasi">
       <p>
